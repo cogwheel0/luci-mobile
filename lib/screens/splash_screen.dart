@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/config/app_config.dart';
+import 'package:luci_mobile/services/app_lock_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -36,12 +37,24 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     final secureStorage = SecureStorageService();
     final reviewerModeEnabled = await secureStorage.readValue(AppConfig.reviewerModeKey);
     
+    // Check app lock status
+    final appLockService = AppLockService();
+    await appLockService.initialize();
+    
     if (reviewerModeEnabled == 'true' && mounted) {
-      // Navigate directly to main screen in reviewer mode
-      unawaited(Navigator.of(context).pushReplacementNamed('/'));
+      // In reviewer mode, check if app lock is enabled
+      if (appLockService.isEnabled && appLockService.isLocked) {
+        unawaited(Navigator.of(context).pushReplacementNamed('/app-lock'));
+      } else {
+        unawaited(Navigator.of(context).pushReplacementNamed('/main'));
+      }
     } else if (mounted) {
-      // Normal flow - go to login screen
-      unawaited(Navigator.of(context).pushReplacementNamed('/login'));
+      // Normal flow - check app lock first
+      if (appLockService.isEnabled && appLockService.isLocked) {
+        unawaited(Navigator.of(context).pushReplacementNamed('/app-lock'));
+      } else {
+        unawaited(Navigator.of(context).pushReplacementNamed('/login'));
+      }
     }
   }
 
