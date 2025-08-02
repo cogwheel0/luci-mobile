@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
+import '../utils/logger.dart';
 
 class AppLockService {
   static const String _pinCodeKey = 'app_lock_pin_code';
@@ -19,6 +20,7 @@ class AppLockService {
   bool _useBiometrics = false;
   int _lockTimeout = 0; // 0 = immediate, >0 = seconds
   DateTime? _lastUnlockTime;
+  bool _isInitialized = false;
   
   bool get isLocked => _isLocked;
   bool get isEnabled => _isEnabled;
@@ -29,18 +31,34 @@ class AppLockService {
   Future<void> initialize() async {
     await _loadSettings();
     _checkLockStatus();
+    _isInitialized = true;
   }
   
   /// Load settings from secure storage
   Future<void> _loadSettings() async {
-    final enabled = await _secureStorage.read(key: _isEnabledKey);
-    _isEnabled = enabled == 'true';
+    try {
+      final enabled = await _secureStorage.read(key: _isEnabledKey);
+      _isEnabled = enabled == 'true';
+    } catch (e, stackTrace) {
+      Logger.exception('Failed to load app lock enabled setting', e, stackTrace);
+      _isEnabled = false; // Default to disabled on error
+    }
     
-    final biometrics = await _secureStorage.read(key: _useBiometricsKey);
-    _useBiometrics = biometrics == 'true';
+    try {
+      final biometrics = await _secureStorage.read(key: _useBiometricsKey);
+      _useBiometrics = biometrics == 'true';
+    } catch (e, stackTrace) {
+      Logger.exception('Failed to load biometrics setting', e, stackTrace);
+      _useBiometrics = false; // Default to disabled on error
+    }
     
-    final timeout = await _secureStorage.read(key: _lockTimeoutKey);
-    _lockTimeout = int.tryParse(timeout ?? '0') ?? 0;
+    try {
+      final timeout = await _secureStorage.read(key: _lockTimeoutKey);
+      _lockTimeout = int.tryParse(timeout ?? '0') ?? 0;
+    } catch (e, stackTrace) {
+      Logger.exception('Failed to load lock timeout setting', e, stackTrace);
+      _lockTimeout = 0; // Default to immediate lock on error
+    }
   }
   
   /// Check if app should be locked based on timeout
@@ -180,6 +198,10 @@ class AppLockService {
   
   /// Check if app should be locked (call this when app becomes active)
   void onAppResumed() {
+    if (!_isInitialized) {
+      Logger.warning('AppLockService not initialized, skipping lock status check');
+      return;
+    }
     _checkLockStatus();
   }
   

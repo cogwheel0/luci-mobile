@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/services/app_lock_service.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
+import 'package:luci_mobile/widgets/pin_ui_components.dart';
 
 class AppLockScreen extends ConsumerStatefulWidget {
   const AppLockScreen({super.key});
@@ -106,87 +107,7 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
     }
   }
   
-  Widget _buildPinDigit({bool isFilled = false}) {
-    return Container(
-      width: 20,
-      height: 20,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: isFilled 
-          ? Theme.of(context).colorScheme.primary
-          : Theme.of(context).colorScheme.outline.withOpacity(0.3),
-      ),
-    );
-  }
-  
-  Widget _buildNumberButton(String number) {
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: AspectRatio(
-          aspectRatio: 1,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(50),
-              onTap: _isAuthenticating ? null : () => _onPinDigitPressed(number),
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
-                    width: 1,
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    number,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-  
-  Widget _buildActionButton({required IconData icon, required VoidCallback onTap}) {
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: AspectRatio(
-          aspectRatio: 1,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(50),
-              onTap: _isAuthenticating ? null : onTap,
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
-                    width: 1,
-                  ),
-                ),
-                child: Center(
-                  child: Icon(
-                    icon,
-                    size: 28,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+
   
   @override
   Widget build(BuildContext context) {
@@ -227,7 +148,7 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
                 final isFilled = index < _enteredPin.length;
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: _buildPinDigit(isFilled: isFilled),
+                  child: PinDigitWidget(isFilled: isFilled),
                 );
               }),
             ),
@@ -252,41 +173,83 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
                   // Row 1: 1, 2, 3
                   Row(
                     children: [
-                      _buildNumberButton('1'),
-                      _buildNumberButton('2'),
-                      _buildNumberButton('3'),
+                      PinNumberButton(
+                        number: '1',
+                        onPressed: () => _onPinDigitPressed('1'),
+                        isDisabled: _isAuthenticating,
+                      ),
+                      PinNumberButton(
+                        number: '2',
+                        onPressed: () => _onPinDigitPressed('2'),
+                        isDisabled: _isAuthenticating,
+                      ),
+                      PinNumberButton(
+                        number: '3',
+                        onPressed: () => _onPinDigitPressed('3'),
+                        isDisabled: _isAuthenticating,
+                      ),
                     ],
                   ),
                   
                   // Row 2: 4, 5, 6
                   Row(
                     children: [
-                      _buildNumberButton('4'),
-                      _buildNumberButton('5'),
-                      _buildNumberButton('6'),
+                      PinNumberButton(
+                        number: '4',
+                        onPressed: () => _onPinDigitPressed('4'),
+                        isDisabled: _isAuthenticating,
+                      ),
+                      PinNumberButton(
+                        number: '5',
+                        onPressed: () => _onPinDigitPressed('5'),
+                        isDisabled: _isAuthenticating,
+                      ),
+                      PinNumberButton(
+                        number: '6',
+                        onPressed: () => _onPinDigitPressed('6'),
+                        isDisabled: _isAuthenticating,
+                      ),
                     ],
                   ),
                   
                   // Row 3: 7, 8, 9
                   Row(
                     children: [
-                      _buildNumberButton('7'),
-                      _buildNumberButton('8'),
-                      _buildNumberButton('9'),
+                      PinNumberButton(
+                        number: '7',
+                        onPressed: () => _onPinDigitPressed('7'),
+                        isDisabled: _isAuthenticating,
+                      ),
+                      PinNumberButton(
+                        number: '8',
+                        onPressed: () => _onPinDigitPressed('8'),
+                        isDisabled: _isAuthenticating,
+                      ),
+                      PinNumberButton(
+                        number: '9',
+                        onPressed: () => _onPinDigitPressed('9'),
+                        isDisabled: _isAuthenticating,
+                      ),
                     ],
                   ),
                   
                   // Row 4: biometric, 0, backspace
                   Row(
                     children: [
-                      _buildActionButton(
+                      PinActionButton(
                         icon: Icons.fingerprint,
-                        onTap: _tryBiometricAuth,
+                        onPressed: _tryBiometricAuth,
+                        isDisabled: _isAuthenticating,
                       ),
-                      _buildNumberButton('0'),
-                      _buildActionButton(
+                      PinNumberButton(
+                        number: '0',
+                        onPressed: () => _onPinDigitPressed('0'),
+                        isDisabled: _isAuthenticating,
+                      ),
+                      PinActionButton(
                         icon: Icons.backspace_outlined,
-                        onTap: _onPinDigitRemoved,
+                        onPressed: _onPinDigitRemoved,
+                        isDisabled: _isAuthenticating,
                       ),
                     ],
                   ),

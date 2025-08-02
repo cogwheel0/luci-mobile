@@ -36,9 +36,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _isAppLockEnabled = _appLockService.isEnabled;
       _useBiometrics = _appLockService.useBiometrics;
       _lockTimeout = _appLockService.lockTimeout;
-      _isBiometricsAvailable = false;
-      _isPinCodeSet = false;
-      _isLoading = true;
     });
     
     // Check biometrics availability
@@ -233,7 +230,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         subtitle: const Text('Lock the app now to test'),
                         onTap: () {
                           _appLockService.lock();
-                          Navigator.of(context).pushReplacementNamed('/app-lock');
+                          Navigator.of(context).pushNamed('/app-lock');
                         },
                       ),
                     ],
