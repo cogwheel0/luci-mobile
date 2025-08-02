@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/services/app_lock_service.dart';
+import 'package:luci_mobile/services/service_factory.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/pin_ui_components.dart';
 
@@ -97,7 +98,7 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
       _isSaving = true;
     });
     
-    final appLockService = AppLockService();
+    final appLockService = ServiceContainer.instance.factory.createAppLockService();
     await appLockService.initialize();
     
     final success = await appLockService.setPinCode(firstPin);

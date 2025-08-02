@@ -15,6 +15,7 @@ class AppLockScreen extends ConsumerStatefulWidget {
 class _AppLockScreenState extends ConsumerState<AppLockScreen> {
   final TextEditingController _pinController = TextEditingController();
   final List<String> _enteredPin = [];
+  late final AppLockService _appLockService;
   bool _isAuthenticating = false;
   bool _showError = false;
   String _errorMessage = '';
@@ -22,6 +23,12 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
   @override
   void initState() {
     super.initState();
+    _appLockService = AppLockService();
+    _initializeAppLockService();
+  }
+  
+  Future<void> _initializeAppLockService() async {
+    await _appLockService.initialize();
     _tryBiometricAuth();
   }
   
@@ -32,15 +39,12 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
   }
   
   Future<void> _tryBiometricAuth() async {
-    final appLockService = AppLockService();
-    await appLockService.initialize();
-    
-    if (appLockService.useBiometrics && await appLockService.isBiometricsAvailable()) {
+    if (_appLockService.useBiometrics && await _appLockService.isBiometricsAvailable()) {
       setState(() {
         _isAuthenticating = true;
       });
       
-      final success = await appLockService.authenticateWithBiometrics();
+      final success = await _appLockService.authenticateWithBiometrics();
       
       if (success && mounted) {
         Navigator.of(context).pushReplacementNamed('/main');
@@ -80,13 +84,10 @@ class _AppLockScreenState extends ConsumerState<AppLockScreen> {
     });
     
     final pinCode = _enteredPin.join();
-    final appLockService = AppLockService();
-    await appLockService.initialize();
-    
-    final isValid = await appLockService.verifyPinCode(pinCode);
+    final isValid = await _appLockService.verifyPinCode(pinCode);
     
     if (isValid && mounted) {
-      appLockService.unlock();
+      _appLockService.unlock();
       Navigator.of(context).pushReplacementNamed('/main');
     } else {
       setState(() {
