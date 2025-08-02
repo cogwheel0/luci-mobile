@@ -7,6 +7,7 @@ import 'package:luci_mobile/services/mock_api_service.dart';
 import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/services/router_service.dart';
 import 'package:luci_mobile/services/throughput_service.dart';
+import 'package:luci_mobile/services/app_lock_service.dart';
 
 abstract class ServiceFactory {
   IAuthService createAuthService();
@@ -14,6 +15,7 @@ abstract class ServiceFactory {
   SecureStorageService createSecureStorageService();
   RouterService createRouterService();
   ThroughputService createThroughputService();
+  AppLockService createAppLockService();
 }
 
 class ProductionServiceFactory implements ServiceFactory {
@@ -31,6 +33,9 @@ class ProductionServiceFactory implements ServiceFactory {
 
   @override
   ThroughputService createThroughputService() => ThroughputService();
+
+  @override
+  AppLockService createAppLockService() => AppLockService();
 }
 
 class ReviewerModeServiceFactory implements ServiceFactory {
@@ -48,6 +53,9 @@ class ReviewerModeServiceFactory implements ServiceFactory {
 
   @override
   ThroughputService createThroughputService() => ThroughputService();
+
+  @override
+  AppLockService createAppLockService() => AppLockService();
 }
 
 class ServiceContainer {
