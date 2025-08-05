@@ -32,6 +32,7 @@
 - **Network Interface Management:** View and monitor all wired and wireless interfaces, bandwidth, IPs, and DNS.
 - **Client Management:** See all connected devices, connection type, MAC/IP, vendor, DHCP lease, and more.
 - **System Control:** Remote reboot, settings, and theme customization (light/dark mode).
+- **App Lock Security:** PIN code and biometric authentication to secure access to your router management interface.
 - **Modern UI/UX:** Material Design 3, responsive layout, and intuitive navigation.
 - **Open Source:** GPLv3 licensed and available on [Google Play](https://play.google.com/store/apps/details?id=com.cogwheel.LuCIMobile) and [IzzyOnDroid](https://apt.izzysoft.de/fdroid/index/apk/com.cogwheel.LuCIMobile).
 
@@ -45,6 +46,15 @@
 - **Edit & Remove:** Update credentials, rename, or remove routers at any time.
 - **Auto-Connect:** Remembers your last selected router and auto-connects on launch.
 - **Secure Storage:** All credentials are stored securely on your device.
+
+## App Lock Security
+
+- **PIN Code Protection:** Set a 4-digit PIN code to secure access to your router management interface.
+- **Biometric Authentication:** Use fingerprint or face recognition for quick and secure access.
+- **Configurable Timeout:** Choose when the app locks - immediately, 30 seconds, 1 minute, 5 minutes, or 10 minutes.
+- **Automatic Locking:** App automatically locks when you switch to another app or after the configured timeout.
+- **Secure Storage:** PIN codes are stored securely using device encryption.
+- **Easy Management:** Configure all app lock settings in the Settings screen.
 
 ---
 
@@ -101,6 +111,7 @@ lib/
 ## Security & Privacy
 - All credentials are stored securely on-device
 - HTTPS and self-signed certificate support
+- App lock with PIN code and biometric authentication
 - No analytics or tracking
 
 ---

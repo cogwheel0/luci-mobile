@@ -41,16 +41,30 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
+            // Only configure signing if key.properties file exists and has required properties
+            if (keystorePropertiesFile.exists() && 
+                keystoreProperties["storeFile"] != null &&
+                keystoreProperties["storePassword"] != null &&
+                keystoreProperties["keyAlias"] != null &&
+                keystoreProperties["keyPassword"] != null) {
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+            }
         }
     }
 
     buildTypes {
         getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
+            // Only set signing config if it's properly configured
+            if (keystorePropertiesFile.exists() && 
+                keystoreProperties["storeFile"] != null &&
+                keystoreProperties["storePassword"] != null &&
+                keystoreProperties["keyAlias"] != null &&
+                keystoreProperties["keyPassword"] != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -59,7 +73,7 @@ android {
             )
         }
         getByName("debug") {
-            signingConfig = signingConfigs.getByName("debug")
+            // Debug builds don't need signing config for development
         }
     }
 

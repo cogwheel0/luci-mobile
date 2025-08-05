@@ -49,7 +49,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
     
     if (reviewerModeEnabled == 'true' && mounted) {
       // Navigate directly to main screen in reviewer mode
-      unawaited(Navigator.of(context).pushReplacementNamed('/'));
+      unawaited(Navigator.of(context).pushReplacementNamed('/main'));
     } else {
       // Try auto login
       unawaited(_tryAutoLogin());
@@ -137,7 +137,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
     await appState.setReviewerMode(true);
     
     if (mounted) {
-      unawaited(Navigator.of(context).pushReplacementNamed('/'));
+      unawaited(Navigator.of(context).pushReplacementNamed('/main'));
     }
   }
 
@@ -156,7 +156,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
     final appState = ref.read(appStateProvider);
     final success = await appState.tryAutoLogin(context: context);
     if (success && mounted) {
-      unawaited(Navigator.of(context).pushReplacementNamed('/'));
+      unawaited(Navigator.of(context).pushReplacementNamed('/main'));
     } else {
       if (mounted) {
         setState(() {
@@ -183,7 +183,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with TickerProviderSt
       );
 
       if (success && mounted) {
-        unawaited(Navigator.of(context).pushReplacementNamed('/'));
+        unawaited(Navigator.of(context).pushReplacementNamed('/main'));
       }
     }
   }
