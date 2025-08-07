@@ -224,30 +224,25 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
                                 final isExpanded = _expandedClientIndices
                                     .contains(index);
 
-                                return LuciSlideTransition(
-                                  direction: LuciSlideDirection.up,
-                                  delay: Duration(milliseconds: index * 50),
-                                  distance: 30,
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16.0,
-                                      vertical: 8.0,
-                                    ),
-                                    child: _UnifiedClientCard(
-                                      client: client,
-                                      isExpanded: isExpanded,
-                                      onTap: () {
-                                        setState(() {
-                                          if (isExpanded) {
-                                            _expandedClientIndices.remove(
-                                              index,
-                                            );
-                                          } else {
-                                            _expandedClientIndices.add(index);
-                                          }
-                                        });
-                                      },
-                                    ),
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16.0,
+                                    vertical: 8.0,
+                                  ),
+                                  child: _UnifiedClientCard(
+                                    client: client,
+                                    isExpanded: isExpanded,
+                                    onTap: () {
+                                      setState(() {
+                                        if (isExpanded) {
+                                          _expandedClientIndices.remove(
+                                            index,
+                                          );
+                                        } else {
+                                          _expandedClientIndices.add(index);
+                                        }
+                                      });
+                                    },
                                   ),
                                 );
                               },
