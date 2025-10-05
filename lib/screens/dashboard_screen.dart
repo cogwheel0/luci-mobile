@@ -106,15 +106,80 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return '${percent.toStringAsFixed(0)}%';
   }
 
+  String _deriveReleaseChannel(Map<String, dynamic>? release) {
+    if (release == null || release.isEmpty) {
+      return 'stable';
+    }
+
+    final buffer = StringBuffer();
+    const keys = ['channel', 'branch', 'version', 'revision', 'description'];
+    for (final key in keys) {
+      final value = release[key];
+      if (value == null) {
+        continue;
+      }
+      buffer
+        ..write(' ')
+        ..write(value.toString().toLowerCase());
+    }
+
+    final combined = buffer.toString();
+
+    if (combined.contains('snapshot')) {
+      return 'snapshot';
+    }
+    if (combined.contains('beta')) {
+      return 'beta';
+    }
+    if (combined.contains('rc')) {
+      return 'rc';
+    }
+    if (combined.contains('testing')) {
+      return 'testing';
+    }
+
+    return 'stable';
+  }
+
+  ({Color background, Color foreground}) _channelColors(String channel) {
+    switch (channel) {
+      case 'snapshot':
+        return (
+          background: Colors.orange.withValues(alpha: 0.15),
+          foreground: Colors.orange.shade800,
+        );
+      case 'beta':
+        return (
+          background: Colors.blue.withValues(alpha: 0.15),
+          foreground: Colors.blue.shade800,
+        );
+      case 'rc':
+        return (
+          background: Colors.purple.withValues(alpha: 0.15),
+          foreground: Colors.purple.shade800,
+        );
+      case 'testing':
+        return (
+          background: Colors.amber.withValues(alpha: 0.18),
+          foreground: Colors.amber.shade900,
+        );
+      default:
+        return (
+          background: Colors.green.withValues(alpha: 0.15),
+          foreground: Colors.green.shade800,
+        );
+    }
+  }
+
   Widget _buildDeviceInfoCard(AppState appState) {
     final boardInfo =
         appState.dashboardData?['boardInfo'] as Map<String, dynamic>?;
     final model = boardInfo?['model'] ?? 'N/A';
-    final version = boardInfo?['release']?['version'] ?? 'N/A';
-    final isSnapshot =
-        boardInfo?['release']?['revision']?.toString().contains('SNAPSHOT') ==
-        true;
-    final branch = isSnapshot ? 'SNAPSHOT' : 'stable';
+    final release = boardInfo?['release'] as Map<String, dynamic>?;
+    final version = release?['version'] ?? 'N/A';
+    final channel = _deriveReleaseChannel(release);
+    final channelLabel = channel.toUpperCase();
+    final channelColors = _channelColors(channel);
 
     final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
       color: Theme.of(context).colorScheme.onSurface,
@@ -171,17 +236,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: isSnapshot
-                              ? Colors.orange.withValues(alpha: 0.15)
-                              : Colors.green.withValues(alpha: 0.15),
+                          color: channelColors.background,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          branch,
+                          channelLabel,
                           style: TextStyle(
-                            color: isSnapshot
-                                ? Colors.orange.shade800
-                                : Colors.green.shade800,
+                            color: channelColors.foreground,
                             fontWeight: FontWeight.bold,
                             fontSize: Theme.of(
                               context,
@@ -970,19 +1031,39 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   IconData _getInterfaceIcon(String name, String proto) {
     final lower = name.toLowerCase();
-    
+
     // Check name-based patterns first
-    if (lower.contains('wan')) return Icons.public_rounded;
-    if (lower.contains('lan')) return Icons.router_rounded;
-    if (lower.contains('iot')) return Icons.sensors_rounded;
-    if (lower.contains('guest')) return Icons.people_rounded;
-    if (lower.contains('dmz')) return Icons.security_rounded;
-    if (lower.contains('docker')) return Icons.computer_rounded;
-    if (lower.contains('bridge') || lower.startsWith('br-')) return Icons.hub_rounded;
-    if (lower.contains('vlan')) return Icons.layers_rounded;
-    if (lower.startsWith('eth')) return Icons.cable_rounded;
-    if (lower.startsWith('wlan')) return Icons.wifi_rounded;
-    
+    if (lower.contains('wan')) {
+      return Icons.public_rounded;
+    }
+    if (lower.contains('lan')) {
+      return Icons.router_rounded;
+    }
+    if (lower.contains('iot')) {
+      return Icons.sensors_rounded;
+    }
+    if (lower.contains('guest')) {
+      return Icons.people_rounded;
+    }
+    if (lower.contains('dmz')) {
+      return Icons.security_rounded;
+    }
+    if (lower.contains('docker')) {
+      return Icons.computer_rounded;
+    }
+    if (lower.contains('bridge') || lower.startsWith('br-')) {
+      return Icons.hub_rounded;
+    }
+    if (lower.contains('vlan')) {
+      return Icons.layers_rounded;
+    }
+    if (lower.startsWith('eth')) {
+      return Icons.cable_rounded;
+    }
+    if (lower.startsWith('wlan')) {
+      return Icons.wifi_rounded;
+    }
+
     // Check protocol-based patterns
     switch (proto) {
       case 'wireguard':
