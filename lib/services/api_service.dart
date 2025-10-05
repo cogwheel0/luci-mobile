@@ -239,6 +239,10 @@ class RealApiService implements IApiService {
         }
       }
 
+      if (isCertError) {
+        return null;
+      }
+
       rethrow;
     }
   }

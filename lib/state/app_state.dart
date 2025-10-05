@@ -542,6 +542,33 @@ class AppState extends ChangeNotifier {
 
     try {
       // Perform all API calls in parallel
+      Future<dynamic> callOptionalRpc({
+        required String object,
+        required String method,
+        Map<String, dynamic>? params,
+      }) async {
+        try {
+          return await _apiService!.call(
+            ip,
+            _authService!.sysauth!,
+            useHttps,
+            object: object,
+            method: method,
+            params: params,
+          );
+        } catch (e, stack) {
+          Logger.warning('Optional RPC $object.$method failed: $e');
+          Logger.debug('Optional RPC $object.$method stack: $stack');
+          return null;
+        }
+      }
+
+      final wirelessFuture = callOptionalRpc(
+        object: 'luci-rpc',
+        method: 'getWirelessDevices',
+        params: {},
+      );
+
       final results = await Future.wait([
         _apiService!.call(
           ip,
@@ -580,14 +607,6 @@ class AppState extends ChangeNotifier {
           _authService!.sysauth!,
           useHttps,
           object: 'luci-rpc',
-          method: 'getWirelessDevices',
-          params: {},
-        ),
-        _apiService!.call(
-          ip,
-          _authService!.sysauth!,
-          useHttps,
-          object: 'luci-rpc',
           method: 'getDHCPLeases',
           params: {},
         ),
@@ -618,11 +637,31 @@ class AppState extends ChangeNotifier {
         return result;
       }
 
+      dynamic getOptionalData(dynamic result, String label) {
+        try {
+          return getData(result);
+        } catch (e) {
+          Logger.warning('Optional RPC $label returned error: $e');
+          return null;
+        }
+      }
+
+      final boardInfoData = getData(results[0]);
+      final sysInfoData = getData(results[1]);
       final networkData = getData(results[2]) as Map<String, dynamic>?;
       final interfaceDump = getData(results[3]) as Map<String, dynamic>?;
-      final wirelessData = getData(results[4]) as Map<String, dynamic>?;
-      final dhcpLeases = getData(results[5]) as Map<String, dynamic>?;
-      final uciWirelessConfig = getData(results[6]);
+      final dhcpLeases = getData(results[4]) as Map<String, dynamic>?;
+      final uciWirelessConfig = getData(results[5]);
+
+      Map<String, dynamic>? wirelessData;
+      final wirelessRaw = await wirelessFuture;
+      if (wirelessRaw != null) {
+        final parsedWireless =
+            getOptionalData(wirelessRaw, 'luci-rpc.getWirelessDevices');
+        if (parsedWireless is Map<String, dynamic>) {
+          wirelessData = parsedWireless;
+        }
+      }
 
       // Fetch WireGuard peer information for WireGuard interfaces
       final wireguardData = <String, dynamic>{};
@@ -706,11 +745,11 @@ class AppState extends ChangeNotifier {
       );
 
       _dashboardData = {
-        'boardInfo': getData(results[0]),
-        'sysInfo': getData(results[1]),
+        'boardInfo': boardInfoData,
+        'sysInfo': sysInfoData,
         'networkDevices': networkData,
         'interfaceDump': interfaceDump,
-        'wireless': wirelessData,
+        'wireless': wirelessData ?? <String, dynamic>{},
         'dhcpLeases': dhcpLeases,
         'wan': _extractWanData(interfaceDump),
         'uciWirelessConfig': uciWirelessConfig,
