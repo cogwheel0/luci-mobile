@@ -162,7 +162,7 @@ class RealApiService implements IApiService {
         }
       }
 
-      if (response.statusCode == 302) {
+      if (response.statusCode == 302 || response.statusCode == 200) {
         // Parse Set-Cookie headers to find sysauth cookie
         final setCookies = response.headers.map['set-cookie'];
         if (setCookies != null && setCookies.isNotEmpty) {
@@ -179,9 +179,26 @@ class RealApiService implements IApiService {
     } on DioException catch (e, stack) {
       Logger.exception('Login failed', e, stack);
 
-      // Check if this is a certificate error and we have context to show dialog
       final isCertError =
           e.error is HandshakeException || e.message?.contains('CERTIFICATE_VERIFY_FAILED') == true;
+
+      if (!useHttps && checkRedirect && isCertError) {
+        Logger.info('Detected HTTPS certificate issue during redirect; retrying with HTTPS');
+        final retryContext = context != null && context.mounted ? context : null;
+        try {
+          return await _login(
+            ipAddress,
+            username,
+            password,
+            true,
+            context: retryContext, // ignore: use_build_context_synchronously
+            checkRedirect: false,
+          );
+        } on DioException catch (httpsError, httpsStack) {
+          Logger.exception('HTTPS retry after redirect failed', httpsError, httpsStack);
+        }
+      }
+
       if (useHttps && context != null && context.mounted && isCertError) {
         // Try to prompt for certificate acceptance
         final accepted = await _httpClientManager.promptForCertificateAcceptance(
@@ -204,7 +221,7 @@ class RealApiService implements IApiService {
               ),
             );
 
-            if (retryResponse.statusCode == 302) {
+            if (retryResponse.statusCode == 302 || retryResponse.statusCode == 200) {
               final setCookies = retryResponse.headers.map['set-cookie'];
               if (setCookies != null && setCookies.isNotEmpty) {
                 final cookies = setCookies.join(',').split(',');
