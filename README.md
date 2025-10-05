@@ -109,7 +109,7 @@ lib/
 
 - **Connection Failed:** Check router IP, LuCI web interface, firewall, and try both HTTP/HTTPS.
 - **Authentication Failed:** Verify credentials and admin privileges.
-- **No Data Displayed:** Check UCI RPC, network, and router logs.
+- **No Data Displayed:** Ensure the router has LuCI RPC support: `opkg update && opkg install luci-mod-rpc rpcd-mod-luci rpcd-mod-iwinfo luci-mod-status`, restart `rpcd` (or reboot), then verify with `ubus list luci-rpc` and `ubus call luci-rpc getNetworkDevices '{}'`.
 
 ---
 
