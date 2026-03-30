@@ -133,7 +133,7 @@ class RealAuthService implements IAuthService {
         username,
         password,
         fallbackHttps ?? false,
-        context: context,
+        context: context?.mounted == true ? context : null,
       );
       if (fallbackOk) {
         return FallbackLoginResult(

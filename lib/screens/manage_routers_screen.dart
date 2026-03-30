@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/main.dart';
@@ -168,6 +170,13 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                 if (!context.mounted) return;
                                 if (confirm == true) {
                                   await appState.removeRouter(router.id);
+                                  if (!context.mounted) return;
+                                  if (appState.routers.isEmpty) {
+                                    unawaited(Navigator.of(context).pushNamedAndRemoveUntil(
+                                      '/login',
+                                      (route) => false,
+                                    ));
+                                  }
                                 }
                               },
                             ),

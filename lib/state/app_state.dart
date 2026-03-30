@@ -2743,7 +2743,7 @@ class AppState extends ChangeNotifier {
         fallbackHttps: router.inactiveUseHttps,
         username: router.username,
         password: router.password,
-        context: context,
+        context: context?.mounted == true ? context : null,
       );
       Logger.info(
         'tryAutoLogin: result success=${result.success}, usedIndex=${result.usedAddressIndex}',
@@ -2768,7 +2768,7 @@ class AppState extends ChangeNotifier {
           null,
           null,
           null,
-          context: context,
+          context: context?.mounted == true ? context : null,
         ) ??
         false;
   }
