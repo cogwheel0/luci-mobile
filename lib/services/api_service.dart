@@ -133,7 +133,8 @@ class RealApiService implements IApiService {
         options: Options(
           contentType: Headers.formUrlEncodedContentType,
           followRedirects: true,
-          validateStatus: (code) => code != null && code >= 200 && code < 400 || code == 302,
+          validateStatus: (code) =>
+              code != null && code >= 200 && code < 400 || code == 302,
         ),
       );
 
@@ -180,11 +181,16 @@ class RealApiService implements IApiService {
       Logger.exception('Login failed', e, stack);
 
       final isCertError =
-          e.error is HandshakeException || e.message?.contains('CERTIFICATE_VERIFY_FAILED') == true;
+          e.error is HandshakeException ||
+          e.message?.contains('CERTIFICATE_VERIFY_FAILED') == true;
 
       if (!useHttps && checkRedirect && isCertError) {
-        Logger.info('Detected HTTPS certificate issue during redirect; retrying with HTTPS');
-        final retryContext = context != null && context.mounted ? context : null;
+        Logger.info(
+          'Detected HTTPS certificate issue during redirect; retrying with HTTPS',
+        );
+        final retryContext = context != null && context.mounted
+            ? context
+            : null;
         try {
           return await _login(
             ipAddress,
@@ -195,21 +201,30 @@ class RealApiService implements IApiService {
             checkRedirect: false,
           );
         } on DioException catch (httpsError, httpsStack) {
-          Logger.exception('HTTPS retry after redirect failed', httpsError, httpsStack);
+          Logger.exception(
+            'HTTPS retry after redirect failed',
+            httpsError,
+            httpsStack,
+          );
         }
       }
 
       if (useHttps && context != null && context.mounted && isCertError) {
         // Try to prompt for certificate acceptance
-        final accepted = await _httpClientManager.promptForCertificateAcceptance(
-          context: context,
-          hostWithPort: ipAddress,
-          useHttps: useHttps,
-        );
+        final accepted = await _httpClientManager
+            .promptForCertificateAcceptance(
+              context: context,
+              hostWithPort: ipAddress,
+              useHttps: useHttps,
+            );
 
         if (accepted && context.mounted) {
           // Create a new client and retry the login
-          final retryClient = _createHttpClient(useHttps, ipAddress, context: context);
+          final retryClient = _createHttpClient(
+            useHttps,
+            ipAddress,
+            context: context,
+          );
           try {
             final retryResponse = await retryClient.post(
               uri.toString(),
@@ -217,11 +232,13 @@ class RealApiService implements IApiService {
               options: Options(
                 contentType: Headers.formUrlEncodedContentType,
                 followRedirects: true,
-                validateStatus: (code) => code != null && code >= 200 && code < 400 || code == 302,
+                validateStatus: (code) =>
+                    code != null && code >= 200 && code < 400 || code == 302,
               ),
             );
 
-            if (retryResponse.statusCode == 302 || retryResponse.statusCode == 200) {
+            if (retryResponse.statusCode == 302 ||
+                retryResponse.statusCode == 200) {
               final setCookies = retryResponse.headers.map['set-cookie'];
               if (setCookies != null && setCookies.isNotEmpty) {
                 final cookies = setCookies.join(',').split(',');
@@ -310,9 +327,7 @@ class RealApiService implements IApiService {
       final response = await client.post(
         url.toString(),
         data: jsonEncode(rpcPayload),
-        options: Options(
-          headers: {'Content-Type': 'application/json'},
-        ),
+        options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
       if (response.statusCode == 200) {

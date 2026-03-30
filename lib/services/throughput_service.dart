@@ -50,22 +50,22 @@ class ThroughputService {
     String? specificInterface,
   }) {
     final now = DateTime.now();
-    
+
     // Always update per-interface throughput for all interfaces
     if (networkData != null) {
       networkData.forEach((devName, devData) {
         _updateInterfaceThroughput(devName, devData, now);
       });
     }
-    
+
     // Update overall throughput
     if (specificInterface != null && specificInterface.isNotEmpty) {
       // If specific interface requested, use only that interface's data
       if (networkData != null && networkData.containsKey(specificInterface)) {
         _updateSpecificInterfaceThroughput(
-          specificInterface, 
-          networkData[specificInterface], 
-          now
+          specificInterface,
+          networkData[specificInterface],
+          now,
         );
       } else {
         // Interface not found in data, clear current rates
@@ -151,10 +151,16 @@ class ThroughputService {
 
     if (elapsedSeconds >= _minElapsedSeconds) {
       // Handle both formats: stats.rx_bytes and direct rx_bytes
-      final lastRx = (lastStats['stats']?['rx_bytes'] ?? lastStats['rx_bytes'] ?? 0) as num;
-      final lastTx = (lastStats['stats']?['tx_bytes'] ?? lastStats['tx_bytes'] ?? 0) as num;
-      final currentRx = (devData['stats']?['rx_bytes'] ?? devData['rx_bytes'] ?? 0) as num;
-      final currentTx = (devData['stats']?['tx_bytes'] ?? devData['tx_bytes'] ?? 0) as num;
+      final lastRx =
+          (lastStats['stats']?['rx_bytes'] ?? lastStats['rx_bytes'] ?? 0)
+              as num;
+      final lastTx =
+          (lastStats['stats']?['tx_bytes'] ?? lastStats['tx_bytes'] ?? 0)
+              as num;
+      final currentRx =
+          (devData['stats']?['rx_bytes'] ?? devData['rx_bytes'] ?? 0) as num;
+      final currentTx =
+          (devData['stats']?['tx_bytes'] ?? devData['tx_bytes'] ?? 0) as num;
 
       final rxRate = max(0, (currentRx - lastRx) / elapsedSeconds);
       final txRate = max(0, (currentTx - lastTx) / elapsedSeconds);

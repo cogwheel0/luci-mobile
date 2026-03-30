@@ -13,6 +13,10 @@ class Client {
   final int? expiresAt; // timestamp in seconds
   final ConnectionType connectionType;
   final List<String>? ipv6Addresses;
+  // GL.iNet-specific enrichment fields
+  final String? wifiBand; // "2G", "5G", "6G", or null (wired/unknown)
+  final bool? isOnline; // true/false from GL.iNet API, null if unknown
+  final String? deviceClass; // "phone", "laptop", "tv", etc.
 
   Client({
     required this.ipAddress,
@@ -27,6 +31,9 @@ class Client {
     this.expiresAt,
     this.connectionType = ConnectionType.unknown,
     this.ipv6Addresses,
+    this.wifiBand,
+    this.isOnline,
+    this.deviceClass,
   });
 
   // Helper function to determine connection type from MAC address or other data
@@ -231,6 +238,31 @@ class Client {
     return parts.join(' ');
   }
 
+  /// Human-readable connection label using GL.iNet data when available.
+  String get connectionLabel {
+    if (isOnline == false) return 'Offline';
+    if (wifiBand != null) {
+      switch (wifiBand) {
+        case '2.4G':
+          return '2.4 GHz';
+        case '5G':
+          return '5 GHz';
+        case '6G':
+          return '6 GHz';
+        default:
+          return wifiBand!;
+      }
+    }
+    switch (connectionType) {
+      case ConnectionType.wireless:
+        return 'Wi-Fi';
+      case ConnectionType.wired:
+        return 'Ethernet';
+      case ConnectionType.unknown:
+        return 'Unknown';
+    }
+  }
+
   Client copyWith({
     String? ipAddress,
     String? macAddress,
@@ -244,6 +276,9 @@ class Client {
     int? expiresAt,
     ConnectionType? connectionType,
     List<String>? ipv6Addresses,
+    String? wifiBand,
+    bool? isOnline,
+    String? deviceClass,
   }) {
     return Client(
       ipAddress: ipAddress ?? this.ipAddress,
@@ -258,6 +293,9 @@ class Client {
       expiresAt: expiresAt ?? this.expiresAt,
       connectionType: connectionType ?? this.connectionType,
       ipv6Addresses: ipv6Addresses ?? this.ipv6Addresses,
+      wifiBand: wifiBand ?? this.wifiBand,
+      isOnline: isOnline ?? this.isOnline,
+      deviceClass: deviceClass ?? this.deviceClass,
     );
   }
 }

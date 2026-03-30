@@ -23,11 +23,7 @@ class HttpClientManager {
   /// Creates or returns a cached HTTP client for the given host
   /// In production builds, certificate validation is enforced with user warnings
   /// In debug builds, self-signed certificates can be allowed automatically
-  Dio getClient(
-    String hostWithPort,
-    bool useHttps, {
-    BuildContext? context,
-  }) {
+  Dio getClient(String hostWithPort, bool useHttps, {BuildContext? context}) {
     // Extract just the hostname without port for certificate validation
     final host = _extractHostname(hostWithPort);
     final key = '$hostWithPort-$useHttps';
@@ -63,11 +59,7 @@ class HttpClientManager {
     return hostWithPort;
   }
 
-  Dio _createSecureClient(
-    String host,
-    bool useHttps, {
-    BuildContext? context,
-  }) {
+  Dio _createSecureClient(String host, bool useHttps, {BuildContext? context}) {
     final dio = Dio(
       BaseOptions(
         connectTimeout: const Duration(seconds: 10),
