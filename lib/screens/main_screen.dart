@@ -28,16 +28,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       _selectedIndex = widget.initialTab!;
     }
     _currentInterfaceToScroll = widget.interfaceToScroll;
-    _checkAuthState();
-  }
-
-  void _checkAuthState() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final appState = ref.read(appStateProvider);
-      if (!appState.isAuthenticated) {
-        Navigator.of(context).pushReplacementNamed('/login');
-      }
-    });
   }
 
   @override
