@@ -22,9 +22,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   final _ipController = TextEditingController();
   final _usernameController = TextEditingController(text: 'root');
   final _passwordController = TextEditingController();
+  final _alternateController = TextEditingController();
   final _confirmationController = TextEditingController();
   bool _isCheckingAutoLogin = true;
   bool _passwordVisible = false;
+  bool _showAlternateAddress = false;
   late AnimationController _logoAnimController;
   late AnimationController _progressAnimController;
   bool _isActivatingReviewerMode = false;
@@ -151,6 +153,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     _ipController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _alternateController.dispose();
     _confirmationController.dispose();
     _logoAnimController.dispose();
     _progressAnimController.dispose();
@@ -187,13 +190,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         return;
       }
 
-      // Use the parsed values
+      // Parse alternate address if provided
+      String? alternateHost;
+      bool? alternateHttps;
+      final altInput = _alternateController.text.trim();
+      if (altInput.isNotEmpty) {
+        final parsedAlt = UrlParser.parse(altInput);
+        if (parsedAlt.isValid) {
+          if (parsedAlt.hostWithPort == parsedUrl.hostWithPort) {
+            appState.setError('Fallback address must differ from primary');
+            return;
+          }
+          alternateHost = parsedAlt.hostWithPort;
+          alternateHttps = parsedAlt.useHttps;
+        }
+      }
+
       final success = await appState.login(
         parsedUrl.hostWithPort,
         user,
         pass,
         parsedUrl.useHttps,
         fromRouter: false,
+        alternateAddress: alternateHost,
+        alternateUseHttps: alternateHttps,
         context: context,
       );
 
@@ -451,6 +471,47 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                               },
                                             ),
                                           ),
+                                          const SizedBox(height: 6),
+                                          if (!_showAlternateAddress)
+                                            Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: TextButton.icon(
+                                                onPressed: () => setState(
+                                                  () => _showAlternateAddress =
+                                                      true,
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.add,
+                                                  size: 18,
+                                                ),
+                                                label: const Text(
+                                                  'Add fallback address',
+                                                ),
+                                                style: TextButton.styleFrom(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 4,
+                                                      ),
+                                                ),
+                                              ),
+                                            )
+                                          else ...[
+                                            TextFormField(
+                                              controller: _alternateController,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Fallback Address',
+                                                border: OutlineInputBorder(),
+                                                prefixIcon: Icon(
+                                                  Icons.swap_horiz,
+                                                ),
+                                                helperText:
+                                                    'Same credentials will be used for both addresses',
+                                                helperMaxLines: 2,
+                                              ),
+                                              textInputAction:
+                                                  TextInputAction.next,
+                                            ),
+                                          ],
                                           const SizedBox(height: 10),
                                           Tooltip(
                                             message:

@@ -13,6 +13,13 @@ class ManageRoutersScreen extends ConsumerStatefulWidget {
       _ManageRoutersScreenState();
 }
 
+/// Truncate long addresses (e.g., Tailscale hostnames) to fit in the card.
+/// Keeps the start and the TLD: "gl-be9300-1.tail..."
+String _truncateAddress(String addr, {int maxLen = 24}) {
+  if (addr.length <= maxLen) return addr;
+  return '${addr.substring(0, maxLen - 3)}...';
+}
+
 class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
   String? _switchingRouterId;
 
@@ -82,8 +89,9 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                             ),
                             child: _UnifiedRouterCard(
                               routerTitle: routerTitle,
-                              subtitle:
-                                  '${router.ipAddress} (${router.username})',
+                              subtitle: router.hasFallback
+                                  ? '● ${_truncateAddress(router.activeAddress)}\n○ ${_truncateAddress(router.inactiveAddress!)}'
+                                  : '${router.ipAddress} (${router.username})',
                               isSelected: isSelected,
                               isSwitching: isSwitching,
                               onTap: () async {
@@ -729,11 +737,11 @@ class _UnifiedRouterCard extends StatelessWidget {
                       subtitle,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.w400,
                         letterSpacing: 0.1,
                       ),
-                      maxLines: 1,
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],

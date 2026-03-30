@@ -316,6 +316,7 @@ class AppState extends ChangeNotifier {
   }
 
   String? get sysauth => _authService?.sysauth;
+  bool get isAuthenticated => _authService?.isAuthenticated ?? false;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool? get canReboot => _reviewerModeEnabled ? true : _canReboot;
@@ -435,11 +436,14 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     // ignore: use_build_context_synchronously
     final loginSuccess = await login(
-      found.ipAddress,
+      found.activeAddress,
       found.username,
       found.password,
-      found.useHttps,
+      found.activeUseHttps,
       fromRouter: true,
+      alternateAddress: found.inactiveAddress,
+      alternateUseHttps: found.inactiveUseHttps,
+      activeAddressIndex: found.activeAddressIndex,
       context: safeContext, // ignore: use_build_context_synchronously
     );
     // A newer session started while this switch was in flight - it owns the
@@ -466,6 +470,9 @@ class AppState extends ChangeNotifier {
     String pass,
     bool useHttps, {
     bool fromRouter = false,
+    String? alternateAddress,
+    bool? alternateUseHttps,
+    int activeAddressIndex = 0,
     BuildContext? context,
   }) async {
     // A fresh login starts a new session; discard stale results from the
@@ -494,45 +501,66 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _serializeAuthOp<void>(
-        () => _authService!.login(ip, user, pass, useHttps, context: context),
+      final result = await _serializeAuthOp<FallbackLoginResult>(
+        () => _authService!.loginWithFallback(
+          activeAddress: ip,
+          activeHttps: useHttps,
+          activeIndex: activeAddressIndex,
+          fallbackAddress: alternateAddress,
+          fallbackHttps: alternateUseHttps,
+          username: user,
+          password: pass,
+          context: context,
+        ),
       );
       // A newer session (logout / another login) superseded this one while
       // the credential exchange was in flight - do not touch any state.
       if (token != _sessionToken) return false;
 
-      // Check if authentication was successful
-      if (_authService!.isAuthenticated) {
-        // Get the actual protocol used (might be different due to redirect)
+      if (result.success && _authService!.isAuthenticated) {
         final actualUseHttps = _authService!.useHttps;
 
         if (!fromRouter) {
-          // If not from router selection, add or update router with detected protocol
           if (_routerService != null) {
             final router = _routerService!.createRouter(
               ip,
               user,
               pass,
-              actualUseHttps, // Use the detected protocol
+              actualUseHttps,
+            );
+            // Preserve alternate address in the new router
+            final routerWithAlternate = router.copyWith(
+              alternateAddress: alternateAddress,
+              alternateUseHttps: alternateUseHttps,
+              activeAddressIndex: result.usedAddressIndex,
             );
             final idx = _routerService!.routers.indexWhere(
-              (r) => r.id == router.id,
+              (r) => r.id == routerWithAlternate.id,
             );
             if (idx == -1) {
-              await addRouter(router);
+              await addRouter(routerWithAlternate);
             } else {
-              await updateRouter(router);
+              await updateRouter(routerWithAlternate);
             }
           }
-        } else if (actualUseHttps != useHttps && _routerService != null) {
-          // If we're logging in from a saved router and the protocol changed, update it
+        } else if (_routerService != null) {
           final router = _routerService!.selectedRouter;
           if (router != null) {
-            final updatedRouter = router.copyWith(useHttps: actualUseHttps);
-            await updateRouter(updatedRouter);
-            Logger.info(
-              'Updated router protocol from ${useHttps ? "HTTPS" : "HTTP"} to ${actualUseHttps ? "HTTPS" : "HTTP"}',
-            );
+            final needsUpdate =
+                actualUseHttps != useHttps ||
+                result.usedAddressIndex != router.activeAddressIndex;
+            if (needsUpdate) {
+              final updatedRouter = router.copyWith(
+                useHttps: actualUseHttps,
+                activeAddressIndex: result.usedAddressIndex,
+              );
+              await updateRouter(updatedRouter);
+              if (result.usedAddressIndex != router.activeAddressIndex) {
+                Logger.info(
+                  'Switched to ${result.usedAddressIndex == 0 ? "primary" : "alternate"} address',
+                );
+              }
+            }
           }
         }
         await fetchDashboardData();
@@ -681,8 +709,9 @@ class AppState extends ChangeNotifier {
     // If already loading, don't start another request (but this shouldn't prevent pull-to-refresh)
     // We'll let the new request proceed and the loading state will be handled properly
     final selectedRouter = _routerService!.selectedRouter!;
-    final ip = selectedRouter.ipAddress;
-    final useHttps = selectedRouter.useHttps;
+    // Use the address and protocol that actually succeeded during login.
+    final ip = _authService!.ipAddress ?? selectedRouter.activeAddress;
+    final useHttps = _authService!.useHttps;
     final routerPassword = selectedRouter.password;
     // Snapshot the credentials for this exact session: reading the mutable
     // auth service mid-flight could send newer credentials to this router.
@@ -2645,6 +2674,32 @@ class AppState extends ChangeNotifier {
         context: context,
       );
     }
+
+    // If we have a selected router with fallback, use loginWithFallback
+    final router = _routerService?.selectedRouter;
+    if (router != null && _authService != null) {
+      final result = await _authService!.loginWithFallback(
+        activeAddress: router.activeAddress,
+        activeHttps: router.activeUseHttps,
+        activeIndex: router.activeAddressIndex,
+        fallbackAddress: router.inactiveAddress,
+        fallbackHttps: router.inactiveUseHttps,
+        username: router.username,
+        password: router.password,
+        context: context,
+      );
+      if (result.success) {
+        if (result.usedAddressIndex != router.activeAddressIndex) {
+          await updateRouter(
+            router.copyWith(activeAddressIndex: result.usedAddressIndex),
+          );
+        }
+        return true;
+      }
+      return false;
+    }
+
+    // Fallback to legacy auto-login from secure storage
     return await _authService?.tryAutoLogin(
           null,
           null,
