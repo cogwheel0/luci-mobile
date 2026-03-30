@@ -13,6 +13,7 @@ import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/models/dashboard_preferences.dart';
 import 'package:luci_mobile/services/interfaces/auth_service_interface.dart';
 import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
+import 'package:luci_mobile/services/glinet_api_service.dart';
 import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/service_factory.dart';
 import 'package:luci_mobile/config/app_config.dart';
@@ -26,6 +27,7 @@ class AppState extends ChangeNotifier {
   late final SecureStorageService _secureStorageService;
   IApiService? _apiService;
   IAuthService? _authService;
+  GlInetApiService? _glInetService;
   RouterService? _routerService;
   ThroughputService? _throughputService;
   final HttpClientManager _httpClientManager = HttpClientManager();
@@ -413,8 +415,9 @@ class AppState extends ChangeNotifier {
     _canReboot = null;
     _rebootAccessError = null;
 
-    // Clear throughput data when switching routers to prevent mixing data from different routers
+    // Clear throughput data and GL.iNet session when switching routers
     _cancelThroughputTimer();
+    _glInetService?.clearSession();
 
     // Determine a safe context before any awaits
     final safeContext = context?.mounted == true
@@ -570,12 +573,12 @@ class AppState extends ChangeNotifier {
     }
     // A newer session started while cleanup ran - it owns the state now.
     if (token != _sessionToken) return;
+    _glInetService?.clearSession();
     _dashboardData = null;
     _dashboardError = null;
     _canReboot = null;
     _rebootAccessError = null;
     _cancelThroughputTimer();
-    // Optionally, do not clear routers or selectedRouter
     notifyListeners();
   }
 
@@ -912,7 +915,6 @@ class AppState extends ChangeNotifier {
           prefs.primaryThroughputInterface!,
         );
       }
-
       // A newer session started while this fetch was in flight - drop the
       // stale results instead of clobbering the current router's data.
       if (token != _sessionToken) return;
@@ -922,6 +924,41 @@ class AppState extends ChangeNotifier {
         wanDeviceNames,
         specificInterface: specificInterface,
       );
+
+      // GL.iNet supplementary data (WiFi channels, CPU temp, fan)
+      Map<String, dynamic>? glinetExtras;
+      Map<String, int>? glinetChannels;
+      final model = boardInfoData?['model']?.toString() ?? '';
+      if (model.contains('GL-') || model.contains('GL.iNet')) {
+        try {
+          _glInetService ??= GlInetApiService(_httpClientManager);
+          final password = await _secureStorageService.readValue('password');
+          if (password != null) {
+            final glSid = await _glInetService!.login(ip, password, useHttps);
+            if (glSid != null) {
+              final futures = await Future.wait([
+                _glInetService!.getWifiStatus(ip, useHttps),
+                _glInetService!.getSystemExtras(ip, useHttps),
+                _glInetService!.getClients(ip, useHttps),
+              ]);
+              final wifiStatus =
+                  futures[0] as Map<String, Map<String, dynamic>>;
+              glinetChannels = wifiStatus.map(
+                (k, v) => MapEntry(k, v['channel'] as int? ?? 0),
+              );
+              glinetExtras = futures[1];
+              glinetExtras['wifiBands'] = wifiStatus.map(
+                (k, v) => MapEntry(k, v['band'] as String? ?? ''),
+              );
+              glinetExtras['clients'] = futures[2];
+              // Determine CPU core count from model name
+              glinetExtras['cpu_cores'] = _getGlInetCoreCount(model);
+            }
+          }
+        } catch (e) {
+          Logger.warning('GL.iNet supplementary fetch failed: $e');
+        }
+      }
 
       _dashboardData = {
         'boardInfo': boardInfoData,
@@ -933,6 +970,10 @@ class AppState extends ChangeNotifier {
         'wan': _extractWanData(interfaceDump),
         'uciWirelessConfig': uciWirelessConfig,
         'wireguard': wireguardData,
+        if (glinetChannels != null) 'glinetChannels': glinetChannels,
+        if (glinetExtras != null) 'glinetExtras': glinetExtras,
+        if (glinetExtras?['clients'] != null)
+          'glinetClients': glinetExtras!['clients'],
         '_lastUpdated':
             DateTime.now().millisecondsSinceEpoch, // Force UI updates
       };
@@ -2748,26 +2789,11 @@ class AppState extends ChangeNotifier {
         }
       }
 
-      // Sort: wireless > wired > unknown, then by hostname
-      final list = clients.values.toList();
-      list.sort((a, b) {
-        int typeOrder(ConnectionType t) {
-          switch (t) {
-            case ConnectionType.wireless:
-              return 0;
-            case ConnectionType.wired:
-              return 1;
-            default:
-              return 2;
-          }
-        }
+      // Enrich with GL.iNet data
+      _enrichClientsWithGlInet(clients);
 
-        final cmpType = typeOrder(
-          a.connectionType,
-        ).compareTo(typeOrder(b.connectionType));
-        if (cmpType != 0) return cmpType;
-        return a.hostname.toLowerCase().compareTo(b.hostname.toLowerCase());
-      });
+      final list = clients.values.toList();
+      _sortClients(list);
       return list;
     } catch (e, stack) {
       Logger.exception('Failed to aggregate clients', e, stack);
@@ -2929,27 +2955,11 @@ class AppState extends ChangeNotifier {
         }
       }
 
+      // Enrich with GL.iNet data
+      _enrichClientsWithGlInet(clientMap);
+
       final clients = clientMap.values.toList();
-
-      // Sort similar to aggregated
-      clients.sort((a, b) {
-        int typeOrder(ConnectionType t) {
-          switch (t) {
-            case ConnectionType.wireless:
-              return 0;
-            case ConnectionType.wired:
-              return 1;
-            default:
-              return 2;
-          }
-        }
-
-        final cmpType = typeOrder(
-          a.connectionType,
-        ).compareTo(typeOrder(b.connectionType));
-        if (cmpType != 0) return cmpType;
-        return a.hostname.toLowerCase().compareTo(b.hostname.toLowerCase());
-      });
+      _sortClients(clients);
       return clients;
     } catch (e, stack) {
       Logger.exception('Failed to fetch clients for selected router', e, stack);
@@ -2958,6 +2968,84 @@ class AppState extends ChangeNotifier {
   }
 
   /// Returns a union set of associated wireless MAC addresses across all routers
+  /// Known GL.iNet model → CPU core count mapping.
+  static int _getGlInetCoreCount(String model) {
+    // IPQ5332 (BE9300, BE6500): Quad-core Cortex-A53
+    // IPQ8071A (B2200): Quad-core Cortex-A53
+    // MT7981B (MT3000): Dual-core Cortex-A53
+    // MT7986A (MT6000): Quad-core Cortex-A53
+    if (model.contains('BE9300') || model.contains('BE6500')) return 4;
+    if (model.contains('MT6000') || model.contains('B2200')) return 4;
+    if (model.contains('MT3000') || model.contains('MT2500')) return 2;
+    return 4; // Safe default for modern GL.iNet routers
+  }
+
+  /// Enrich client map with GL.iNet API data (band, online, device class).
+  void _enrichClientsWithGlInet(Map<String, Client> clients) {
+    final glinetClients =
+        _dashboardData?['glinetClients'] as Map<String, Map<String, dynamic>>?;
+    if (glinetClients == null) return;
+
+    for (final macNorm in clients.keys.toList()) {
+      final glData = glinetClients[macNorm.toLowerCase()];
+      if (glData != null) {
+        final iface = glData['iface'] as String?;
+        final isOnline = glData['online'] as bool?;
+        final deviceClass = glData['class'] as String?;
+        final connType = iface != null
+            ? ConnectionType.wireless
+            : (isOnline == true
+                  ? ConnectionType.wired
+                  : clients[macNorm]!.connectionType);
+        // Prefer GL.iNet alias > GL.iNet name > existing hostname
+        final alias = glData['alias'] as String?;
+        final glName = glData['name'] as String?;
+        final currentHostname = clients[macNorm]!.hostname;
+        final bestName = (alias != null && alias.isNotEmpty)
+            ? alias
+            : (glName != null &&
+                  glName.isNotEmpty &&
+                  (currentHostname == 'Unknown' || currentHostname == 'N/A'))
+            ? glName
+            : null;
+
+        clients[macNorm] = clients[macNorm]!.copyWith(
+          connectionType: connType,
+          wifiBand: iface,
+          isOnline: isOnline,
+          deviceClass: deviceClass,
+          hostname: bestName,
+        );
+      }
+    }
+  }
+
+  /// Sort clients: online first, then wireless > wired > unknown, then by hostname.
+  void _sortClients(List<Client> clients) {
+    clients.sort((a, b) {
+      final aOnline = a.isOnline ?? true;
+      final bOnline = b.isOnline ?? true;
+      if (aOnline != bOnline) return aOnline ? -1 : 1;
+
+      int typeOrder(ConnectionType t) {
+        switch (t) {
+          case ConnectionType.wireless:
+            return 0;
+          case ConnectionType.wired:
+            return 1;
+          default:
+            return 2;
+        }
+      }
+
+      final cmpType = typeOrder(
+        a.connectionType,
+      ).compareTo(typeOrder(b.connectionType));
+      if (cmpType != 0) return cmpType;
+      return a.hostname.toLowerCase().compareTo(b.hostname.toLowerCase());
+    });
+  }
+
   Future<Set<String>> fetchAllAssociatedWirelessMacsAggregated() async {
     try {
       if (_reviewerModeEnabled) {

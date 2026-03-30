@@ -6,6 +6,7 @@ import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_animation_system.dart';
 import 'package:luci_mobile/models/router.dart' as model;
+import 'package:luci_mobile/utils/wifi_utils.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -111,11 +112,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return parts.join(' ');
   }
 
-  String _formatCpuLoad(List<dynamic> load) {
+  String _formatCpuLoad(List<dynamic> load, {int? cores}) {
     if (load.isEmpty) return 'N/A';
-    // Use the first value as the main CPU load
-    final percent = ((load[0] / 65536) * 100).clamp(0, 100);
-    return '${percent.toStringAsFixed(0)}%';
+    final loadAvg = load[0] / 65536;
+    if (cores != null && cores > 0) {
+      final percent = (loadAvg / cores * 100).clamp(0, 100).toInt();
+      return '$percent%';
+    }
+    // Non-GL.iNet: show raw load average (original behavior was broken,
+    // this is the standard way to display load average)
+    return loadAvg.toStringAsFixed(2);
   }
 
   String _deriveReleaseChannel(Map<String, dynamic>? release) {
@@ -667,7 +673,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final uptimeValue = uptime != null ? _formatUptime(uptime) : 'N/A';
 
     final cpuLoad = sysInfo?['load'] as List<dynamic>?;
-    final cpuLoadValue = cpuLoad != null ? _formatCpuLoad(cpuLoad) : 'N/A';
+    final glinetExtras =
+        appState.dashboardData?['glinetExtras'] as Map<String, dynamic>?;
+    final cpuCores = glinetExtras?['cpu_cores'] as int?;
+    final cpuLoadValue = cpuLoad != null
+        ? _formatCpuLoad(cpuLoad, cores: cpuCores)
+        : 'N/A';
 
     final totalMem = sysInfo?['memory']?['total'] as int? ?? 0;
     final freeMem = sysInfo?['memory']?['free'] as int? ?? 0;
@@ -677,37 +688,58 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ? '${(usedMem / totalMem * 100).toStringAsFixed(0)}%'
         : 'N/A';
 
+    // GL.iNet extras: CPU temperature, fan (glinetExtras already declared above)
+    final cpuTemp = glinetExtras?['cpu_temperature'] as int?;
+    final fanActive = glinetExtras?['fan_active'] as bool?;
+    final fanSpeed = glinetExtras?['fan_speed'] as int?;
+
+    final vitals = <Widget>[
+      Expanded(
+        child: _buildVitalsColumn(
+          context,
+          label: cpuCores != null ? 'CPU' : 'Load',
+          value: cpuLoadValue,
+        ),
+      ),
+      Expanded(
+        child: _buildVitalsColumn(context, label: 'Memory', value: memoryValue),
+      ),
+      Expanded(
+        child: _buildVitalsColumn(context, label: 'Uptime', value: uptimeValue),
+      ),
+    ];
+
+    if (cpuTemp != null) {
+      vitals.add(
+        Expanded(
+          child: _buildVitalsColumn(
+            context,
+            label: 'CPU Temp',
+            value: '$cpuTemp\u00B0C',
+          ),
+        ),
+      );
+    }
+
+    if (fanActive != null) {
+      vitals.add(
+        Expanded(
+          child: _buildVitalsColumn(
+            context,
+            label: 'Fan',
+            value: fanActive ? '$fanSpeed RPM' : 'Off',
+          ),
+        ),
+      );
+    }
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
-        child: Row(
-          children: [
-            Expanded(
-              child: _buildVitalsColumn(
-                context,
-                label: 'CPU Load',
-                value: cpuLoadValue,
-              ),
-            ),
-            Expanded(
-              child: _buildVitalsColumn(
-                context,
-                label: 'Memory',
-                value: memoryValue,
-              ),
-            ),
-            Expanded(
-              child: _buildVitalsColumn(
-                context,
-                label: 'Uptime',
-                value: uptimeValue,
-              ),
-            ),
-          ],
-        ),
+        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
+        child: Row(children: vitals),
       ),
     );
   }
@@ -841,8 +873,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             }
 
             final isEnabled = !(config['disabled'] as bool? ?? false);
-            final channel = (iwinfo['channel'] ?? config['channel'] ?? 'N/A')
-                .toString();
+            // Try iwinfo → config → GL.iNet API channels → N/A
+            final glinetChannels =
+                appState.dashboardData?['glinetChannels'] as Map<String, int>?;
+            final glinetExtras =
+                appState.dashboardData?['glinetExtras']
+                    as Map<String, dynamic>?;
+            final glinetBands =
+                glinetExtras?['wifiBands'] as Map<String, String>?;
+            final channel =
+                (iwinfo['channel'] ??
+                        config['channel'] ??
+                        glinetChannels?[radioName] ??
+                        'N/A')
+                    .toString();
+            // Band label from GL.iNet API (e.g., "2g" → "2.4 GHz")
+            final bandStr =
+                glinetBands?[radioName] ?? config['band'] as String? ?? '';
+            final bandLabel = formatWifiBand(bandStr);
             final signal = iwinfo['signal'] as int?;
 
             networkCardWidgets.add(
@@ -864,7 +912,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     padding: const EdgeInsets.all(6.0),
                     child: _buildWirelessInfoCardContent(
                       context,
-                      ssid: ssid,
+                      ssid: bandLabel.isNotEmpty ? '$ssid ($bandLabel)' : ssid,
                       isEnabled: isEnabled,
                       signal: signal,
                       channel: channel,

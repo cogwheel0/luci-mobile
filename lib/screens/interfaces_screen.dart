@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:flutter/services.dart';
 import 'package:luci_mobile/models/interface.dart';
+import 'package:luci_mobile/utils/wifi_utils.dart';
 import 'dart:math';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
@@ -565,6 +566,31 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
         }
         return NetworkInterface.fromJson(detailedInterfaceMap);
       }).toList();
+
+      // Enrich Tailscale interface with GL.iNet API data
+      final glinetExtras =
+          appState.dashboardData?['glinetExtras'] as Map<String, dynamic>?;
+      if (glinetExtras != null) {
+        interfacesList = interfacesList.map((iface) {
+          if (iface.name.toLowerCase() == 'tailscale' &&
+              iface.ipAddress == null) {
+            return NetworkInterface(
+              name: iface.name,
+              isUp: iface.isUp,
+              protocol: 'tailscale',
+              uptime: iface.uptime,
+              device: iface.device,
+              ipAddress: glinetExtras['tailscale_ip'] as String?,
+              netmask: null,
+              gateway: null,
+              dnsServers: iface.dnsServers,
+              stats: iface.stats,
+              ipv6Addresses: iface.ipv6Addresses,
+            );
+          }
+          return iface;
+        }).toList();
+      }
     }
 
     final interfaces = interfacesList;
@@ -602,6 +628,11 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     final dashboardData = appState.dashboardData;
     final wirelessData = dashboardData?['wireless'] as Map<String, dynamic>?;
     final uciWirelessConfig = dashboardData?['uciWirelessConfig'];
+    final glinetChannels =
+        dashboardData?['glinetChannels'] as Map<String, int>?;
+    final glinetExtras =
+        dashboardData?['glinetExtras'] as Map<String, dynamic>?;
+    final glinetBands = glinetExtras?['wifiBands'] as Map<String, String>?;
     final interfacesList = <Map<String, dynamic>>[];
 
     final uciRadios = <String, Map>{};
@@ -650,6 +681,18 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             final mode = _uciString(config['mode']).toUpperCase().isNotEmpty
                 ? _uciString(config['mode']).toUpperCase()
                 : (iwinfo['mode']?.toString().toUpperCase() ?? 'N/A');
+            final uciCh = _uciString(config['channel']);
+            final channel =
+                iwinfo['channel']?.toString() ??
+                (uciCh.isNotEmpty ? uciCh : null) ??
+                glinetChannels?[radioName]?.toString() ??
+                'N/A';
+            final bandStr =
+                glinetBands?[radioName] ?? (config['band'] as String? ?? '');
+            final bandLabel = formatWifiBand(bandStr);
+            final subtitleParts = <String>[mode];
+            if (bandLabel.isNotEmpty) subtitleParts.add(bandLabel);
+            subtitleParts.add('Ch. $channel');
 
             // Build encryption description
             final rawEncIwinfo = iwinfo['encryption'];
@@ -662,8 +705,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               'name': _uciString(config['ssid']).isNotEmpty
                   ? _uciString(config['ssid'])
                   : (iwinfo['ssid']?.toString() ?? 'Unnamed'),
-              'subtitle':
-                  '$mode • Ch. ${iwinfo['channel']?.toString() ?? _uciString(config['channel'], 'N/A')}',
+              'subtitle': subtitleParts.join(' • '),
               'isEnabled': isEnabled,
               'isIfaceEnabled': isIfaceEnabled,
               'isRadioEnabled': isRadioEnabled,
@@ -687,9 +729,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                 'Mode': _uciString(config['mode']).isNotEmpty
                     ? _uciString(config['mode'])
                     : (iwinfo['mode']?.toString() ?? 'N/A'),
-                'Channel':
-                    iwinfo['channel']?.toString() ??
-                    _uciString(config['channel'], 'N/A'),
+                'Band': bandLabel.isNotEmpty ? bandLabel : 'N/A',
+                'Channel': channel,
                 'Signal': '${iwinfo['signal']?.toString() ?? '--'} dBm',
                 'Network': (config['network'] is List)
                     ? (config['network'] as List).join(', ')

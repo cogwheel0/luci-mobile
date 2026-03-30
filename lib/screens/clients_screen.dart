@@ -418,20 +418,16 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
                           right: 0,
                           top: 0,
                           child: Tooltip(
-                            message:
-                                widget.client.connectionType ==
-                                    ConnectionType.unknown
-                                ? 'Unknown connection type'
-                                : 'Client is online',
+                            message: widget.client.isOnline == false
+                                ? 'Client is offline'
+                                : widget.client.connectionLabel,
                             child: Container(
                               width: 10,
                               height: 10,
                               decoration: BoxDecoration(
-                                color:
-                                    widget.client.connectionType ==
-                                            ConnectionType.wireless ||
-                                        widget.client.connectionType ==
-                                            ConnectionType.wired
+                                color: widget.client.isOnline == false
+                                    ? Colors.grey
+                                    : widget.client.isOnline == true
                                     ? Colors.green
                                     : Colors.amber,
                                 shape: BoxShape.circle,
@@ -452,7 +448,13 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
                         children: [
                           Text(
                             widget.client.hostname,
-                            style: LuciTextStyles.cardTitle(context),
+                            style: Theme.of(context).textTheme.titleSmall!
+                                .copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
+                                ),
                             semanticsLabel:
                                 'Client hostname: ${widget.client.hostname}',
                             maxLines: 1,
@@ -490,10 +492,7 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
                         ],
                       ),
                     ),
-                    _buildConnectionTypeChip(
-                      context,
-                      widget.client.connectionType,
-                    ),
+                    _buildConnectionTypeChip(context, widget.client),
                     const SizedBox(width: 8),
                     Icon(
                       widget.isExpanded ? Icons.expand_less : Icons.expand_more,
@@ -520,42 +519,50 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
     );
   }
 
-  Widget _buildConnectionTypeChip(BuildContext context, ConnectionType type) {
+  Widget _buildConnectionTypeChip(BuildContext context, Client client) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    String label;
+    final label = client.connectionLabel;
     IconData icon;
     Color bgColor;
     Color fgColor;
 
-    switch (type) {
-      case ConnectionType.wireless:
-        label = 'Wi-Fi';
-        icon = Icons.wifi;
-        bgColor = colorScheme.primaryContainer;
-        fgColor = colorScheme.onPrimaryContainer;
-        break;
-      case ConnectionType.wired:
-        label = 'Wired';
-        icon = Icons.settings_ethernet;
-        bgColor = colorScheme.secondaryContainer;
-        fgColor = colorScheme.onSecondaryContainer;
-        break;
-      default:
-        label = 'Unknown';
-        icon = Icons.devices_other_outlined;
-        bgColor = colorScheme.surfaceContainerHighest;
-        fgColor = colorScheme.onSurfaceVariant;
-        break;
+    if (client.isOnline == false) {
+      icon = Icons.cloud_off_outlined;
+      bgColor = colorScheme.surfaceContainerHighest;
+      fgColor = colorScheme.onSurfaceVariant;
+    } else if (client.wifiBand != null ||
+        client.connectionType == ConnectionType.wireless) {
+      icon = Icons.wifi;
+      bgColor = colorScheme.primaryContainer;
+      fgColor = colorScheme.onPrimaryContainer;
+    } else if (client.connectionType == ConnectionType.wired) {
+      icon = Icons.settings_ethernet;
+      bgColor = colorScheme.secondaryContainer;
+      fgColor = colorScheme.onSecondaryContainer;
+    } else {
+      icon = Icons.devices_other_outlined;
+      bgColor = colorScheme.surfaceContainerHighest;
+      fgColor = colorScheme.onSurfaceVariant;
     }
 
-    return Chip(
-      label: Text(label),
-      avatar: Icon(icon, size: 16, color: fgColor),
-      backgroundColor: bgColor,
-      labelStyle: theme.textTheme.labelSmall?.copyWith(color: fgColor),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: fgColor),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(color: fgColor),
+          ),
+        ],
+      ),
     );
   }
 
