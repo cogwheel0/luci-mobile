@@ -108,7 +108,8 @@ class HttpClientManager {
   bool _keyMatchesHost(String key, String host, bool useHttps) {
     final (keyHost, keyUseHttps) = _parseClientKey(key);
     if (keyUseHttps != useHttps) return false;
-    return _extractHostname(keyHost) == _extractHostname(host) &&
+    return _normalizePinHost(_extractHostname(keyHost)) ==
+            _normalizePinHost(_extractHostname(host)) &&
         _effectivePort(keyHost, keyUseHttps) == _effectivePort(host, useHttps);
   }
 
@@ -234,13 +235,15 @@ class HttpClientManager {
   /// Clears pinned certificates and cached clients for a specific host
   /// (across all ports)
   Future<void> clearCertificatesForHost(String host) async {
-    final hostname = _extractHostname(host);
+    final hostname = _normalizePinHost(_extractHostname(host));
     _acceptedCertFingerprints.removeWhere(
-      (key, _) => _extractHostname(key) == hostname,
+      (key, _) => _normalizePinHost(_extractHostname(key)) == hostname,
     );
 
     _closeAndRemoveClients(
-      (key) => _extractHostname(_parseClientKey(key).$1) == hostname,
+      (key) =>
+          _normalizePinHost(_extractHostname(_parseClientKey(key).$1)) ==
+          hostname,
     );
 
     await _saveAcceptedCertificates();

@@ -169,14 +169,14 @@ class RealApiService implements IApiService {
         final finalUrl = response.realUri;
         if (finalUrl.scheme == 'https') {
           Logger.info('Detected HTTP to HTTPS redirect: $uri -> $finalUrl');
-          // If we got a successful login after redirect, extract the token
-          if (response.statusCode == 302 || response.statusCode == 200) {
-            final token = _extractSysauthToken(response.headers);
-            if (token != null) {
-              // Signal that HTTPS should be used by returning a special marker
-              // We'll handle this in loginWithProtocolDetection
-              return 'HTTPS_REDIRECT:$token';
-            }
+          // If we got a successful login after redirect, extract the token.
+          // Any status accepted by _sendLogin may carry the session cookie
+          // (e.g. 301/303/307 when Dio stops following redirects).
+          final token = _extractSysauthToken(response.headers);
+          if (token != null) {
+            // Signal that HTTPS should be used by returning a special marker
+            // We'll handle this in loginWithProtocolDetection
+            return 'HTTPS_REDIRECT:$token';
           }
           // No token found, trigger HTTPS retry
           return null;

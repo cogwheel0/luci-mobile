@@ -483,7 +483,17 @@ class AppState extends ChangeNotifier {
     _sessionToken++;
     _cancelRebootPolling();
     _isRebooting = false;
-    await _authService?.logout();
+    try {
+      await _authService?.logout();
+    } catch (e) {
+      // Storage cleanup may have been incomplete; still clear in-memory
+      // session state and proceed with logout.
+      Logger.exception(
+        'Credential cleanup incomplete during logout',
+        e,
+        StackTrace.current,
+      );
+    }
     _dashboardData = null;
     _dashboardError = null;
     _cancelThroughputTimer();
@@ -1000,12 +1010,13 @@ class AppState extends ChangeNotifier {
           }
         }
 
+        // Drop stale results before they can touch rate history.
+        if (token != _sessionToken) return;
         _throughputService?.updateThroughput(
           networkData,
           wanDeviceNames,
           specificInterface: specificInterface,
         );
-        if (token != _sessionToken) return;
         notifyListeners();
       } catch (e) {
         // Throughput updates are non-critical, but log so persistent
@@ -1075,12 +1086,13 @@ class AppState extends ChangeNotifier {
           }
         }
 
+        // Drop stale results before they can touch rate history.
+        if (token != _sessionToken) return;
         _throughputService?.updateThroughput(
           networkData,
           wanDeviceNames,
           specificInterface: specificInterface,
         );
-        if (token != _sessionToken) return;
         notifyListeners();
       }
     } catch (e) {
@@ -1106,17 +1118,36 @@ class AppState extends ChangeNotifier {
     _isRebooting = true;
     notifyListeners();
 
+    // Capture the target and session before the RPC: a router switch while
+    // the reboot call is in flight must not redirect the poll elsewhere.
+    final token = _sessionToken;
+    final targetIp = _authService!.ipAddress!;
+    final targetUseHttps = _authService!.useHttps;
+
     try {
       final result = await _apiService!.reboot(
-        _authService!.ipAddress!,
+        targetIp,
         _authService!.sysauth!,
-        _authService!.useHttps,
+        targetUseHttps,
         context: context,
       );
-      // Capture the target so polling keeps pinging the rebooted router even
-      // if the user switches routers or logs out while it restarts.
-      _rebootTargetIp = _authService!.ipAddress;
-      _rebootTargetUseHttps = _authService!.useHttps;
+      if (!result) {
+        // The RPC reported failure - don't leave the UI stuck in the
+        // rebooting state polling for a router that never restarted.
+        if (token == _sessionToken) {
+          _isRebooting = false;
+          notifyListeners();
+        }
+        return false;
+      }
+      if (token != _sessionToken) {
+        // Session changed mid-reboot; the new session owns its own state.
+        return false;
+      }
+      // Store the captured target so polling keeps pinging the rebooted
+      // router even if the user switches routers or logs out meanwhile.
+      _rebootTargetIp = targetIp;
+      _rebootTargetUseHttps = targetUseHttps;
       // Wait 30 seconds before starting to poll for router availability
       // Some routers take longer to reboot
       _rebootDelayTimer?.cancel();
@@ -1125,8 +1156,10 @@ class AppState extends ChangeNotifier {
       });
       return result;
     } catch (e) {
-      _isRebooting = false;
-      notifyListeners();
+      if (token == _sessionToken) {
+        _isRebooting = false;
+        notifyListeners();
+      }
       return false;
     }
   }
@@ -1232,19 +1265,19 @@ class AppState extends ChangeNotifier {
     ];
 
     for (final endpoint in endpoints) {
+      // Create a fresh Dio client for pinging to avoid certificate/connection
+      // issues; declared outside try so finally can always close it.
+      final dio = Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 5),
+          sendTimeout: const Duration(seconds: 5),
+          followRedirects: false,
+          validateStatus: (code) => code != null && code >= 200 && code < 500,
+        ),
+      );
       try {
         final url = '$scheme://$targetIp$endpoint';
-
-        // Create a fresh Dio client for pinging to avoid certificate/connection issues
-        final dio = Dio(
-          BaseOptions(
-            connectTimeout: const Duration(seconds: 5),
-            receiveTimeout: const Duration(seconds: 5),
-            sendTimeout: const Duration(seconds: 5),
-            followRedirects: false,
-            validateStatus: (code) => code != null && code >= 200 && code < 500,
-          ),
-        );
 
         if (targetUseHttps) {
           final adapter = IOHttpClientAdapter();
@@ -1291,6 +1324,10 @@ class AppState extends ChangeNotifier {
             // print('[Ping] SSL handshake error - router may still be starting');
           }
         }
+      } finally {
+        // Each attempt uses its own throwaway client; close it so repeated
+        // polls don't retain adapters and sockets until process shutdown.
+        dio.close(force: true);
       }
     }
 
