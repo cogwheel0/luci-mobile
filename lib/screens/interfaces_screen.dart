@@ -68,9 +68,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
 
     // The UCI section name is the primary identity: it is unique per
     // wireless interface config and computable by both the scroll-targeting
-    // and rendering paths, and it survives SSID edits and reordering.
+    // and rendering paths. Keying on the section alone keeps state stable
+    // across SSID edits and runtime/configuration-only transitions.
     if (section.isNotEmpty) {
-      return '${ssidTrimmed.toLowerCase()}__$section';
+      return 'wireless__$section';
     }
 
     // If SSID is empty, we need to ensure uniqueness even with same radio

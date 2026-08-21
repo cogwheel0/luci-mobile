@@ -72,6 +72,12 @@ void main() {
 
       expect(service.currentRxRate, 0.0);
       expect(service.currentTxRate, 0.0);
+      for (final rate in service.rxHistory) {
+        expect(rate.isFinite, isTrue);
+      }
+      for (final rate in service.txHistory) {
+        expect(rate.isFinite, isTrue);
+      }
     });
 
     test('finite string counters produce positive finite rates', () async {
