@@ -64,12 +64,14 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
   }) {
     final radio = (radioName ?? '').trim();
     final ssidTrimmed = (ssid ?? '').trim();
-    final section = (sectionName ?? '').trim().toLowerCase();
 
     // The UCI section name is the primary identity: it is unique per
     // wireless interface config and computable by both the scroll-targeting
     // and rendering paths. Keying on the section alone keeps state stable
-    // across SSID edits and runtime/configuration-only transitions.
+    // across SSID edits and runtime/configuration-only transitions. Section
+    // names are case-sensitive on the router, so preserve case here - two
+    // sections may differ only by case and must not share a GlobalKey.
+    final section = (sectionName ?? '').trim();
     if (section.isNotEmpty) {
       return 'wireless__$section';
     }
