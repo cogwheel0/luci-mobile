@@ -194,15 +194,15 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                   final ssidKey = _normalizeInterfaceKey(ssid);
                   final deviceKey = _normalizeInterfaceKey(deviceName);
                   final nameKey = _normalizeInterfaceKey(name);
-                  final sectionKey = (sectionName ?? '').trim();
-                  // Match against all possible keys. Sections compare
-                  // case-sensitively against the raw target; the aliases
-                  // normalize case.
+                  final sectionKey = _normalizeInterfaceKey(sectionName);
+                  // Match against all possible keys. Keys preserve section
+                  // case (distinct sections must not share a GlobalKey),
+                  // but target matching normalizes case so e.g. "GUEST"
+                  // finds "Guest".
                   if (normalizedTarget == ssidKey ||
                       normalizedTarget == deviceKey ||
                       normalizedTarget == nameKey ||
-                      (sectionKey.isNotEmpty &&
-                          interfaceName.trim() == sectionKey)) {
+                      normalizedTarget == sectionKey) {
                     _scrollToExpandedCard(keyStr);
                     return;
                   }
@@ -655,9 +655,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                     _normalizeInterfaceKey(target) ||
                 _normalizeInterfaceKey(name) ==
                     _normalizeInterfaceKey(target) ||
-                (section != null &&
-                    section.trim().isNotEmpty &&
-                    section.trim() == target.trim()));
+                _normalizeInterfaceKey(section) ==
+                    _normalizeInterfaceKey(target));
 
         final shouldExpand = isTargetInterface || _expandedInterface == keyStr;
         return Padding(
