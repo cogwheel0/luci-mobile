@@ -12,6 +12,15 @@ import 'logger.dart';
 String _certificateFingerprint(X509Certificate cert) =>
     sha256.convert(cert.der).toString();
 
+/// Normalizes a host for certificate-pin keys. `Uri.host` (and therefore
+/// the host passed to `badCertificateCallback`) returns IPv6 literals
+/// without brackets, while user input may include them - strip brackets so
+/// pin writes and reads always agree.
+String _normalizePinHost(String host) =>
+    host.startsWith('[') && host.endsWith(']')
+    ? host.substring(1, host.length - 1)
+    : host;
+
 /// HTTP client manager that provides secure client instances with proper
 /// certificate validation and connection pooling.
 ///
@@ -147,7 +156,8 @@ class HttpClientManager {
         httpClient.badCertificateCallback = (cert, certHost, port) {
           // Trust the certificate only if its fingerprint was accepted
           // for this exact host:port pair.
-          final expected = _acceptedCertFingerprints['$certHost:$port'];
+          final expected =
+              _acceptedCertFingerprints['${_normalizePinHost(certHost)}:$port'];
           return expected != null && expected == _certificateFingerprint(cert);
         };
         return httpClient;
@@ -196,7 +206,7 @@ class HttpClientManager {
 
   /// Whether [cert] matches the pinned fingerprint for `host:port`.
   bool isCertificatePinned(String host, int port, X509Certificate cert) {
-    return _acceptedCertFingerprints['$host:$port'] ==
+    return _acceptedCertFingerprints['${_normalizePinHost(host)}:$port'] ==
         _certificateFingerprint(cert);
   }
 
@@ -270,7 +280,8 @@ class HttpClientManager {
         return true;
       }
 
-      final certKey = '$host:${_effectivePort(hostWithPort, useHttps)}';
+      final certKey =
+          '${_normalizePinHost(host)}:${_effectivePort(hostWithPort, useHttps)}';
       final fingerprint = _certificateFingerprint(presentedCert!);
 
       // Already pinned with this exact certificate.

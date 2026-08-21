@@ -124,11 +124,16 @@ class ThroughputService {
     }
   }
 
-  /// Safely coerces a counter value to [num]. Some firmware builds report
-  /// byte counters as strings; a hard cast would throw and kill the update.
+  /// Safely coerces a counter value to a finite [num]. Some firmware builds
+  /// report byte counters as strings; a hard cast would throw and kill the
+  /// update. Non-finite values (NaN/Infinity, also parseable from strings)
+  /// are rejected so they cannot propagate into rates and history.
   static num _asNum(Object? value) {
-    if (value is num) return value;
-    if (value is String) return num.tryParse(value) ?? 0;
+    if (value is num) return value.isFinite ? value : 0;
+    if (value is String) {
+      final parsed = num.tryParse(value);
+      return (parsed != null && parsed.isFinite) ? parsed : 0;
+    }
     return 0;
   }
 

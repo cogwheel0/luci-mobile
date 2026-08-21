@@ -360,6 +360,9 @@ class AppState extends ChangeNotifier {
     // Invalidate any in-flight requests from the previously selected router
     _sessionToken++;
     _cancelRebootPolling();
+    // Cancelling the poll removes the only path that clears this flag, so
+    // reset it here or the new router gets no throughput timer.
+    _isRebooting = false;
 
     _isLoading = true;
     _dashboardError = null;
@@ -964,14 +967,15 @@ class AppState extends ChangeNotifier {
       return;
     }
     _throughputUpdateInFlight = true;
+    final token = _sessionToken;
     try {
-      await _updateThroughputInternal();
+      await _updateThroughputInternal(token);
     } finally {
       _throughputUpdateInFlight = false;
     }
   }
 
-  Future<void> _updateThroughputInternal() async {
+  Future<void> _updateThroughputInternal(int token) async {
     if (_reviewerModeEnabled) {
       // For reviewer mode, get network devices data only
       try {
@@ -1001,6 +1005,7 @@ class AppState extends ChangeNotifier {
           wanDeviceNames,
           specificInterface: specificInterface,
         );
+        if (token != _sessionToken) return;
         notifyListeners();
       } catch (e) {
         // Throughput updates are non-critical, but log so persistent
@@ -1075,6 +1080,7 @@ class AppState extends ChangeNotifier {
           wanDeviceNames,
           specificInterface: specificInterface,
         );
+        if (token != _sessionToken) return;
         notifyListeners();
       }
     } catch (e) {
@@ -1416,8 +1422,7 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     _throughputTimer?.cancel();
-    _pollingTimer?.cancel();
-    _pollAttempts = 0;
+    _cancelRebootPolling();
     _isRebooting = false;
     super.dispose();
   }

@@ -125,10 +125,11 @@ class RealApiService implements IApiService {
     return LoginResult(token: null, actualUseHttps: initialUseHttps);
   }
 
-  /// POSTs the login form and extracts the session token from the
-  /// `sysauth` cookie, if present.
-  Future<String?> _postLogin(Dio client, Uri uri, String params) async {
-    final response = await client.post(
+  /// POSTs the login form. Returns the raw response so callers can inspect
+  /// redirect targets; any status accepted by [Options.validateStatus]
+  /// (2xx-3xx) may carry the session cookie.
+  Future<Response<dynamic>> _sendLogin(Dio client, Uri uri, String params) {
+    return client.post(
       uri.toString(),
       data: params,
       options: Options(
@@ -137,11 +138,13 @@ class RealApiService implements IApiService {
         validateStatus: (code) => code != null && code >= 200 && code < 400,
       ),
     );
+  }
 
-    if (response.statusCode == 302 || response.statusCode == 200) {
-      return _extractSysauthToken(response.headers);
-    }
-    return null;
+  /// POSTs the login form and extracts the session token from the
+  /// `sysauth` cookie, if present.
+  Future<String?> _postLogin(Dio client, Uri uri, String params) async {
+    final response = await _sendLogin(client, uri, params);
+    return _extractSysauthToken(response.headers);
   }
 
   Future<String?> _login(
@@ -159,15 +162,7 @@ class RealApiService implements IApiService {
 
     try {
       // Normal POST request - Dio will follow redirects by default
-      final response = await client.post(
-        uri.toString(),
-        data: params,
-        options: Options(
-          contentType: Headers.formUrlEncodedContentType,
-          followRedirects: true,
-          validateStatus: (code) => code != null && code >= 200 && code < 400,
-        ),
-      );
+      final response = await _sendLogin(client, uri, params);
 
       // Check if we were redirected to HTTPS (only relevant for initial HTTP attempts)
       if (checkRedirect && !useHttps) {
@@ -188,10 +183,7 @@ class RealApiService implements IApiService {
         }
       }
 
-      if (response.statusCode == 302 || response.statusCode == 200) {
-        return _extractSysauthToken(response.headers);
-      }
-      return null;
+      return _extractSysauthToken(response.headers);
     } on DioException catch (e, stack) {
       Logger.exception('Login failed', e, stack);
 

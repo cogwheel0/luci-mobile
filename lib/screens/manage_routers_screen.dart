@@ -204,7 +204,7 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                 bool isConnecting = false;
                                 String? errorMessage;
                                 try {
-                                  await showDialog<Map<String, dynamic>>(
+                                  await showDialog<void>(
                                     context: context,
                                     builder: (context) {
                                       return StatefulBuilder(
