@@ -2,13 +2,19 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
 import 'package:luci_mobile/models/router.dart';
 import '../utils/logger.dart';
-import 'package:luci_mobile/config/app_config.dart';
 
 class SecureStorageService {
   final _storage = const FlutterSecureStorage();
 
   static const String _routersKey = 'routers';
   static const String _selectedRouterKey = 'selectedRouterId';
+
+  static const List<String> _credentialKeys = [
+    'ipAddress',
+    'username',
+    'password',
+    'useHttps',
+  ];
 
   Future<void> saveCredentials({
     required String ipAddress,
@@ -52,15 +58,11 @@ class SecureStorageService {
 
   Future<void> clearCredentials() async {
     try {
-      // Clear all credentials but preserve reviewer mode flag
-      final reviewerMode = await _storage.read(key: AppConfig.reviewerModeKey);
-      await _storage.deleteAll();
-      // Restore reviewer mode flag if it was set
-      if (reviewerMode != null) {
-        await _storage.write(
-          key: AppConfig.reviewerModeKey,
-          value: reviewerMode,
-        );
+      // Clear only session credentials. Deleting everything here would also
+      // wipe the saved routers list (including per-router passwords), the
+      // selected router, dashboard preferences, theme and accepted certs.
+      for (final key in _credentialKeys) {
+        await _storage.delete(key: key);
       }
     } catch (e, stack) {
       Logger.exception('Failed to clear credentials', e, stack);

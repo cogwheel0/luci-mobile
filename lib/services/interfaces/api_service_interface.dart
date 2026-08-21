@@ -74,11 +74,16 @@ abstract class IApiService {
     required String config,
     BuildContext? context,
   });
+
+  /// Executes a command on the router via the rpcd `file.exec` ubus method.
+  /// [command] must be an absolute executable path; [params] are its
+  /// arguments.
   Future<dynamic> systemExec(
     String ipAddress,
     String sysauth,
     bool useHttps, {
     required String command,
+    List<String> params = const [],
     BuildContext? context,
   });
 }

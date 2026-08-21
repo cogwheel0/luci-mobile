@@ -50,22 +50,22 @@ class ThroughputService {
     String? specificInterface,
   }) {
     final now = DateTime.now();
-    
+
     // Always update per-interface throughput for all interfaces
     if (networkData != null) {
       networkData.forEach((devName, devData) {
         _updateInterfaceThroughput(devName, devData, now);
       });
     }
-    
+
     // Update overall throughput
     if (specificInterface != null && specificInterface.isNotEmpty) {
       // If specific interface requested, use only that interface's data
       if (networkData != null && networkData.containsKey(specificInterface)) {
         _updateSpecificInterfaceThroughput(
-          specificInterface, 
-          networkData[specificInterface], 
-          now
+          specificInterface,
+          networkData[specificInterface],
+          now,
         );
       } else {
         // Interface not found in data, clear current rates
@@ -124,6 +124,14 @@ class ThroughputService {
     }
   }
 
+  /// Safely coerces a counter value to [num]. Some firmware builds report
+  /// byte counters as strings; a hard cast would throw and kill the update.
+  static num _asNum(Object? value) {
+    if (value is num) return value;
+    if (value is String) return num.tryParse(value) ?? 0;
+    return 0;
+  }
+
   void _updateInterfaceThroughput(
     String interface,
     dynamic devData,
@@ -151,10 +159,18 @@ class ThroughputService {
 
     if (elapsedSeconds >= _minElapsedSeconds) {
       // Handle both formats: stats.rx_bytes and direct rx_bytes
-      final lastRx = (lastStats['stats']?['rx_bytes'] ?? lastStats['rx_bytes'] ?? 0) as num;
-      final lastTx = (lastStats['stats']?['tx_bytes'] ?? lastStats['tx_bytes'] ?? 0) as num;
-      final currentRx = (devData['stats']?['rx_bytes'] ?? devData['rx_bytes'] ?? 0) as num;
-      final currentTx = (devData['stats']?['tx_bytes'] ?? devData['tx_bytes'] ?? 0) as num;
+      final lastRx = _asNum(
+        lastStats['stats']?['rx_bytes'] ?? lastStats['rx_bytes'],
+      );
+      final lastTx = _asNum(
+        lastStats['stats']?['tx_bytes'] ?? lastStats['tx_bytes'],
+      );
+      final currentRx = _asNum(
+        devData['stats']?['rx_bytes'] ?? devData['rx_bytes'],
+      );
+      final currentTx = _asNum(
+        devData['stats']?['tx_bytes'] ?? devData['tx_bytes'],
+      );
 
       final rxRate = max(0, (currentRx - lastRx) / elapsedSeconds);
       final txRate = max(0, (currentTx - lastTx) / elapsedSeconds);
@@ -248,9 +264,9 @@ class ThroughputService {
           // Handle both formats: stats.rx_bytes and direct rx_bytes
           if (devData['stats'] is Map<String, dynamic> &&
               devData['stats'][key] != null) {
-            total += devData['stats'][key];
+            total += _asNum(devData['stats'][key]);
           } else if (devData[key] != null) {
-            total += devData[key];
+            total += _asNum(devData[key]);
           }
         }
       }

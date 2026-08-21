@@ -24,6 +24,19 @@ Uri _buildUrl(String ipAddress, bool useHttps, String path) {
   return Uri.parse('$scheme://$host$path');
 }
 
+/// Matches the LuCI session cookie (`sysauth`, or `sysauth_https` on some
+/// HTTPS setups) and captures its value up to the first `;`, `,` or
+/// whitespace so tokens containing `=` survive.
+final RegExp _sysauthCookiePattern = RegExp(r'\bsysauth\w*=([^;,\s]+)');
+
+String? _extractSysauthToken(Headers headers) {
+  for (final header in headers['set-cookie'] ?? const <String>[]) {
+    final match = _sysauthCookiePattern.firstMatch(header);
+    if (match != null) return match.group(1);
+  }
+  return null;
+}
+
 class RealApiService implements IApiService {
   final HttpClientManager _httpClientManager = HttpClientManager();
 
@@ -112,6 +125,25 @@ class RealApiService implements IApiService {
     return LoginResult(token: null, actualUseHttps: initialUseHttps);
   }
 
+  /// POSTs the login form and extracts the session token from the
+  /// `sysauth` cookie, if present.
+  Future<String?> _postLogin(Dio client, Uri uri, String params) async {
+    final response = await client.post(
+      uri.toString(),
+      data: params,
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        followRedirects: true,
+        validateStatus: (code) => code != null && code >= 200 && code < 400,
+      ),
+    );
+
+    if (response.statusCode == 302 || response.statusCode == 200) {
+      return _extractSysauthToken(response.headers);
+    }
+    return null;
+  }
+
   Future<String?> _login(
     String ipAddress,
     String username,
@@ -133,7 +165,7 @@ class RealApiService implements IApiService {
         options: Options(
           contentType: Headers.formUrlEncodedContentType,
           followRedirects: true,
-          validateStatus: (code) => code != null && code >= 200 && code < 400 || code == 302,
+          validateStatus: (code) => code != null && code >= 200 && code < 400,
         ),
       );
 
@@ -144,17 +176,11 @@ class RealApiService implements IApiService {
           Logger.info('Detected HTTP to HTTPS redirect: $uri -> $finalUrl');
           // If we got a successful login after redirect, extract the token
           if (response.statusCode == 302 || response.statusCode == 200) {
-            final setCookies = response.headers.map['set-cookie'];
-            if (setCookies != null && setCookies.isNotEmpty) {
-              final cookies = setCookies.join(',').split(',');
-              for (final cookie in cookies) {
-                if (cookie.contains('sysauth')) {
-                  final cookieValue = cookie.split(';')[0].split('=')[1];
-                  // Signal that HTTPS should be used by returning a special marker
-                  // We'll handle this in loginWithProtocolDetection
-                  return 'HTTPS_REDIRECT:$cookieValue';
-                }
-              }
+            final token = _extractSysauthToken(response.headers);
+            if (token != null) {
+              // Signal that HTTPS should be used by returning a special marker
+              // We'll handle this in loginWithProtocolDetection
+              return 'HTTPS_REDIRECT:$token';
             }
           }
           // No token found, trigger HTTPS retry
@@ -163,28 +189,23 @@ class RealApiService implements IApiService {
       }
 
       if (response.statusCode == 302 || response.statusCode == 200) {
-        // Parse Set-Cookie headers to find sysauth cookie
-        final setCookies = response.headers.map['set-cookie'];
-        if (setCookies != null && setCookies.isNotEmpty) {
-          final cookies = setCookies.join(',').split(',');
-          for (final cookie in cookies) {
-            if (cookie.contains('sysauth')) {
-              final cookieValue = cookie.split(';')[0].split('=')[1];
-              return cookieValue;
-            }
-          }
-        }
+        return _extractSysauthToken(response.headers);
       }
       return null;
     } on DioException catch (e, stack) {
       Logger.exception('Login failed', e, stack);
 
       final isCertError =
-          e.error is HandshakeException || e.message?.contains('CERTIFICATE_VERIFY_FAILED') == true;
+          e.error is HandshakeException ||
+          e.message?.contains('CERTIFICATE_VERIFY_FAILED') == true;
 
       if (!useHttps && checkRedirect && isCertError) {
-        Logger.info('Detected HTTPS certificate issue during redirect; retrying with HTTPS');
-        final retryContext = context != null && context.mounted ? context : null;
+        Logger.info(
+          'Detected HTTPS certificate issue during redirect; retrying with HTTPS',
+        );
+        final retryContext = context != null && context.mounted
+            ? context
+            : null;
         try {
           return await _login(
             ipAddress,
@@ -195,44 +216,32 @@ class RealApiService implements IApiService {
             checkRedirect: false,
           );
         } on DioException catch (httpsError, httpsStack) {
-          Logger.exception('HTTPS retry after redirect failed', httpsError, httpsStack);
+          Logger.exception(
+            'HTTPS retry after redirect failed',
+            httpsError,
+            httpsStack,
+          );
         }
       }
 
       if (useHttps && context != null && context.mounted && isCertError) {
         // Try to prompt for certificate acceptance
-        final accepted = await _httpClientManager.promptForCertificateAcceptance(
-          context: context,
-          hostWithPort: ipAddress,
-          useHttps: useHttps,
-        );
+        final accepted = await _httpClientManager
+            .promptForCertificateAcceptance(
+              context: context,
+              hostWithPort: ipAddress,
+              useHttps: useHttps,
+            );
 
         if (accepted && context.mounted) {
           // Create a new client and retry the login
-          final retryClient = _createHttpClient(useHttps, ipAddress, context: context);
+          final retryClient = _createHttpClient(
+            useHttps,
+            ipAddress,
+            context: context,
+          );
           try {
-            final retryResponse = await retryClient.post(
-              uri.toString(),
-              data: params,
-              options: Options(
-                contentType: Headers.formUrlEncodedContentType,
-                followRedirects: true,
-                validateStatus: (code) => code != null && code >= 200 && code < 400 || code == 302,
-              ),
-            );
-
-            if (retryResponse.statusCode == 302 || retryResponse.statusCode == 200) {
-              final setCookies = retryResponse.headers.map['set-cookie'];
-              if (setCookies != null && setCookies.isNotEmpty) {
-                final cookies = setCookies.join(',').split(',');
-                for (final cookie in cookies) {
-                  if (cookie.contains('sysauth')) {
-                    final cookieValue = cookie.split(';')[0].split('=')[1];
-                    return cookieValue;
-                  }
-                }
-              }
-            }
+            return await _postLogin(retryClient, uri, params);
           } on DioException catch (retryError, retryStack) {
             Logger.exception('Login retry failed', retryError, retryStack);
           }
@@ -310,9 +319,7 @@ class RealApiService implements IApiService {
       final response = await client.post(
         url.toString(),
         data: jsonEncode(rpcPayload),
-        options: Options(
-          headers: {'Content-Type': 'application/json'},
-        ),
+        options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
       if (response.statusCode == 200) {
@@ -649,21 +656,27 @@ class RealApiService implements IApiService {
     );
   }
 
+  /// Executes a command on the router via the rpcd `file.exec` ubus method.
+  ///
+  /// Note: rpcd's `system` object has no `exec` method - command execution
+  /// lives in the `file` object (rpcd-mod-file), which LuCI admin sessions
+  /// are ACL-granted to use.
   @override
   Future<dynamic> systemExec(
     String ipAddress,
     String sysauth,
     bool useHttps, {
     required String command,
+    List<String> params = const [],
     BuildContext? context,
   }) async {
     return await callWithContext(
       ipAddress,
       sysauth,
       useHttps,
-      object: 'system',
+      object: 'file',
       method: 'exec',
-      params: {'command': command},
+      params: {'command': command, 'params': params},
       context: context,
     );
   }
