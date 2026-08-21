@@ -1215,7 +1215,16 @@ class AppState extends ChangeNotifier {
 
     _pollingTimer = Timer(Duration(seconds: delaySeconds), () async {
       _pollAttempts++;
+      final token = _sessionToken;
       final available = await _pingRouter();
+
+      // Cancelling the timer does not abort an in-flight probe: if the user
+      // switched routers or logged out while this liveness check was
+      // outstanding, its result describes the previous target. Ignore it so
+      // recovery cannot act on (or re-login into) the wrong session.
+      if (token != _sessionToken) {
+        return;
+      }
 
       if (available) {
         // Router is back online
