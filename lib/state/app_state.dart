@@ -1365,8 +1365,15 @@ class AppState extends ChangeNotifier {
       try {
         // Build the URI structurally: string interpolation produces an
         // invalid authority for IPv6 literals (missing brackets), while
-        // Uri host handling adds them automatically.
-        final authority = Uri.parse('//$targetIp');
+        // Uri host handling adds them automatically. Persisted addresses
+        // may hold unbracketed IPv6 literals (2+ colons) - bracket them
+        // first or the authority parse throws and every probe fails.
+        var authorityInput = targetIp;
+        if (!authorityInput.startsWith('[') &&
+            ':'.allMatches(authorityInput).length > 1) {
+          authorityInput = '[$authorityInput]';
+        }
+        final authority = Uri.parse('//$authorityInput');
         final uri = Uri(
           scheme: scheme,
           host: authority.host,
@@ -1551,7 +1558,6 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  @override
   @override
   void notifyListeners() {
     // Async continuations can outlive disposal; suppress their notifications

@@ -32,9 +32,6 @@ String _normalizePinHost(String host) =>
 class HttpClientManager {
   static final HttpClientManager _instance = HttpClientManager._internal();
   factory HttpClientManager() => _instance;
-  HttpClientManager._internal() {
-    _loadAcceptedCertificates();
-  }
 
   final Map<String, Dio> _clients = {};
 
@@ -48,6 +45,14 @@ class HttpClientManager {
   // afterwards would clobber newer in-memory state - so mutations set
   // [_pinsMutated] and the loader defers to it.
   bool _pinsMutated = false;
+
+  /// Completes when persisted pins have been merged into memory. Pin-reading
+  /// entry points await this so an early connection cannot miss stored pins.
+  late final Future<void> _pinsLoaded;
+
+  HttpClientManager._internal() {
+    _pinsLoaded = _loadAcceptedCertificates();
+  }
 
   /// Creates or returns a cached HTTP client for the given host
   /// In production builds, certificate validation is enforced with user warnings
@@ -269,6 +274,10 @@ class HttpClientManager {
   }) async {
     if (!useHttps) return true; // Non-HTTPS doesn't need certificate acceptance
     if (!context.mounted) return false;
+    // Make sure persisted pins are in memory before deciding whether to
+    // prompt - otherwise an early connection could re-prompt for a host
+    // that was already accepted.
+    await _pinsLoaded;
 
     final host = _extractHostname(hostWithPort);
 
