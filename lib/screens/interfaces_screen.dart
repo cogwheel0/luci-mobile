@@ -187,16 +187,22 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                     name: name,
                     sectionName: sectionName,
                   );
-                  // Generate all possible normalized keys for matching
+                  // Generate all possible normalized keys for matching.
+                  // Section names are compared case-sensitively (they are
+                  // case-sensitive on the router); only the user-facing
+                  // aliases normalize case.
                   final ssidKey = _normalizeInterfaceKey(ssid);
                   final deviceKey = _normalizeInterfaceKey(deviceName);
                   final nameKey = _normalizeInterfaceKey(name);
-                  final sectionKey = _normalizeInterfaceKey(sectionName);
-                  // Match against all possible keys
+                  final sectionKey = (sectionName ?? '').trim();
+                  // Match against all possible keys. Sections compare
+                  // case-sensitively against the raw target; the aliases
+                  // normalize case.
                   if (normalizedTarget == ssidKey ||
                       normalizedTarget == deviceKey ||
                       normalizedTarget == nameKey ||
-                      normalizedTarget == sectionKey) {
+                      (sectionKey.isNotEmpty &&
+                          interfaceName.trim() == sectionKey)) {
                     _scrollToExpandedCard(keyStr);
                     return;
                   }
@@ -638,18 +644,20 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             ? ssid.toString()
             : deviceName.toString();
 
-        // Check if this is the target interface for expansion
+        // Check if this is the target interface for expansion. Section
+        // names match case-sensitively; aliases normalize case.
         final section = iface['section'] as String?;
+        final target = _targetInterface;
         final isTargetInterface =
-            _targetInterface != null &&
-            (_normalizeInterfaceKey(ssid) ==
-                    _normalizeInterfaceKey(_targetInterface!) ||
+            target != null &&
+            (_normalizeInterfaceKey(ssid) == _normalizeInterfaceKey(target) ||
                 _normalizeInterfaceKey(deviceName) ==
-                    _normalizeInterfaceKey(_targetInterface!) ||
+                    _normalizeInterfaceKey(target) ||
                 _normalizeInterfaceKey(name) ==
-                    _normalizeInterfaceKey(_targetInterface!) ||
-                _normalizeInterfaceKey(section) ==
-                    _normalizeInterfaceKey(_targetInterface!));
+                    _normalizeInterfaceKey(target) ||
+                (section != null &&
+                    section.trim().isNotEmpty &&
+                    section.trim() == target.trim()));
 
         final shouldExpand = isTargetInterface || _expandedInterface == keyStr;
         return Padding(

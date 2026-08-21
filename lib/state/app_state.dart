@@ -65,6 +65,20 @@ class AppState extends ChangeNotifier {
   // Guards against overlapping throughput polls on slow links.
   bool _throughputUpdateInFlight = false;
 
+  // Set when dispose() runs; suppresses late async notifications.
+  bool _isDisposed = false;
+
+  // Serializes authentication operations (login/logout) so overlapping
+  // calls cannot interleave mutations of the shared auth-service session
+  // fields. A generation check alone cannot undo a stale write.
+  Future<void> _authOpQueue = Future<void>.value();
+
+  Future<T> _serializeAuthOp<T>(Future<T> Function() action) {
+    final op = _authOpQueue.then((_) => action());
+    _authOpQueue = op.then((_) {}, onError: (_) {});
+    return op;
+  }
+
   // Add rebooting state
   bool _isRebooting = false;
   bool get isRebooting => _isRebooting;
@@ -234,7 +248,11 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadDashboardPreferences() async {
+  /// Loads dashboard preferences scoped to the selected router. When
+  /// [expectedToken] is provided, results are discarded if the session
+  /// changed while loading - rapid router switches must not apply the
+  /// previous router's preferences to the new one.
+  Future<void> loadDashboardPreferences({int? expectedToken}) async {
     try {
       // Scope preferences by selected router if available
       final routerId = _routerService?.selectedRouter?.id;
@@ -248,6 +266,10 @@ class AppState extends ChangeNotifier {
       if ((json == null || json.isEmpty) && routerId != null) {
         json = await _secureStorageService.readValue('dashboard_preferences');
       }
+      // The selection changed while loading - these are the previous
+      // router's preferences; applying them would leak state across
+      // routers and a later save could persist them under the wrong key.
+      if (expectedToken != null && expectedToken != _sessionToken) return;
       if (json != null && json.isNotEmpty) {
         _dashboardPreferences = DashboardPreferences.fromJson(jsonDecode(json));
         notifyListeners();
@@ -364,6 +386,7 @@ class AppState extends ChangeNotifier {
 
     // Invalidate any in-flight requests from the previously selected router
     _sessionToken++;
+    final token = _sessionToken;
     _cancelRebootPolling();
     // Cancelling the poll removes the only path that clears this flag, so
     // reset it here or the new router gets no throughput timer.
@@ -381,7 +404,8 @@ class AppState extends ChangeNotifier {
         : null; // ignore: use_build_context_synchronously
 
     // Load router-scoped dashboard preferences immediately on selection
-    await loadDashboardPreferences();
+    await loadDashboardPreferences(expectedToken: token);
+    if (token != _sessionToken) return;
 
     notifyListeners();
     // ignore: use_build_context_synchronously
@@ -393,6 +417,9 @@ class AppState extends ChangeNotifier {
       fromRouter: true,
       context: safeContext, // ignore: use_build_context_synchronously
     );
+    // A newer session started while this switch was in flight - it owns the
+    // loading and error state now.
+    if (token != _sessionToken) return;
     // login() already fetches dashboard data on success; fetching again here
     // would double the RPC burst on every router switch.
     if (!loginSuccess) {
@@ -421,6 +448,7 @@ class AppState extends ChangeNotifier {
     // recovery - that recovery belongs to the session that started it and
     // must not adopt the replacement session.
     _sessionToken++;
+    final token = _sessionToken;
     _cancelRebootPolling();
     _isRebooting = false;
     _isLoading = true;
@@ -432,7 +460,12 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _authService!.login(ip, user, pass, useHttps, context: context);
+      await _serializeAuthOp<void>(
+        () => _authService!.login(ip, user, pass, useHttps, context: context),
+      );
+      // A newer session (logout / another login) superseded this one while
+      // the credential exchange was in flight - do not touch any state.
+      if (token != _sessionToken) return false;
 
       // Check if authentication was successful
       if (_authService!.isAuthenticated) {
@@ -469,11 +502,13 @@ class AppState extends ChangeNotifier {
           }
         }
         await fetchDashboardData();
+        if (token != _sessionToken) return false;
         _startThroughputTimer();
         _isLoading = false;
         notifyListeners();
         return true;
       } else {
+        if (token != _sessionToken) return false;
         _errorMessage =
             'Login Failed: Invalid credentials or host unreachable.';
         _isLoading = false;
@@ -481,6 +516,7 @@ class AppState extends ChangeNotifier {
         return false;
       }
     } catch (e) {
+      if (token != _sessionToken) return false;
       _errorMessage = 'An error occurred: $e';
       _isLoading = false;
       notifyListeners();
@@ -489,11 +525,13 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    _sessionToken++;
+    final token = ++_sessionToken;
     _cancelRebootPolling();
     _isRebooting = false;
     try {
-      await _authService?.logout();
+      await _serializeAuthOp<void>(
+        () => _authService?.logout() ?? Future<void>.value(),
+      );
     } catch (e) {
       // Storage cleanup may have been incomplete; still clear in-memory
       // session state and proceed with logout.
@@ -503,6 +541,8 @@ class AppState extends ChangeNotifier {
         StackTrace.current,
       );
     }
+    // A newer session started while cleanup ran - it owns the state now.
+    if (token != _sessionToken) return;
     _dashboardData = null;
     _dashboardError = null;
     _cancelThroughputTimer();
@@ -604,6 +644,9 @@ class AppState extends ChangeNotifier {
     // We'll let the new request proceed and the loading state will be handled properly
     final ip = _routerService!.selectedRouter!.ipAddress;
     final useHttps = _routerService!.selectedRouter!.useHttps;
+    // Snapshot the credentials for this exact session: reading the mutable
+    // auth service mid-flight could send newer credentials to this router.
+    final sysauth = _authService!.sysauth!;
     final token = _sessionToken;
 
     _isDashboardLoading = true;
@@ -620,7 +663,7 @@ class AppState extends ChangeNotifier {
         try {
           return await _apiService!.call(
             ip,
-            _authService!.sysauth!,
+            sysauth,
             useHttps,
             object: object,
             method: method,
@@ -649,7 +692,7 @@ class AppState extends ChangeNotifier {
       final results = await Future.wait([
         _apiService!.call(
           ip,
-          _authService!.sysauth!,
+          sysauth,
           useHttps,
           object: 'system',
           method: 'board',
@@ -657,7 +700,7 @@ class AppState extends ChangeNotifier {
         ),
         _apiService!.call(
           ip,
-          _authService!.sysauth!,
+          sysauth,
           useHttps,
           object: 'system',
           method: 'info',
@@ -665,7 +708,7 @@ class AppState extends ChangeNotifier {
         ),
         _apiService!.call(
           ip,
-          _authService!.sysauth!,
+          sysauth,
           useHttps,
           object: 'luci-rpc',
           method: 'getNetworkDevices',
@@ -673,7 +716,7 @@ class AppState extends ChangeNotifier {
         ),
         _apiService!.call(
           ip,
-          _authService!.sysauth!,
+          sysauth,
           useHttps,
           object: 'network.interface',
           method: 'dump',
@@ -681,7 +724,7 @@ class AppState extends ChangeNotifier {
         ),
         _apiService!.call(
           ip,
-          _authService!.sysauth!,
+          sysauth,
           useHttps,
           object: 'luci-rpc',
           method: 'getDHCPLeases',
@@ -760,13 +803,17 @@ class AppState extends ChangeNotifier {
         });
 
         if (hasWireGuardInterfaces) {
+          // This is the last target-sensitive RPC of the fetch; a session
+          // switch must not send newer credentials to the previous router.
+          if (token != _sessionToken) return;
           // Fetch all WireGuard data at once
           final allWireGuardData = await _apiService!.fetchWireGuardPeers(
             ipAddress: ip,
-            sysauth: _authService!.sysauth!,
+            sysauth: sysauth,
             useHttps: useHttps,
             interface: '', // Empty string to get all interfaces
           );
+          if (token != _sessionToken) return;
 
           if (allWireGuardData != null) {
             // The new endpoint returns data for all interfaces
@@ -1125,6 +1172,9 @@ class AppState extends ChangeNotifier {
     _cancelThroughputTimer();
     // Start a fresh recovery cycle (drops any pending one)
     _cancelRebootPolling();
+    // The router is going down: invalidate in-flight dashboard/throughput
+    // continuations so their results cannot land after the service cleared.
+    _sessionToken++;
 
     // Snapshot the identity of THIS recovery attempt: session, generation,
     // and target. An overlapping older reboot() call must not mutate this
@@ -1285,8 +1335,10 @@ class AppState extends ChangeNotifier {
     if (targetIp == null) return false;
     final targetUseHttps = _rebootTargetUseHttps;
 
-    // Clear cached HTTP clients for this host to avoid stale connections
-    if (_pollAttempts == 0) {
+    // Clear cached HTTP clients for this host to avoid stale connections.
+    // The poll counter is incremented before each attempt, so the first
+    // probe sees 1.
+    if (_pollAttempts <= 1) {
       _httpClientManager.disposeClient(targetIp, targetUseHttps);
     }
 
@@ -1311,7 +1363,16 @@ class AppState extends ChangeNotifier {
         ),
       );
       try {
-        final url = '$scheme://$targetIp$endpoint';
+        // Build the URI structurally: string interpolation produces an
+        // invalid authority for IPv6 literals (missing brackets), while
+        // Uri host handling adds them automatically.
+        final authority = Uri.parse('//$targetIp');
+        final uri = Uri(
+          scheme: scheme,
+          host: authority.host,
+          port: authority.hasPort ? authority.port : null,
+          path: endpoint,
+        );
 
         if (targetUseHttps) {
           final adapter = IOHttpClientAdapter();
@@ -1329,7 +1390,7 @@ class AppState extends ChangeNotifier {
         }
 
         // print('[Ping] Attempt $_pollAttempts: Checking $url');
-        final response = await dio.get(url);
+        final response = await dio.getUri(uri);
         // print('[Ping] Response from $endpoint: ${response.statusCode}');
 
         // Accept various status codes as "alive"
@@ -1491,7 +1552,20 @@ class AppState extends ChangeNotifier {
   }
 
   @override
+  @override
+  void notifyListeners() {
+    // Async continuations can outlive disposal; suppress their notifications
+    // instead of letting them throw on a disposed ChangeNotifier.
+    if (_isDisposed) return;
+    super.notifyListeners();
+  }
+
+  @override
   void dispose() {
+    _isDisposed = true;
+    // Invalidate every token-checked continuation (dashboard fetch,
+    // throughput polls, login flows) that may still be in flight.
+    _sessionToken++;
     _throughputTimer?.cancel();
     _cancelRebootPolling();
     _isRebooting = false;

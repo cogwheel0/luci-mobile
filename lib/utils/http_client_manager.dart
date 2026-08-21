@@ -42,6 +42,13 @@ class HttpClientManager {
   final Map<String, String> _acceptedCertFingerprints = {};
   static const String _acceptedCertsKey = 'accepted_certificates';
 
+  // Pin-store synchronization: `_loadAcceptedCertificates()` runs async from
+  // the constructor. If the user accepts a certificate (or clears pins)
+  // before the storage read completes, applying the on-disk snapshot
+  // afterwards would clobber newer in-memory state - so mutations set
+  // [_pinsMutated] and the loader defers to it.
+  bool _pinsMutated = false;
+
   /// Creates or returns a cached HTTP client for the given host
   /// In production builds, certificate validation is enforced with user warnings
   /// In debug builds, self-signed certificates can be allowed automatically
@@ -178,12 +185,14 @@ class HttpClientManager {
     try {
       final storage = const FlutterSecureStorage();
       final certsJson = await storage.read(key: _acceptedCertsKey);
+      // A mutation (accept/clear) happened while the read was in flight -
+      // in-memory state is newer than the on-disk snapshot, so keep it.
+      if (_pinsMutated) return;
       if (certsJson != null) {
         final certs = Map<String, dynamic>.from(jsonDecode(certsJson));
-        _acceptedCertFingerprints.clear();
         certs.forEach((key, value) {
           if (value is String && value.isNotEmpty) {
-            _acceptedCertFingerprints[key] = value;
+            _acceptedCertFingerprints.putIfAbsent(key, () => value);
           }
         });
       }
@@ -218,6 +227,7 @@ class HttpClientManager {
 
   /// Clear accepted certificates (useful for logout or security reset)
   Future<void> clearAcceptedCertificates() async {
+    _pinsMutated = true;
     _acceptedCertFingerprints.clear();
 
     // Clear all cached HTTP clients
@@ -235,6 +245,7 @@ class HttpClientManager {
   /// Clears pinned certificates and cached clients for a specific host
   /// (across all ports)
   Future<void> clearCertificatesForHost(String host) async {
+    _pinsMutated = true;
     final hostname = _normalizePinHost(_extractHostname(host));
     _acceptedCertFingerprints.removeWhere(
       (key, _) => _normalizePinHost(_extractHostname(key)) == hostname,
@@ -410,6 +421,7 @@ class HttpClientManager {
 
       if (result == true) {
         // Pin the accepted certificate's fingerprint persistently.
+        _pinsMutated = true;
         _acceptedCertFingerprints[certKey] = fingerprint;
         await _saveAcceptedCertificates();
         return true;
