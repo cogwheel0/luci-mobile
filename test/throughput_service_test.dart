@@ -18,17 +18,23 @@ void main() {
       expect(service.currentTxRate, 0.0);
     });
 
-    test('NaN/Infinity string counters do not poison rates', () {
+    test('non-finite second sample yields zero, not NaN', () async {
       final service = ThroughputService();
       // Seed baseline with finite values.
       service.updateThroughput(
         {
-          'eth0': {'rx_bytes': 100, 'tx_bytes': 100},
+          'eth0': {'rx_bytes': 1000, 'tx_bytes': 500},
         },
         {'eth0'},
       );
 
-      // Feed non-finite garbage as a later sample.
+      // The rate calculation only runs once at least _minElapsedSeconds
+      // (0.1s) have passed between samples.
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+
+      // Feed non-finite garbage as the second sample: both counters fall
+      // back to 0, so the computed delta is negative and clamps to a
+      // finite 0.0 rate instead of poisoning history with NaN.
       service.updateThroughput(
         {
           'eth0': {'rx_bytes': 'NaN', 'tx_bytes': 'Infinity'},
@@ -36,8 +42,8 @@ void main() {
         {'eth0'},
       );
 
-      expect(service.currentRxRate.isFinite, isTrue);
-      expect(service.currentTxRate.isFinite, isTrue);
+      expect(service.currentRxRate, 0.0);
+      expect(service.currentTxRate, 0.0);
       for (final rate in service.rxHistory) {
         expect(rate.isFinite, isTrue);
       }
@@ -46,14 +52,16 @@ void main() {
       }
     });
 
-    test('non-finite num counters do not poison rates', () {
+    test('non-finite num counters do not poison rates', () async {
       final service = ThroughputService();
       service.updateThroughput(
         {
-          'eth0': {'rx_bytes': 100, 'tx_bytes': 100},
+          'eth0': {'rx_bytes': 1000, 'tx_bytes': 1000},
         },
         {'eth0'},
       );
+
+      await Future<void>.delayed(const Duration(milliseconds: 150));
 
       service.updateThroughput(
         {
@@ -62,7 +70,31 @@ void main() {
         {'eth0'},
       );
 
+      expect(service.currentRxRate, 0.0);
+      expect(service.currentTxRate, 0.0);
+    });
+
+    test('finite string counters produce positive finite rates', () async {
+      final service = ThroughputService();
+      service.updateThroughput(
+        {
+          'eth0': {'rx_bytes': '1000', 'tx_bytes': '500'},
+        },
+        {'eth0'},
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+
+      service.updateThroughput(
+        {
+          'eth0': {'rx_bytes': '25000', 'tx_bytes': '12500'},
+        },
+        {'eth0'},
+      );
+
+      expect(service.currentRxRate, greaterThan(0));
       expect(service.currentRxRate.isFinite, isTrue);
+      expect(service.currentTxRate, greaterThan(0));
       expect(service.currentTxRate.isFinite, isTrue);
     });
   });
