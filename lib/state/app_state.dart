@@ -1126,14 +1126,16 @@ class AppState extends ChangeNotifier {
     // Start a fresh recovery cycle (drops any pending one)
     _cancelRebootPolling();
 
-    _isRebooting = true;
-    notifyListeners();
-
-    // Capture the target and session before the RPC: a router switch while
-    // the reboot call is in flight must not redirect the poll elsewhere.
+    // Snapshot the identity of THIS recovery attempt: session, generation,
+    // and target. An overlapping older reboot() call must not mutate this
+    // cycle's state when its RPC resolves later.
     final token = _sessionToken;
+    final cycle = _rebootCycleId;
     final targetIp = _authService!.ipAddress!;
     final targetUseHttps = _authService!.useHttps;
+
+    _isRebooting = true;
+    notifyListeners();
 
     try {
       final result = await _apiService!.reboot(
@@ -1142,17 +1144,16 @@ class AppState extends ChangeNotifier {
         targetUseHttps,
         context: context,
       );
+      // A newer recovery cycle took over (second reboot) or the session
+      // changed while this RPC was in flight - leave state alone.
+      if (cycle != _rebootCycleId || token != _sessionToken) {
+        return false;
+      }
       if (!result) {
         // The RPC reported failure - don't leave the UI stuck in the
         // rebooting state polling for a router that never restarted.
-        if (token == _sessionToken) {
-          _isRebooting = false;
-          notifyListeners();
-        }
-        return false;
-      }
-      if (token != _sessionToken) {
-        // Session changed mid-reboot; the new session owns its own state.
+        _isRebooting = false;
+        notifyListeners();
         return false;
       }
       // Store the captured target so polling keeps pinging the rebooted
@@ -1167,7 +1168,7 @@ class AppState extends ChangeNotifier {
       });
       return result;
     } catch (e) {
-      if (token == _sessionToken) {
+      if (cycle == _rebootCycleId && token == _sessionToken) {
         _isRebooting = false;
         notifyListeners();
       }
