@@ -412,8 +412,12 @@ class AppState extends ChangeNotifier {
     BuildContext? context,
   }) async {
     // A fresh login starts a new session; discard stale results from the
-    // previous one.
+    // previous one. A manual login also supersedes any pending reboot
+    // recovery - that recovery belongs to the session that started it and
+    // must not adopt the replacement session.
     _sessionToken++;
+    _cancelRebootPolling();
+    _isRebooting = false;
     _isLoading = true;
     _errorMessage = null;
 
@@ -1114,6 +1118,8 @@ class AppState extends ChangeNotifier {
 
     // Cancel throughput timer before starting reboot to prevent "client closed" errors
     _cancelThroughputTimer();
+    // Start a fresh recovery cycle (drops any pending one)
+    _cancelRebootPolling();
 
     _isRebooting = true;
     notifyListeners();
@@ -1215,14 +1221,19 @@ class AppState extends ChangeNotifier {
 
     _pollingTimer = Timer(Duration(seconds: delaySeconds), () async {
       _pollAttempts++;
+      // Snapshot everything the continuation validates against: the session
+      // this recovery belongs to, and the reboot target it is probing.
       final token = _sessionToken;
+      final targetIp = _rebootTargetIp;
       final available = await _pingRouter();
 
-      // Cancelling the timer does not abort an in-flight probe: if the user
-      // switched routers or logged out while this liveness check was
-      // outstanding, its result describes the previous target. Ignore it so
-      // recovery cannot act on (or re-login into) the wrong session.
-      if (token != _sessionToken) {
+      // Cancelling the timer does not abort an in-flight probe. Discard the
+      // result when the session changed (switch/logout/manual login), the
+      // recovery was superseded, or the target moved - otherwise recovery
+      // could fire callbacks or re-login based on another router's answer.
+      if (token != _sessionToken ||
+          !_isRebooting ||
+          _rebootTargetIp != targetIp) {
         return;
       }
 
