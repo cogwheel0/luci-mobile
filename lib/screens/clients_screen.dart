@@ -16,11 +16,11 @@ class ClientsScreen extends ConsumerStatefulWidget {
   ConsumerState<ClientsScreen> createState() => _ClientsScreenState();
 }
 
-class _ClientsScreenState extends ConsumerState<ClientsScreen>
-    with SingleTickerProviderStateMixin {
+class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   String _searchQuery = '';
-  final Set<int> _expandedClientIndices = {};
-  late AnimationController _controller;
+  // Track expansion by client identity (MAC/IP), not list index - indices
+  // shift when the search filter or the underlying data reorders the list.
+  final Set<String> _expandedClientKeys = {};
   late TextEditingController _searchController;
   bool _aggregateAllRouters = true;
   Future<List<Client>>? _clientsFuture;
@@ -29,10 +29,6 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
     _searchController = TextEditingController();
     _searchController.addListener(() {
       if (_searchQuery != _searchController.text) {
@@ -46,7 +42,6 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
     _aggregateAllRouters = initState.clientsAggregateAllRouters;
     _lastSelectedRouterId = initState.selectedRouter?.id;
     _computeClientsFuture();
-
   }
 
   void _computeClientsFuture() {
@@ -58,7 +53,6 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
 
   @override
   void dispose() {
-    _controller.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -88,12 +82,16 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
                 onRefresh: () async {
                   // Trigger a refresh by re-fetching dashboard data for selected router
                   await ref.read(appStateProvider).fetchDashboardData();
-                  setState(() { _computeClientsFuture(); });
+                  setState(() {
+                    _computeClientsFuture();
+                  });
                 },
                 child: Builder(
                   builder: (context) {
                     final appState = ref.watch(appStateProvider);
-                    final isLoading = snapshot.connectionState == ConnectionState.waiting && (aggregatedClients.isEmpty);
+                    final isLoading =
+                        snapshot.connectionState == ConnectionState.waiting &&
+                        (aggregatedClients.isEmpty);
                     final dashboardError = appState.dashboardError;
 
                     if (isLoading) {
@@ -220,7 +218,9 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
                             showSelectedIcon: false,
                             style: SegmentedButton.styleFrom(
                               visualDensity: VisualDensity.compact,
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
                             ),
                             onSelectionChanged: (s) {
                               setState(() {
@@ -231,7 +231,8 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
                               ref
                                   .read(appStateProvider)
                                   .setClientsAggregateAllRouters(
-                                      _aggregateAllRouters);
+                                    _aggregateAllRouters,
+                                  );
                             },
                           ),
                         ),
@@ -253,8 +254,10 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
                                   itemCount: filteredClients.length,
                                   itemBuilder: (context, index) {
                                     final client = filteredClients[index];
-                                    final isExpanded = _expandedClientIndices
-                                        .contains(index);
+                                    final clientKey =
+                                        '${client.macAddress}|${client.ipAddress}';
+                                    final isExpanded = _expandedClientKeys
+                                        .contains(clientKey);
 
                                     return LuciSlideTransition(
                                       direction: LuciSlideDirection.up,
@@ -271,12 +274,12 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen>
                                           onTap: () {
                                             setState(() {
                                               if (isExpanded) {
-                                                _expandedClientIndices.remove(
-                                                  index,
+                                                _expandedClientKeys.remove(
+                                                  clientKey,
                                                 );
                                               } else {
-                                                _expandedClientIndices.add(
-                                                  index,
+                                                _expandedClientKeys.add(
+                                                  clientKey,
                                                 );
                                               }
                                             });

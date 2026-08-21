@@ -28,6 +28,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   late AnimationController _logoAnimController;
   late AnimationController _progressAnimController;
   bool _isActivatingReviewerMode = false;
+  late final Future<PackageInfo> _packageInfoFuture =
+      PackageInfo.fromPlatform();
   @override
   void initState() {
     super.initState();
@@ -664,7 +666,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           ),
                         ),
                         FutureBuilder<PackageInfo>(
-                          future: PackageInfo.fromPlatform(),
+                          future: _packageInfoFuture,
                           builder: (context, snapshot) {
                             if (!snapshot.hasData) {
                               return const SizedBox.shrink();

@@ -57,24 +57,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   void _updateWirelessArrows() {
-    if (!_wirelessScrollController.hasClients) return;
+    if (!mounted || !_wirelessScrollController.hasClients) return;
     final max = _wirelessScrollController.position.maxScrollExtent;
     final min = _wirelessScrollController.position.minScrollExtent;
     final offset = _wirelessScrollController.offset;
+    final showLeft = offset > min + 2;
+    final showRight = offset < max - 2;
+    // Skip redundant rebuilds - scroll listeners fire on every pixel.
+    if (showLeft == _showWirelessLeftArrow &&
+        showRight == _showWirelessRightArrow) {
+      return;
+    }
     setState(() {
-      _showWirelessLeftArrow = offset > min + 2;
-      _showWirelessRightArrow = offset < max - 2;
+      _showWirelessLeftArrow = showLeft;
+      _showWirelessRightArrow = showRight;
     });
   }
 
   void _updateWanArrows() {
-    if (!_wanScrollController.hasClients) return;
+    if (!mounted || !_wanScrollController.hasClients) return;
     final max = _wanScrollController.position.maxScrollExtent;
     final min = _wanScrollController.position.minScrollExtent;
     final offset = _wanScrollController.offset;
+    final showLeft = offset > min + 2;
+    final showRight = offset < max - 2;
+    if (showLeft == _showWanLeftArrow && showRight == _showWanRightArrow) {
+      return;
+    }
     setState(() {
-      _showWanLeftArrow = offset > min + 2;
-      _showWanRightArrow = offset < max - 2;
+      _showWanLeftArrow = showLeft;
+      _showWanRightArrow = showRight;
     });
   }
 

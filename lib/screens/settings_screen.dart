@@ -28,7 +28,7 @@ class SettingsScreen extends ConsumerWidget {
             onPressed: () async {
               Navigator.of(context).pop();
               await appState.setReviewerMode(false);
-              appState.logout();
+              await appState.logout();
               if (context.mounted) {
                 unawaited(
                   Navigator.of(
@@ -99,7 +99,10 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ),
                   Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     elevation: 2,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -113,7 +116,9 @@ class SettingsScreen extends ConsumerWidget {
                         ),
                         child: Icon(
                           Icons.dashboard_customize,
-                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onPrimaryContainer,
                           size: 24,
                         ),
                       ),
@@ -121,7 +126,9 @@ class SettingsScreen extends ConsumerWidget {
                         'Customize Dashboard',
                         style: TextStyle(fontWeight: FontWeight.w600),
                       ),
-                      subtitle: const Text('Configure interface visibility and throughput monitoring'),
+                      subtitle: const Text(
+                        'Configure interface visibility and throughput monitoring',
+                      ),
                       trailing: Icon(
                         Icons.arrow_forward_ios,
                         size: 16,

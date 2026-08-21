@@ -22,7 +22,11 @@ class DashboardSettingsListScreen extends ConsumerWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.router_outlined, size: 56, color: Theme.of(context).colorScheme.outline),
+                    Icon(
+                      Icons.router_outlined,
+                      size: 56,
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
                     SizedBox(height: LuciSpacing.md),
                     Text(
                       'No Routers Added',
@@ -83,16 +87,16 @@ class DashboardSettingsListScreen extends ConsumerWidget {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => RouterDashboardSettingsScreen(
-                            routerId: r.id,
-                          ),
+                          builder: (_) =>
+                              RouterDashboardSettingsScreen(routerId: r.id),
                         ),
                       );
                     },
                   ),
                 );
               },
-              separatorBuilder: (context, index) => SizedBox(height: LuciSpacing.sm),
+              separatorBuilder: (context, index) =>
+                  SizedBox(height: LuciSpacing.sm),
               itemCount: routers.length,
             ),
     );

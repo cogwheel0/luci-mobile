@@ -60,6 +60,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     String? radioName,
     String? deviceName,
     String? name,
+    int occurrenceIndex = 0,
   }) {
     final radio = (radioName ?? '').trim();
     final ssidTrimmed = (ssid ?? '').trim();
@@ -76,8 +77,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
       if (interfaceName.isNotEmpty && interfaceName != radio) {
         return '${ssidTrimmed.toLowerCase()}__${interfaceName.toLowerCase()}';
       }
-      // If all names are the same, add a unique suffix
-      return '${ssidTrimmed.toLowerCase()}__${radio.toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}';
+      // If all names are the same, disambiguate by position - stable across
+      // rebuilds (a timestamp here would mint a new key every frame and
+      // break expansion/scroll targeting).
+      return '${ssidTrimmed.toLowerCase()}__${radio.toLowerCase()}__$occurrenceIndex';
     }
 
     // If SSID is not empty, use SSID + radio
@@ -173,6 +176,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                     radioName: radioName,
                     deviceName: deviceName,
                     name: name,
+                    occurrenceIndex: i,
                   );
                   // Generate all possible normalized keys for matching
                   final ssidKey = _normalizeInterfaceKey(ssid);
@@ -614,6 +618,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
           radioName: radioName,
           deviceName: deviceName,
           name: name,
+          occurrenceIndex: index,
         );
         final key = _interfaceKeys.putIfAbsent(keyStr, () => GlobalKey());
         final displayName = ssid.toString().isNotEmpty
