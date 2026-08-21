@@ -57,16 +57,18 @@ class SecureStorageService {
   }
 
   Future<void> clearCredentials() async {
-    try {
-      // Clear only session credentials. Deleting everything here would also
-      // wipe the saved routers list (including per-router passwords), the
-      // selected router, dashboard preferences, theme and accepted certs.
-      for (final key in _credentialKeys) {
+    // Clear only session credentials. Deleting everything here would also
+    // wipe the saved routers list (including per-router passwords), the
+    // selected router, dashboard preferences, theme and accepted certs.
+    for (final key in _credentialKeys) {
+      try {
         await _storage.delete(key: key);
+      } catch (e, stack) {
+        // Keep deleting the remaining keys - aborting early could leave the
+        // stored password behind after a logout. Not rethrown: this is often
+        // called during cleanup, but failures are logged.
+        Logger.exception('Failed to clear credential key: $key', e, stack);
       }
-    } catch (e, stack) {
-      Logger.exception('Failed to clear credentials', e, stack);
-      // Don't rethrow as this is often called during cleanup
     }
   }
 

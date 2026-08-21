@@ -60,7 +60,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     String? radioName,
     String? deviceName,
     String? name,
-    int occurrenceIndex = 0,
+    String? sectionName,
   }) {
     final radio = (radioName ?? '').trim();
     final ssidTrimmed = (ssid ?? '').trim();
@@ -77,10 +77,15 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
       if (interfaceName.isNotEmpty && interfaceName != radio) {
         return '${ssidTrimmed.toLowerCase()}__${interfaceName.toLowerCase()}';
       }
-      // If all names are the same, disambiguate by position - stable across
-      // rebuilds (a timestamp here would mint a new key every frame and
-      // break expansion/scroll targeting).
-      return '${ssidTrimmed.toLowerCase()}__${radio.toLowerCase()}__$occurrenceIndex';
+      // Last resort: the UCI section name - a stable identity both the
+      // scroll-targeting and rendering paths can compute independently
+      // (a positional index would differ between them, and a timestamp
+      // would mint a new key every rebuild).
+      final section = (sectionName ?? '').trim().toLowerCase();
+      if (section.isNotEmpty) {
+        return '${ssidTrimmed.toLowerCase()}__${radio.toLowerCase()}__$section';
+      }
+      return '${ssidTrimmed.toLowerCase()}__${radio.toLowerCase()}';
     }
 
     // If SSID is not empty, use SSID + radio
@@ -176,7 +181,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                     radioName: radioName,
                     deviceName: deviceName,
                     name: name,
-                    occurrenceIndex: i,
+                    sectionName: interface['section'] as String?,
                   );
                   // Generate all possible normalized keys for matching
                   final ssidKey = _normalizeInterfaceKey(ssid);
@@ -553,6 +558,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               'radioName': radioName,
               'ssid': ssid,
               'interfaceName': name,
+              'section': uciName,
               'details': {
                 'Device': _uciString(config['device'], radioName),
                 'Mode': _uciString(config['mode']).isNotEmpty
@@ -589,6 +595,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
           'radioName': radioName,
           'ssid': name,
           'interfaceName': name,
+          'section': uciName,
           'details': {
             'Device': radioName,
             'Mode': _uciString(config['mode'], 'N/A'),
@@ -618,7 +625,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
           radioName: radioName,
           deviceName: deviceName,
           name: name,
-          occurrenceIndex: index,
+          sectionName: iface['section'] as String?,
         );
         final key = _interfaceKeys.putIfAbsent(keyStr, () => GlobalKey());
         final displayName = ssid.toString().isNotEmpty
