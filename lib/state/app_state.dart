@@ -52,6 +52,11 @@ class AppState extends ChangeNotifier {
   String? _rebootTargetIp;
   bool _rebootTargetUseHttps = false;
 
+  // Monotonically increasing generation for reboot-recovery cycles. Bumped
+  // by every cancel/start so an in-flight liveness probe from an older
+  // cycle can never act on newer recovery state.
+  int _rebootCycleId = 0;
+
   // Monotonically increasing token used to discard stale async results
   // (e.g. a slow dashboard fetch from router A resolving after the user
   // already switched to router B).
@@ -1171,7 +1176,11 @@ class AppState extends ChangeNotifier {
   }
 
   /// Cancels any pending reboot polling (delay timer + poll timer).
+  ///
+  /// Bumps the recovery generation so a probe that is already awaiting
+  /// `_pingRouter()` is discarded instead of acting on newer state.
   void _cancelRebootPolling() {
+    _rebootCycleId++;
     _rebootDelayTimer?.cancel();
     _rebootDelayTimer = null;
     _pollingTimer?.cancel();
@@ -1222,16 +1231,20 @@ class AppState extends ChangeNotifier {
     _pollingTimer = Timer(Duration(seconds: delaySeconds), () async {
       _pollAttempts++;
       // Snapshot everything the continuation validates against: the session
-      // this recovery belongs to, and the reboot target it is probing.
+      // this recovery belongs to, its generation, and the reboot target it
+      // is probing.
       final token = _sessionToken;
+      final cycle = _rebootCycleId;
       final targetIp = _rebootTargetIp;
       final available = await _pingRouter();
 
       // Cancelling the timer does not abort an in-flight probe. Discard the
-      // result when the session changed (switch/logout/manual login), the
-      // recovery was superseded, or the target moved - otherwise recovery
-      // could fire callbacks or re-login based on another router's answer.
+      // result when the session changed, the recovery was superseded or
+      // cancelled (generation mismatch), or the target moved - otherwise
+      // recovery could fire callbacks or re-login based on another router's
+      // answer or an older cycle's probe.
       if (token != _sessionToken ||
+          cycle != _rebootCycleId ||
           !_isRebooting ||
           _rebootTargetIp != targetIp) {
         return;
