@@ -1668,23 +1668,45 @@ class AppState extends ChangeNotifier {
   /// Used after operations that need wifi to reload (toggle, modify, delete).
   /// Propagates restart failures so callers cannot report stale runtime state.
   Future<void> _wifiReload({BuildContext? context}) async {
-    // Get list of radios from dashboard data
-    final wirelessData =
-        _dashboardData?['wireless'] as Map<String, dynamic>? ?? {};
-    final radios = wirelessData.keys.toList();
+    final result = await _apiService!.uciGetAll(
+      _authService!.ipAddress!,
+      _authService!.sysauth!,
+      _authService!.useHttps,
+      config: 'wireless',
+      context: context,
+    );
+    final sections = _resolveUciSections(result, 'wireless');
+    if (sections == null) {
+      throw const FormatException('Invalid wireless configuration response');
+    }
+    bool isDisabled(dynamic value) => value is List
+        ? value.any(isDisabled)
+        : value == true || value?.toString() == '1';
+    final radios = sections.entries
+        .where(
+          (entry) =>
+              entry.value is Map &&
+              entry.value['.type']?.toString() == 'wifi-device' &&
+              !isDisabled(entry.value['disabled']),
+        )
+        .map((entry) => entry.key)
+        .toList();
 
     if (radios.isEmpty) {
-      Logger.warning('_wifiReload: no radios found in dashboard data');
-      await Future.delayed(const Duration(seconds: 4));
+      Logger.info('_wifiReload: no enabled radios to restart');
       try {
         await fetchDashboardData();
       } catch (_) {}
       return;
     }
 
-    // Cycle all radios
+    // Cycle only enabled radios; disabled radios must remain disabled.
     for (final radio in radios) {
-      await _restartRadioViaUci(radio, context: context, delaySeconds: 3);
+      await _restartRadioViaUci(
+        radio,
+        context: context?.mounted == true ? context : null,
+        delaySeconds: 3,
+      );
     }
   }
 

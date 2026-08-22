@@ -5,9 +5,13 @@ import 'package:luci_mobile/services/mock_auth_service.dart';
 import 'package:luci_mobile/state/app_state.dart';
 
 class _FailingRestartApiService extends MockApiService {
-  _FailingRestartApiService({this.failWirelessDelete = false});
+  _FailingRestartApiService({
+    this.failWirelessDelete = false,
+    this.radioDisabled = false,
+  });
 
   final bool failWirelessDelete;
+  final bool radioDisabled;
   final calls = <String>[];
 
   @override
@@ -20,7 +24,7 @@ class _FailingRestartApiService extends MockApiService {
   }) async {
     final values = switch (config) {
       'wireless' => {
-        'radio0': {'.type': 'wifi-device'},
+        'radio0': {'.type': 'wifi-device', if (radioDisabled) 'disabled': '1'},
       },
       'network' => {
         'lan': {'.type': 'interface'},
@@ -172,5 +176,21 @@ void main() {
       isNot(contains('/sbin/uci del_list firewall.@zone[1].network=wwan')),
     );
     expect(api.calls, isNot(contains('delete network.wwan')));
+  });
+
+  test('interface reload leaves disabled radios disabled', () async {
+    final api = _FailingRestartApiService(radioDisabled: true);
+    final state = AppState.forTesting(
+      apiService: api,
+      authService: MockAuthService(),
+    );
+    addTearDown(state.dispose);
+
+    final modified = await state.modifyWirelessInterface('wifinet0', {
+      'ssid': 'Updated network',
+    });
+
+    expect(modified, isTrue);
+    expect(api.calls.where((call) => call.startsWith('/sbin/wifi ')), isEmpty);
   });
 }
