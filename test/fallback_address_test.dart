@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/models/router.dart';
+import 'package:luci_mobile/services/api_service.dart';
+import 'package:luci_mobile/services/auth_service.dart';
 
 void main() {
   group('Router fallback address', () {
@@ -59,6 +61,7 @@ void main() {
           password: 'p',
           useHttps: false,
           alternateAddress: 'alt',
+          alternateUseHttps: false,
         ).hasFallback,
         isTrue,
       );
@@ -80,6 +83,18 @@ void main() {
           password: 'p',
           useHttps: false,
           alternateAddress: '',
+          alternateUseHttps: false,
+        ).hasFallback,
+        isFalse,
+      );
+      expect(
+        Router(
+          id: 'a',
+          ipAddress: 'ip',
+          username: 'u',
+          password: 'p',
+          useHttps: false,
+          alternateAddress: 'alt',
         ).hasFallback,
         isFalse,
       );
@@ -150,5 +165,59 @@ void main() {
       final switched = router.copyWith(activeAddressIndex: 1);
       expect(switched.id, router.id);
     });
+
+    test('copyWith can clear the fallback address', () {
+      final router = Router(
+        id: 'test-root',
+        ipAddress: '192.168.8.1',
+        username: 'root',
+        password: 'pass',
+        useHttps: false,
+        alternateAddress: 'router.tail.ts.net',
+        alternateUseHttps: true,
+        activeAddressIndex: 1,
+      );
+
+      final updated = router.copyWith(clearAlternate: true);
+
+      expect(updated.alternateAddress, isNull);
+      expect(updated.alternateUseHttps, isNull);
+      expect(updated.activeAddressIndex, 0);
+      expect(updated.activeAddress, '192.168.8.1');
+    });
+
+    test(
+      'auth does not assume HTTP when fallback protocol is missing',
+      () async {
+        final api = _FailingLoginApi();
+        final result = await RealAuthService(api).loginWithFallback(
+          activeAddress: 'primary',
+          activeHttps: true,
+          activeIndex: 0,
+          fallbackAddress: 'fallback',
+          username: 'root',
+          password: 'pass',
+        );
+
+        expect(result.success, isFalse);
+        expect(api.addresses, ['primary']);
+      },
+    );
   });
+}
+
+class _FailingLoginApi extends RealApiService {
+  final addresses = <String>[];
+
+  @override
+  Future<LoginResult> loginWithProtocolDetection(
+    String ipAddress,
+    String username,
+    String password,
+    bool initialUseHttps, {
+    dynamic context,
+  }) async {
+    addresses.add(ipAddress);
+    return LoginResult(token: null, actualUseHttps: initialUseHttps);
+  }
 }

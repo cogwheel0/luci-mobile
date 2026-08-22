@@ -510,6 +510,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                               ),
                                               textInputAction:
                                                   TextInputAction.next,
+                                              validator: (value) {
+                                                if (value == null ||
+                                                    value.isEmpty) {
+                                                  return null;
+                                                }
+                                                final parsed = UrlParser.parse(
+                                                  value,
+                                                );
+                                                if (!parsed.isValid) {
+                                                  return parsed.error ??
+                                                      'Invalid address format';
+                                                }
+                                                final primary = UrlParser.parse(
+                                                  _ipController.text,
+                                                );
+                                                if (primary.isValid &&
+                                                    parsed.hostWithPort ==
+                                                        primary.hostWithPort) {
+                                                  return 'Must differ from primary address';
+                                                }
+                                                return null;
+                                              },
                                             ),
                                           ],
                                           const SizedBox(height: 10),

@@ -126,13 +126,15 @@ class RealAuthService implements IAuthService {
     }
 
     // Try the fallback address if available
-    if (fallbackAddress != null && fallbackAddress.isNotEmpty) {
+    if (fallbackAddress != null &&
+        fallbackAddress.isNotEmpty &&
+        fallbackHttps != null) {
       final fallbackIndex = activeIndex == 0 ? 1 : 0;
       final fallbackOk = await _login(
         fallbackAddress,
         username,
         password,
-        fallbackHttps ?? false,
+        fallbackHttps,
         context: context?.mounted == true ? context : null,
       );
       if (fallbackOk) {

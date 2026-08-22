@@ -391,6 +391,11 @@ class AppState extends ChangeNotifier {
 
     // Clear certificates for this specific router
     await _httpClientManager.clearCertificatesForHost(router.ipAddress);
+    if (router.alternateAddress != null) {
+      await _httpClientManager.clearCertificatesForHost(
+        router.alternateAddress!,
+      );
+    }
 
     final needsSwitch = await _routerService!.removeRouter(id);
     if (needsSwitch && _routerService!.routers.isNotEmpty) {
@@ -527,16 +532,21 @@ class AppState extends ChangeNotifier {
 
         if (!fromRouter) {
           if (_routerService != null) {
+            final primaryUseHttps = result.usedAddressIndex == 0
+                ? actualUseHttps
+                : useHttps;
             final router = _routerService!.createRouter(
               ip,
               user,
               pass,
-              actualUseHttps,
+              primaryUseHttps,
             );
             // Preserve alternate address in the new router
             final routerWithAlternate = router.copyWith(
               alternateAddress: alternateAddress,
-              alternateUseHttps: alternateUseHttps,
+              alternateUseHttps: result.usedAddressIndex == 1
+                  ? actualUseHttps
+                  : alternateUseHttps,
               activeAddressIndex: result.usedAddressIndex,
             );
             final idx = _routerService!.routers.indexWhere(
@@ -555,10 +565,15 @@ class AppState extends ChangeNotifier {
                 actualUseHttps != useHttps ||
                 result.usedAddressIndex != router.activeAddressIndex;
             if (needsUpdate) {
-              final updatedRouter = router.copyWith(
-                useHttps: actualUseHttps,
-                activeAddressIndex: result.usedAddressIndex,
-              );
+              final updatedRouter = result.usedAddressIndex == 0
+                  ? router.copyWith(
+                      useHttps: actualUseHttps,
+                      activeAddressIndex: 0,
+                    )
+                  : router.copyWith(
+                      alternateUseHttps: actualUseHttps,
+                      activeAddressIndex: 1,
+                    );
               await updateRouter(updatedRouter);
               if (result.usedAddressIndex != router.activeAddressIndex) {
                 Logger.info(
@@ -1495,8 +1510,10 @@ class AppState extends ChangeNotifier {
             reloginRouter.username,
             reloginRouter.password,
             reloginRouter.activeUseHttps,
+            fromRouter: true,
             alternateAddress: reloginRouter.inactiveAddress,
             alternateUseHttps: reloginRouter.inactiveUseHttps,
+            activeAddressIndex: reloginRouter.activeAddressIndex,
           );
         }
       } else {
@@ -2731,28 +2748,20 @@ class AppState extends ChangeNotifier {
     // If we have a selected router, use loginWithFallback
     final router = _routerService?.selectedRouter;
     if (router != null && _authService != null) {
-      Logger.info(
-        'tryAutoLogin: router=${router.id}, activeIndex=${router.activeAddressIndex}, '
-        'active=${router.activeAddress}, fallback=${router.inactiveAddress}',
-      );
-      final result = await _authService!.loginWithFallback(
-        activeAddress: router.activeAddress,
-        activeHttps: router.activeUseHttps,
-        activeIndex: router.activeAddressIndex,
-        fallbackAddress: router.inactiveAddress,
-        fallbackHttps: router.inactiveUseHttps,
-        username: router.username,
-        password: router.password,
-        context: context?.mounted == true ? context : null,
-      );
-      Logger.info(
-        'tryAutoLogin: result success=${result.success}, usedIndex=${result.usedAddressIndex}',
+      final result = await _serializeAuthOp<FallbackLoginResult>(
+        () => _authService!.loginWithFallback(
+          activeAddress: router.activeAddress,
+          activeHttps: router.activeUseHttps,
+          activeIndex: router.activeAddressIndex,
+          fallbackAddress: router.inactiveAddress,
+          fallbackHttps: router.inactiveUseHttps,
+          username: router.username,
+          password: router.password,
+          context: context?.mounted == true ? context : null,
+        ),
       );
       if (result.success) {
         if (result.usedAddressIndex != router.activeAddressIndex) {
-          Logger.info(
-            'tryAutoLogin: switching activeAddressIndex from ${router.activeAddressIndex} to ${result.usedAddressIndex}',
-          );
           await updateRouter(
             router.copyWith(activeAddressIndex: result.usedAddressIndex),
           );

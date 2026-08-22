@@ -23,25 +23,21 @@ class Router {
 
   /// The address currently in use (based on last successful connection).
   String get activeAddress =>
-      activeAddressIndex == 1 && alternateAddress != null
-      ? alternateAddress!
-      : ipAddress;
+      activeAddressIndex == 1 && hasFallback ? alternateAddress! : ipAddress;
 
   /// The protocol for the currently active address.
   bool get activeUseHttps =>
-      activeAddressIndex == 1 && alternateUseHttps != null
-      ? alternateUseHttps!
-      : useHttps;
+      activeAddressIndex == 1 && hasFallback ? alternateUseHttps! : useHttps;
 
   /// The other address (if any).
-  String? get inactiveAddress => alternateAddress == null
+  String? get inactiveAddress => !hasFallback
       ? null
       : activeAddressIndex == 0
       ? alternateAddress
       : ipAddress;
 
   /// The protocol for the inactive address.
-  bool? get inactiveUseHttps => alternateAddress == null
+  bool? get inactiveUseHttps => !hasFallback
       ? null
       : activeAddressIndex == 0
       ? alternateUseHttps
@@ -49,7 +45,9 @@ class Router {
 
   /// Whether this router has a fallback address configured.
   bool get hasFallback =>
-      alternateAddress != null && alternateAddress!.isNotEmpty;
+      alternateAddress != null &&
+      alternateAddress!.isNotEmpty &&
+      alternateUseHttps != null;
 
   factory Router.fromJson(Map<String, dynamic> json) {
     return Router(
@@ -90,6 +88,7 @@ class Router {
     String? alternateAddress,
     bool? alternateUseHttps,
     int? activeAddressIndex,
+    bool clearAlternate = false,
   }) {
     return Router(
       id: id ?? this.id,
@@ -98,9 +97,15 @@ class Router {
       password: password ?? this.password,
       useHttps: useHttps ?? this.useHttps,
       lastKnownHostname: lastKnownHostname ?? this.lastKnownHostname,
-      alternateAddress: alternateAddress ?? this.alternateAddress,
-      alternateUseHttps: alternateUseHttps ?? this.alternateUseHttps,
-      activeAddressIndex: activeAddressIndex ?? this.activeAddressIndex,
+      alternateAddress: clearAlternate
+          ? null
+          : alternateAddress ?? this.alternateAddress,
+      alternateUseHttps: clearAlternate
+          ? null
+          : alternateUseHttps ?? this.alternateUseHttps,
+      activeAddressIndex: clearAlternate
+          ? 0
+          : activeAddressIndex ?? this.activeAddressIndex,
     );
   }
 }
