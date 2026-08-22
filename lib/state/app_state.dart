@@ -1769,7 +1769,7 @@ class AppState extends ChangeNotifier {
           final isValidFreq = (freq >= 2400 && freq <= 2500) ||
               (freq >= 4900 && freq <= 7125);
           if (isValidFreq) {
-            band = freq >= 5925 ? '6 GHz' : freq >= 5000 ? '5 GHz' : freq >= 4000 ? '4 GHz' : '2.4 GHz';
+            band = freq >= 5925 ? '6 GHz' : freq >= 5000 ? '5 GHz' : freq >= 4900 ? '4.9 GHz' : '2.4 GHz';
           }
         }
         if (band.isEmpty && channel is int) {
