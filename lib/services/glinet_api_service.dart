@@ -167,7 +167,7 @@ class GlInetApiService implements IGlInetApiService {
     );
     for (final value in _asList(clientResult?['clients'])) {
       final client = _asMap(value);
-      final mac = _asString(client?['mac'])?.toLowerCase();
+      final mac = _asString(client?['mac'])?.toLowerCase().replaceAll('-', ':');
       if (mac != null) {
         final iface = _asString(client?['iface']);
         clients[mac] = GlInetClient(
@@ -214,12 +214,14 @@ class GlInetApiService implements IGlInetApiService {
   static bool _isAuthenticationError(Map<String, dynamic>? response) {
     final error = response?['error'];
     if (error == null) return false;
+    final code = _asInt(_asMap(error)?['code']);
+    if (code != null) return code == -32000;
     final text = error.toString().toLowerCase();
     return text.contains('auth') ||
         text.contains('login') ||
         text.contains('permission') ||
         text.contains('session') ||
-        text.contains('sid');
+        RegExp(r'\bsid\b').hasMatch(text);
   }
 
   static Map<String, dynamic>? _asMap(dynamic value) => value is Map

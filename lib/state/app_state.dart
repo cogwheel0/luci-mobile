@@ -2778,9 +2778,6 @@ class AppState extends ChangeNotifier {
         }
       }
 
-      // Enrich with GL.iNet data
-      _enrichClientsWithGlInet(clients);
-
       final list = clients.values.toList();
       _sortClients(list);
       return list;
@@ -2958,20 +2955,22 @@ class AppState extends ChangeNotifier {
     if (glinetClients == null) return;
 
     for (final macNorm in clients.keys.toList()) {
-      final glData = glinetClients[macNorm.toLowerCase()];
+      final glData = glinetClients[macNorm.toLowerCase().replaceAll('-', ':')];
       if (glData != null) {
+        final currentClient = clients[macNorm]!;
         final iface = glData.wifiBand;
         final isOnline = glData.online;
         final deviceClass = glData.deviceClass;
         final connType = iface != null
             ? ConnectionType.wireless
-            : (isOnline == true
+            : (isOnline == true &&
+                      currentClient.connectionType == ConnectionType.unknown
                   ? ConnectionType.wired
-                  : clients[macNorm]!.connectionType);
+                  : currentClient.connectionType);
         // Prefer GL.iNet alias > GL.iNet name > existing hostname
         final alias = glData.alias;
         final glName = glData.name;
-        final currentHostname = clients[macNorm]!.hostname;
+        final currentHostname = currentClient.hostname;
         final bestName = (alias != null && alias.isNotEmpty)
             ? alias
             : (glName != null &&
@@ -2980,7 +2979,7 @@ class AppState extends ChangeNotifier {
             ? glName
             : null;
 
-        clients[macNorm] = clients[macNorm]!.copyWith(
+        clients[macNorm] = currentClient.copyWith(
           connectionType: connType,
           wifiBand: iface,
           isOnline: isOnline,

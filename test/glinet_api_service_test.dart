@@ -9,9 +9,24 @@ import 'package:luci_mobile/utils/http_client_manager.dart';
 import 'package:luci_mobile/utils/wifi_utils.dart';
 
 void main() {
-  test('session state can be cleared', () {
+  test('session state can be cleared after authentication', () async {
+    final server = await _startRpcServer((request) {
+      return switch (request['method']) {
+        'challenge' => _result({
+          'nonce': 'nonce',
+          'salt': 'salt',
+          'alg': 5,
+          'hash-method': 'sha256',
+        }),
+        'login' => _result({'sid': 'sid-1'}),
+        _ => _result({}),
+      };
+    });
+    addTearDown(() => server.close(force: true));
+
     final service = GlInetApiService(HttpClientManager());
-    expect(service.isAuthenticated, isFalse);
+    await service.fetchData('127.0.0.1:${server.port}', 'password', false);
+    expect(service.isAuthenticated, isTrue);
     service.clearSession();
     expect(service.isAuthenticated, isFalse);
   });
@@ -39,7 +54,7 @@ void main() {
     expect(normalizeWifiChannel(' 44 '), '44');
   });
 
-  test('parses firmware value variants independently', () async {
+  test('parses radio, client, system, fan, and Tailscale data', () async {
     final server = await _startRpcServer((request) {
       final method = request['method'];
       if (method == 'challenge') {
@@ -63,7 +78,7 @@ void main() {
           'clients': [
             {'mac': 'AA:BB:CC:DD:EE:FF', 'online': 1, 'iface': '5G'},
             {'mac': 'AA:BB:CC:DD:EE:00', 'online': 1, 'iface': 'cable'},
-            {'mac': 'AA:BB:CC:DD:EE:01', 'online': 1, 'iface': 'wlan0'},
+            {'mac': 'AA-BB-CC-DD-EE-01', 'online': 1, 'iface': 'wlan0'},
           ],
         }),
         'system' => _result({
@@ -117,19 +132,28 @@ void main() {
         return {
           'jsonrpc': '2.0',
           'id': 1,
-          'error': {'message': 'session expired'},
+          'error': {'code': -32000, 'message': 'Access denied'},
         };
+      }
+      final module = (request['params'] as List)[1];
+      if (module == 'wifi') {
+        return _result({
+          'res': [
+            {'name': 'wifi0', 'channel': 44},
+          ],
+        });
       }
       return _result({});
     });
     addTearDown(() => server.close(force: true));
 
-    await GlInetApiService(
+    final data = await GlInetApiService(
       HttpClientManager(),
     ).fetchData('127.0.0.1:${server.port}', 'password', false);
 
     expect(loginCount, 2);
     expect(callSids.take(2), ['sid-1', 'sid-2']);
+    expect(data?.radios['wifi0']?.channel, 44);
   });
 }
 

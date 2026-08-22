@@ -50,7 +50,8 @@ class Sha256Crypt {
 
   static String hash(String password, String salt, {int rounds = 5000}) {
     final pw = utf8.encode(password);
-    final s = utf8.encode(salt);
+    final normalizedSalt = salt.length > 16 ? salt.substring(0, 16) : salt;
+    final s = utf8.encode(normalizedSalt);
 
     // Digest B
     final db = _sha256([...pw, ...s, ...pw]);
@@ -104,7 +105,7 @@ class Sha256Crypt {
     _b64Encode(sb, 0, c[_transpose[31]], c[_transpose[30]], 3);
 
     final roundsPrefix = rounds == 5000 ? '' : 'rounds=$rounds\$';
-    return '\$5\$$roundsPrefix$salt\$$sb';
+    return '\$5\$$roundsPrefix$normalizedSalt\$$sb';
   }
 
   static void _b64Encode(StringBuffer sb, int a, int b, int c, int n) {

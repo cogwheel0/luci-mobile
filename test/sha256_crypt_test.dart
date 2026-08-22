@@ -37,6 +37,14 @@ void main() {
       expect(result, r'$5$a/b.c$vee/XycLMvVg2OU6SHvkoH15sT4kjI6CDsYGnju0W83');
     });
 
+    test('truncates salts to the SHA-crypt 16-character limit', () {
+      final result = Sha256Crypt.hash('password', '1234567890123456EXTRA');
+      expect(
+        result,
+        r'$5$1234567890123456$kA3y6qb6u0bgJ5yW80rDsBB1Widrs.MmtC0zvgP1Vj5',
+      );
+    });
+
     test('rounds omitted when default (5000)', () {
       final result = Sha256Crypt.hash('test', 'saltsalt');
       expect(result.contains('rounds='), isFalse);

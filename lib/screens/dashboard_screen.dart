@@ -659,7 +659,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: labelStyle),
+        Text(
+          label,
+          style: labelStyle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 4),
         Text(
           value,
