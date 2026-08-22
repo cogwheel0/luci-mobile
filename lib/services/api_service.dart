@@ -152,6 +152,12 @@ String? _extractSysauthToken(Headers headers) {
 class RealApiService implements IApiService {
   final HttpClientManager _httpClientManager = HttpClientManager();
 
+  List<dynamic> _requireRpcSuccess(dynamic result, String operation) {
+    if (result is List && result.isNotEmpty && result[0] == 0) return result;
+    final detail = result is List && result.length > 1 ? result[1] : result;
+    throw Exception('$operation failed: $detail');
+  }
+
   Dio _createHttpClient(
     bool useHttps,
     String hostWithPort, {
@@ -772,14 +778,17 @@ class RealApiService implements IApiService {
     required Map<String, String> values,
     BuildContext? context,
   }) async {
-    return await callWithContext(
-      ipAddress,
-      sysauth,
-      useHttps,
-      object: 'uci',
-      method: 'set',
-      params: {'config': config, 'section': section, 'values': values},
-      context: context,
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'set',
+        params: {'config': config, 'section': section, 'values': values},
+        context: context,
+      ),
+      'uci.set',
     );
   }
 
@@ -791,14 +800,17 @@ class RealApiService implements IApiService {
     required String config,
     BuildContext? context,
   }) async {
-    return await callWithContext(
-      ipAddress,
-      sysauth,
-      useHttps,
-      object: 'uci',
-      method: 'commit',
-      params: {'config': config},
-      context: context,
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'commit',
+        params: {'config': config},
+        context: context,
+      ),
+      'uci.commit',
     );
   }
 
@@ -816,15 +828,25 @@ class RealApiService implements IApiService {
     List<String> params = const [],
     BuildContext? context,
   }) async {
-    return await callWithContext(
-      ipAddress,
-      sysauth,
-      useHttps,
-      object: 'file',
-      method: 'exec',
-      params: {'command': command, 'params': params},
-      context: context,
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'file',
+        method: 'exec',
+        params: {'command': command, 'params': params},
+        context: context,
+      ),
+      'file.exec',
     );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is Map && data['code'] is num && data['code'] != 0) {
+      throw Exception(
+        'file.exec failed: ${data['stderr'] ?? 'exit ${data['code']}'}',
+      );
+    }
+    return result;
   }
 
   CancelToken? _scanCancelToken;
@@ -915,9 +937,7 @@ class RealApiService implements IApiService {
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) return [];
       if (e.type == DioExceptionType.receiveTimeout) {
-        throw Exception(
-          'Scan timed out on "$device". The radio may be busy.',
-        );
+        throw Exception('Scan timed out on "$device". The radio may be busy.');
       }
       Logger.exception('WiFi scan DioException', e, e.stackTrace);
       rethrow;
@@ -935,19 +955,22 @@ class RealApiService implements IApiService {
     String? name,
     BuildContext? context,
   }) async {
-    return await callWithContext(
-      ipAddress,
-      sysauth,
-      useHttps,
-      object: 'uci',
-      method: 'add',
-      params: {
-        'config': config,
-        'type': type,
-        'values': values,
-        if (name != null) 'name': name,
-      },
-      context: context,
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'add',
+        params: {
+          'config': config,
+          'type': type,
+          'values': values,
+          'name': ?name,
+        },
+        context: context,
+      ),
+      'uci.add',
     );
   }
 
@@ -958,16 +981,20 @@ class RealApiService implements IApiService {
     bool useHttps, {
     required String config,
     required String section,
+    String? option,
     BuildContext? context,
   }) async {
-    return await callWithContext(
-      ipAddress,
-      sysauth,
-      useHttps,
-      object: 'uci',
-      method: 'delete',
-      params: {'config': config, 'section': section},
-      context: context,
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'delete',
+        params: {'config': config, 'section': section, 'option': ?option},
+        context: context,
+      ),
+      'uci.delete',
     );
   }
 
@@ -979,14 +1006,17 @@ class RealApiService implements IApiService {
     required String config,
     BuildContext? context,
   }) async {
-    return await callWithContext(
-      ipAddress,
-      sysauth,
-      useHttps,
-      object: 'uci',
-      method: 'get',
-      params: {'config': config},
-      context: context,
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'get',
+        params: {'config': config},
+        context: context,
+      ),
+      'uci.get',
     );
   }
 }

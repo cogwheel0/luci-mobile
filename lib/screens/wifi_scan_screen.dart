@@ -215,8 +215,8 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
             child: _isScanning
                 ? _buildScanningIndicator(theme, colorScheme)
                 : _scanResults.isEmpty
-                    ? _buildEmptyState(theme, colorScheme)
-                    : _buildResultsList(theme, colorScheme),
+                ? _buildEmptyState(theme, colorScheme)
+                : _buildResultsList(theme, colorScheme),
           ),
         ],
       ),
@@ -363,7 +363,8 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
               // Restart Radio button
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _isScanning || _isRestarting || _selectedRadio == null
+                  onPressed:
+                      _isScanning || _isRestarting || _selectedRadio == null
                       ? null
                       : _restartRadio,
                   icon: _isRestarting
@@ -376,7 +377,9 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
                           ),
                         )
                       : const Icon(Icons.restart_alt, size: 20),
-                  label: Text(_isRestarting ? 'Restarting...' : 'Restart Radio'),
+                  label: Text(
+                    _isRestarting ? 'Restarting...' : 'Restart Radio',
+                  ),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     side: BorderSide(
@@ -446,7 +449,9 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
                     height: 80,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      color: colorScheme.primaryContainer.withValues(
+                        alpha: 0.3,
+                      ),
                     ),
                     child: Icon(
                       Icons.radar,
@@ -490,7 +495,8 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
           ),
           const SizedBox(height: LuciSpacing.md),
           Text(
-            _error ?? 'Select a radio and tap Scan\nto find nearby WiFi networks',
+            _error ??
+                'Select a radio and tap Scan\nto find nearby WiFi networks',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: _error != null
@@ -515,10 +521,10 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
 
   Widget _buildResultsList(ThemeData theme, ColorScheme colorScheme) {
     // Separate networks with SSIDs from hidden ones
-    final visibleNetworks =
-        _scanResults.where((r) => r.ssid.isNotEmpty).toList();
-    final hiddenNetworks =
-        _scanResults.where((r) => r.ssid.isEmpty).toList();
+    final visibleNetworks = _scanResults
+        .where((r) => r.ssid.isNotEmpty)
+        .toList();
+    final hiddenNetworks = _scanResults.where((r) => r.ssid.isEmpty).toList();
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: LuciSpacing.sm),
@@ -734,11 +740,7 @@ class _SignalIcon extends StatelessWidget {
             ),
           ),
           // Use built-in WiFi icons based on signal level
-          Icon(
-            _getWifiIcon(),
-            size: 22,
-            color: color,
-          ),
+          Icon(_getWifiIcon(), size: 22, color: color),
           // Lock indicator
           if (hasLock)
             Positioned(
@@ -847,7 +849,8 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
     // Block unsupported enterprise networks.
     if (widget.network.encryption.isEnterprise) {
       setState(() {
-        _error = 'Enterprise (EAP) networks are not supported for connecting here.';
+        _error =
+            'Enterprise (EAP) networks are not supported for connecting here.';
       });
       return;
     }
@@ -900,11 +903,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
             children: [
               const Icon(Icons.check_circle, color: Colors.white, size: 20),
               const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Connecting to "${widget.network.ssid}"...',
-                ),
-              ),
+              Expanded(child: Text('Connecting to "$ssid"...')),
             ],
           ),
           backgroundColor: Colors.green.shade700,
@@ -964,7 +963,9 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      color: colorScheme.primaryContainer.withValues(
+                        alpha: 0.3,
+                      ),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -1022,9 +1023,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
               ),
 
               const SizedBox(height: LuciSpacing.lg),
-              Divider(
-                color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-              ),
+              Divider(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
               const SizedBox(height: LuciSpacing.md),
 
               // Radio selector
@@ -1060,10 +1059,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
                           : radioName;
                       return DropdownMenuItem<String>(
                         value: device['radioName'],
-                        child: Text(
-                          label,
-                          style: theme.textTheme.bodyMedium,
-                        ),
+                        child: Text(label, style: theme.textTheme.bodyMedium),
                       );
                     }).toList(),
                     onChanged: _isConnecting
@@ -1275,10 +1271,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
           const SizedBox(width: 10),
           SizedBox(
             width: 80,
-            child: Text(
-              label,
-              style: LuciTextStyles.detailLabel(context),
-            ),
+            child: Text(label, style: LuciTextStyles.detailLabel(context)),
           ),
           Expanded(
             child: Text(

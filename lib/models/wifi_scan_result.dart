@@ -48,13 +48,6 @@ class WifiScanResult {
     return defaultValue;
   }
 
-  /// Safely extract a positive integer. Returns null for missing, zero, or
-  /// negative values so callers can fall back to channel-based logic.
-  static int? _safePositiveInt(dynamic value) {
-    final parsed = _safeInt(value, 0);
-    return parsed > 0 ? parsed : null;
-  }
-
   /// Returns a valid Wi-Fi frequency in MHz, or null if the value is missing,
   /// zero, negative, or outside any known Wi-Fi band range.
   /// Valid ranges: 2.4 GHz (2400–2500), 4.9 GHz (4900–5000),
@@ -142,9 +135,10 @@ class WifiEncryption {
       wpaVersion = rawWpa;
     } else if (rawWpa is List && rawWpa.isNotEmpty) {
       // Take the highest WPA version from the array
-      wpaVersion = rawWpa
-          .whereType<int>()
-          .fold(0, (max, v) => v > max ? v : max);
+      wpaVersion = rawWpa.whereType<int>().fold(
+        0,
+        (max, v) => v > max ? v : max,
+      );
       if (wpaVersion == 0) {
         // Try parsing from dynamic types
         for (final v in rawWpa) {
@@ -158,12 +152,13 @@ class WifiEncryption {
     final enabled = json['enabled'] == true || wpaVersion > 0 || wep;
 
     // Auth suites: try multiple key names used by different OpenWrt versions
-    final authSuites = _toStringList(json['auth_suites'])
-        + _toStringList(json['authentication']);
+    final authSuites =
+        _toStringList(json['auth_suites']) +
+        _toStringList(json['authentication']);
 
     // Ciphers: try multiple key names
-    final pairCiphers = _toStringList(json['pair_ciphers'])
-        + _toStringList(json['ciphers']);
+    final pairCiphers =
+        _toStringList(json['pair_ciphers']) + _toStringList(json['ciphers']);
     final groupCiphers = _toStringList(json['group_ciphers']);
 
     // Build description from available data if not provided
@@ -180,10 +175,10 @@ class WifiEncryption {
       final wpaPart = wpaVersion >= 3
           ? 'WPA3'
           : wpaVersion >= 2
-              ? 'WPA2'
-              : wpaVersion >= 1
-                  ? 'WPA'
-                  : 'WPA';
+          ? 'WPA2'
+          : wpaVersion >= 1
+          ? 'WPA'
+          : 'WPA';
       final authPart = authSuites.isNotEmpty
           ? ' ${authSuites.map((s) => s.toUpperCase()).join("/")}'
           : '';

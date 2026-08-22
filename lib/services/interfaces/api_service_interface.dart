@@ -113,13 +113,14 @@ abstract class IApiService {
     BuildContext? context,
   });
 
-  /// Deletes a UCI section (e.g., to remove a wifi-iface).
+  /// Deletes a UCI section or one of its options.
   Future<dynamic> uciDelete(
     String ipAddress,
     String sysauth,
     bool useHttps, {
     required String config,
     required String section,
+    String? option,
     BuildContext? context,
   });
 

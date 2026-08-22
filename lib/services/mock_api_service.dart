@@ -1054,6 +1054,7 @@ class MockApiService implements IApiService {
     bool useHttps, {
     required String config,
     required String section,
+    String? option,
     BuildContext? context,
   }) async {
     await Future.delayed(const Duration(milliseconds: 200));
@@ -1077,7 +1078,7 @@ class MockApiService implements IApiService {
       object: 'uci',
       method: 'get',
       params: {'config': config},
-      context: context,
+      context: context?.mounted == true ? context : null,
     );
   }
 

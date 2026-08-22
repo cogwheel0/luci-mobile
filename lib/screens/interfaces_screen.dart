@@ -608,7 +608,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     final uciInterfaces = <String, Map<String, dynamic>>{};
 
     // Try 'values' key (real API) then 'wireless' key (mock data)
-    final uciValues = (uciWirelessConfig?['values'] as Map?) ??
+    final uciValues =
+        (uciWirelessConfig?['values'] as Map?) ??
         (uciWirelessConfig?['wireless'] as Map?);
     if (uciValues != null) {
       uciValues.forEach((key, value) {
@@ -635,7 +636,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             }
 
             final isRadioEnabled = uciRadios[radioName]?['disabled'] != '1';
-            final isIfaceEnabled = config['disabled'] != '1' &&
+            final isIfaceEnabled =
+                config['disabled'] != '1' &&
                 config['disabled'] != 1 &&
                 config['disabled'] != true;
             final isEnabled = isRadioEnabled && isIfaceEnabled;
@@ -651,7 +653,9 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
 
             // Build encryption description
             final encIwinfo = iwinfo['encryption'] as Map<String, dynamic>?;
-            final encDescription = encIwinfo?['description'] ?? _uciString(config['encryption'], 'N/A');
+            final encDescription =
+                encIwinfo?['description'] ??
+                _uciString(config['encryption'], 'N/A');
 
             interfacesList.add({
               'name': _uciString(config['ssid']).isNotEmpty
@@ -660,12 +664,23 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               'subtitle':
                   '$mode • Ch. ${iwinfo['channel']?.toString() ?? _uciString(config['channel'], 'N/A')}',
               'isEnabled': isEnabled,
+              'isIfaceEnabled': isIfaceEnabled,
+              'isRadioEnabled': isRadioEnabled,
               'deviceName': deviceName,
               'radioName': radioName,
               'ssid': ssid,
               'interfaceName': name,
               'section': uciName,
+              'uciSection': uciName,
               'ifname': iface['ifname'] as String?,
+              'mode': mode,
+              'encryption': config['encryption'] ?? '',
+              'encryptionDescription': encDescription,
+              'network': (config['network'] is List)
+                  ? (config['network'] as List).join(', ')
+                  : config['network']?.toString() ?? '',
+              'channel': iwinfo['channel']?.toString() ?? 'auto',
+              'signal': iwinfo['signal']?.toString() ?? '--',
               'details': {
                 'Device': _uciString(config['device'], radioName),
                 'Mode': _uciString(config['mode']).isNotEmpty
@@ -845,7 +860,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
         // Management action buttons
         if (uciSection.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12.0,
+              vertical: 4.0,
+            ),
             child: Column(
               children: [
                 // Enable/Disable toggle row
@@ -879,8 +897,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () =>
-                            _showDeleteWifiDialog(context, iface),
+                        onPressed: () => _showDeleteWifiDialog(context, iface),
                         icon: Icon(Icons.delete_outline, size: 18),
                         label: const Text('Remove'),
                         style: OutlinedButton.styleFrom(
@@ -908,8 +925,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                       mode.toLowerCase() == 'sta'
                           ? 'Client (Station) mode'
                           : mode.toLowerCase() == 'ap'
-                              ? 'Access Point mode'
-                              : '${mode.toUpperCase()} mode',
+                          ? 'Access Point mode'
+                          : '${mode.toUpperCase()} mode',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         fontStyle: FontStyle.italic,
@@ -937,10 +954,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     );
   }
 
-  void _showEditWifiSheet(
-    BuildContext context,
-    Map<String, dynamic> iface,
-  ) {
+  void _showEditWifiSheet(BuildContext context, Map<String, dynamic> iface) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -952,10 +966,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     );
   }
 
-  void _showDeleteWifiDialog(
-    BuildContext context,
-    Map<String, dynamic> iface,
-  ) {
+  void _showDeleteWifiDialog(BuildContext context, Map<String, dynamic> iface) {
     final ssid = iface['ssid']?.toString() ?? 'this interface';
     final uciSection = iface['uciSection'] as String? ?? '';
     final mode = iface['mode']?.toString() ?? 'ap';
@@ -963,11 +974,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
 
     showDialog(
       context: context,
-      builder: (ctx) => _WifiDeleteDialog(
-        ssid: ssid,
-        uciSection: uciSection,
-        mode: mode,
-      ),
+      builder: (ctx) =>
+          _WifiDeleteDialog(ssid: ssid, uciSection: uciSection, mode: mode),
     );
   }
 
@@ -1202,17 +1210,6 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildGenericDetails(
-    BuildContext context,
-    Map<String, dynamic> details,
-  ) {
-    return Column(
-      children: details.entries.map((entry) {
-        return _buildDetailRow(context, entry.key, entry.value.toString());
-      }).toList(),
     );
   }
 
@@ -1649,10 +1646,7 @@ class _WifiToggleRow extends ConsumerStatefulWidget {
   final String uciSection;
   final bool isEnabled;
 
-  const _WifiToggleRow({
-    required this.uciSection,
-    required this.isEnabled,
-  });
+  const _WifiToggleRow({required this.uciSection, required this.isEnabled});
 
   @override
   ConsumerState<_WifiToggleRow> createState() => _WifiToggleRowState();
@@ -1722,10 +1716,7 @@ class _WifiToggleRowState extends ConsumerState<_WifiToggleRow> {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           else
-            Switch(
-              value: widget.isEnabled,
-              onChanged: _toggle,
-            ),
+            Switch(value: widget.isEnabled, onChanged: _toggle),
         ],
       ),
     );
@@ -1781,11 +1772,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
     // prevent saving until the user makes a valid selection.
     final currentEnc = widget.iface['encryption']?.toString() ?? 'none';
     _originalEncryption = currentEnc;
-    _selectedEncryption = _encryptionOptions.any(
-      (o) => o['value'] == currentEnc,
-    )
-        ? currentEnc
-        : currentEnc; // preserve the raw value; save is blocked for unknown modes
+    _selectedEncryption = currentEnc;
   }
 
   @override
@@ -1816,24 +1803,26 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
 
     // Block unsupported encryption modes (e.g. enterprise WPA-EAP)
     if (!_isEncryptionSupported) {
-      setState(() => _error =
-          'Encryption mode "$_selectedEncryption" cannot be edited here. '
-          'Please select a supported mode.');
+      setState(
+        () => _error =
+            'Encryption mode "$_selectedEncryption" cannot be edited here. '
+            'Please select a supported mode.',
+      );
       return;
     }
 
     // Require a password when changing an open interface to an encrypted one
     if (_changingToEncrypted && _passwordController.text.isEmpty) {
-      setState(() => _error = 'A password is required when enabling encryption.');
+      setState(
+        () => _error = 'A password is required when enabling encryption.',
+      );
       return;
     }
 
     if (_requiresPassword &&
         _passwordController.text.isNotEmpty &&
         _passwordController.text.length < 8) {
-      setState(
-        () => _error = 'Password must be at least 8 characters.',
-      );
+      setState(() => _error = 'Password must be at least 8 characters.');
       return;
     }
 
@@ -1940,7 +1929,9 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      color: colorScheme.primaryContainer.withValues(
+                        alpha: 0.3,
+                      ),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -2082,8 +2073,11 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.error_outline, color: colorScheme.error,
-                          size: 18),
+                      Icon(
+                        Icons.error_outline,
+                        color: colorScheme.error,
+                        size: 18,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -2110,8 +2104,11 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.info_outline, color: colorScheme.tertiary,
-                        size: 18),
+                    Icon(
+                      Icons.info_outline,
+                      color: colorScheme.tertiary,
+                      size: 18,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -2169,9 +2166,9 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
   Widget _buildLabel(BuildContext context, String text) {
     return Text(
       text,
-      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-        fontWeight: FontWeight.w600,
-      ),
+      style: Theme.of(
+        context,
+      ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
     );
   }
 
@@ -2272,13 +2269,16 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final displayName = widget.ssid.isNotEmpty ? widget.ssid : widget.uciSection;
+    final displayName = widget.ssid.isNotEmpty
+        ? widget.ssid
+        : widget.uciSection;
     final modeLower = widget.mode.toLowerCase();
-    final isStaMode = modeLower.contains('sta') || 
-                      modeLower.contains('client') || 
-                      modeLower == 'station' ||
-                      modeLower == 'n/a' ||
-                      widget.mode.isEmpty;
+    final isStaMode =
+        modeLower.contains('sta') ||
+        modeLower.contains('client') ||
+        modeLower == 'station' ||
+        modeLower == 'n/a' ||
+        widget.mode.isEmpty;
     final warningMessage = isStaMode
         ? 'This will remove the STA connection from this radio.'
         : 'WiFi will restart. Clients on this network will be disconnected.';
@@ -2313,9 +2313,9 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
                 Icon(Icons.warning_amber, color: colorScheme.error, size: 18),
                 const SizedBox(width: 8),
                 Expanded(
-                child: Text(
-                  warningMessage,
-                  style: theme.textTheme.bodySmall?.copyWith(
+                  child: Text(
+                    warningMessage,
+                    style: theme.textTheme.bodySmall?.copyWith(
                       color: colorScheme.error,
                     ),
                   ),
