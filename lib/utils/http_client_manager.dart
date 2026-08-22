@@ -274,7 +274,12 @@ class HttpClientManager {
 
   /// Clear accepted certificates (useful for logout or security reset)
   Future<void> clearAcceptedCertificates() async {
+    // Flag first so an in-flight load defers to this operation, then let
+    // any pending load (and its migration write) finish before mutating
+    // memory/storage - otherwise cleared pins could be restored by a
+    // late-arriving write.
     _pinsMutated = true;
+    await _pinsLoaded;
     _acceptedCertFingerprints.clear();
 
     // Clear all cached HTTP clients
@@ -292,7 +297,10 @@ class HttpClientManager {
   /// Clears pinned certificates and cached clients for a specific host
   /// (across all ports)
   Future<void> clearCertificatesForHost(String host) async {
+    // Serialize behind any in-flight load/migration write (see
+    // clearAcceptedCertificates).
     _pinsMutated = true;
+    await _pinsLoaded;
     final hostname = _normalizePinHost(_extractHostname(host));
     _acceptedCertFingerprints.removeWhere((key, value) {
       final parsed = _parsePinKey(key);
