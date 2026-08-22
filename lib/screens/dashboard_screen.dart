@@ -113,13 +113,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return parts.join(' ');
   }
 
-  String _formatCpuLoad(List<dynamic> load, {int? cores}) {
+  String _formatCpuLoad(
+    List<dynamic> load, {
+    int? cores,
+    bool showRawLoad = false,
+  }) {
     if (load.isEmpty) return 'N/A';
     final loadAvg = load[0] / 65536;
     if (cores != null && cores > 0) {
       final percent = (loadAvg / cores * 100).clamp(0, 100).toInt();
       return '$percent%';
     }
+    if (showRawLoad) return loadAvg.toStringAsFixed(2);
     final percent = (loadAvg * 100).clamp(0, 100);
     return '${percent.toStringAsFixed(0)}%';
   }
@@ -676,7 +681,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final glInetData = appState.dashboardData?['glinet'] as GlInetData?;
     final cpuCores = glInetData?.cpuCores;
     final cpuLoadValue = cpuLoad != null
-        ? _formatCpuLoad(cpuLoad, cores: cpuCores)
+        ? _formatCpuLoad(
+            cpuLoad,
+            cores: cpuCores,
+            showRawLoad: glInetData != null && cpuCores == null,
+          )
         : 'N/A';
 
     final totalMem = sysInfo?['memory']?['total'] as int? ?? 0;

@@ -7,6 +7,7 @@ import 'package:luci_mobile/services/interfaces/glinet_api_service_interface.dar
 import 'package:luci_mobile/utils/http_client_manager.dart';
 import 'package:luci_mobile/utils/logger.dart';
 import 'package:luci_mobile/utils/sha256_crypt.dart';
+import 'package:luci_mobile/utils/wifi_utils.dart';
 
 /// Fetches supplementary data exposed by GL.iNet's `/rpc` API.
 class GlInetApiService implements IGlInetApiService {
@@ -99,7 +100,8 @@ class GlInetApiService implements IGlInetApiService {
     Map<String, dynamic> args = const {},
     bool retryExpiredSession = true,
   ]) async {
-    if (await _login(host, password, useHttps) == null) return null;
+    final sid = await _login(host, password, useHttps);
+    if (sid == null) return null;
 
     try {
       final client = _httpClientManager.getClient(host, useHttps);
@@ -109,7 +111,7 @@ class GlInetApiService implements IGlInetApiService {
           'jsonrpc': '2.0',
           'id': 1,
           'method': 'call',
-          'params': [_sid, module, function, args],
+          'params': [sid, module, function, args],
         }),
         options: Options(contentType: Headers.jsonContentType),
       );
@@ -167,9 +169,12 @@ class GlInetApiService implements IGlInetApiService {
       final client = _asMap(value);
       final mac = _asString(client?['mac'])?.toLowerCase();
       if (mac != null) {
+        final iface = _asString(client?['iface']);
         clients[mac] = GlInetClient(
           online: _asBool(client?['online']),
-          wifiBand: _asString(client?['iface']),
+          wifiBand: iface != null && formatWifiBand(iface).isNotEmpty
+              ? iface
+              : null,
           deviceClass: _asString(client?['class']),
           name: _asString(client?['name']),
           alias: _asString(client?['alias']),

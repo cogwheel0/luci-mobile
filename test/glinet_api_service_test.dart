@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:luci_mobile/models/client.dart';
 import 'package:luci_mobile/services/glinet_api_service.dart';
 import 'package:luci_mobile/services/mock_glinet_api_service.dart';
 import 'package:luci_mobile/utils/http_client_manager.dart';
@@ -17,6 +18,18 @@ void main() {
   test('reviewer service returns no vendor data', () async {
     final service = MockGlInetApiService();
     expect(await service.fetchData('router', 'password', false), isNull);
+  });
+
+  test('formats the documented 2G client band', () {
+    final client = Client(
+      ipAddress: '192.0.2.1',
+      macAddress: '00:11:22:33:44:55',
+      hostname: 'client',
+      connectionType: ConnectionType.wireless,
+      wifiBand: '2G',
+    );
+
+    expect(client.connectionLabel, '2.4 GHz');
   });
 
   test('parses firmware value variants independently', () async {
@@ -42,6 +55,8 @@ void main() {
         'clients' => _result({
           'clients': [
             {'mac': 'AA:BB:CC:DD:EE:FF', 'online': 1, 'iface': '5G'},
+            {'mac': 'AA:BB:CC:DD:EE:00', 'online': 1, 'iface': 'cable'},
+            {'mac': 'AA:BB:CC:DD:EE:01', 'online': 1, 'iface': 'wlan0'},
           ],
         }),
         'system' => _result({
@@ -56,11 +71,15 @@ void main() {
     });
     addTearDown(() => server.close(force: true));
 
-    final data = await GlInetApiService(HttpClientManager())
-        .fetchData('127.0.0.1:${server.port}', 'password', false);
+    final data = await GlInetApiService(
+      HttpClientManager(),
+    ).fetchData('127.0.0.1:${server.port}', 'password', false);
 
     expect(data?.radios['wifi0']?.channel, 44);
     expect(data?.clients['aa:bb:cc:dd:ee:ff']?.online, isTrue);
+    expect(data?.clients['aa:bb:cc:dd:ee:ff']?.wifiBand, '5G');
+    expect(data?.clients['aa:bb:cc:dd:ee:00']?.wifiBand, isNull);
+    expect(data?.clients['aa:bb:cc:dd:ee:01']?.wifiBand, isNull);
     expect(data?.cpuTemperature, 45.5);
     expect(data?.fanSpeed, 1200);
     expect(data?.fanActive, isTrue);
@@ -70,6 +89,7 @@ void main() {
   test('reauthenticates once when the session expires', () async {
     var loginCount = 0;
     var expired = false;
+    final callSids = <String>[];
     final server = await _startRpcServer((request) {
       final method = request['method'];
       if (method == 'challenge') {
@@ -84,6 +104,7 @@ void main() {
         loginCount++;
         return _result({'sid': 'sid-$loginCount'});
       }
+      callSids.add((request['params'] as List).first as String);
       if (!expired) {
         expired = true;
         return {
@@ -96,10 +117,12 @@ void main() {
     });
     addTearDown(() => server.close(force: true));
 
-    await GlInetApiService(HttpClientManager())
-        .fetchData('127.0.0.1:${server.port}', 'password', false);
+    await GlInetApiService(
+      HttpClientManager(),
+    ).fetchData('127.0.0.1:${server.port}', 'password', false);
 
     expect(loginCount, 2);
+    expect(callSids.take(2), ['sid-1', 'sid-2']);
   });
 }
 

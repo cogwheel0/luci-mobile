@@ -680,8 +680,10 @@ class AppState extends ChangeNotifier {
 
     // If already loading, don't start another request (but this shouldn't prevent pull-to-refresh)
     // We'll let the new request proceed and the loading state will be handled properly
-    final ip = _routerService!.selectedRouter!.ipAddress;
-    final useHttps = _routerService!.selectedRouter!.useHttps;
+    final selectedRouter = _routerService!.selectedRouter!;
+    final ip = selectedRouter.ipAddress;
+    final useHttps = selectedRouter.useHttps;
+    final routerPassword = selectedRouter.password;
     // Snapshot the credentials for this exact session: reading the mutable
     // auth service mid-flight could send newer credentials to this router.
     final sysauth = _authService!.sysauth!;
@@ -932,20 +934,19 @@ class AppState extends ChangeNotifier {
       GlInetData? glInetData;
       final routerModel = boardInfoData?['model']?.toString() ?? '';
       if (routerModel.contains('GL-') || routerModel.contains('GL.iNet')) {
-        final password = _routerService?.selectedRouter?.password;
-        if (password != null) {
-          try {
-            glInetData = await _glInetService?.fetchData(
-              ip,
-              password,
-              useHttps,
-            );
-            glInetData = glInetData?.withCpuCores(
-              _getGlInetCoreCount(routerModel),
-            );
-          } catch (error) {
-            Logger.warning('GL.iNet supplementary fetch failed: $error');
+        if (token != _sessionToken) return;
+        try {
+          glInetData = await _glInetService?.fetchData(
+            ip,
+            routerPassword,
+            useHttps,
+          );
+          final cpuCores = _getGlInetCoreCount(routerModel);
+          if (cpuCores != null) {
+            glInetData = glInetData?.withCpuCores(cpuCores);
           }
+        } catch (error) {
+          Logger.warning('GL.iNet supplementary fetch failed: $error');
         }
       }
 
@@ -2831,24 +2832,7 @@ class AppState extends ChangeNotifier {
           }
         }
         final reviewerClients = clientMap.values.toList();
-        reviewerClients.sort((a, b) {
-          int typeOrder(ConnectionType t) {
-            switch (t) {
-              case ConnectionType.wireless:
-                return 0;
-              case ConnectionType.wired:
-                return 1;
-              default:
-                return 2;
-            }
-          }
-
-          final cmpType = typeOrder(
-            a.connectionType,
-          ).compareTo(typeOrder(b.connectionType));
-          if (cmpType != 0) return cmpType;
-          return a.hostname.toLowerCase().compareTo(b.hostname.toLowerCase());
-        });
+        _sortClients(reviewerClients);
         return reviewerClients;
       }
 
@@ -2957,7 +2941,7 @@ class AppState extends ChangeNotifier {
 
   /// Returns a union set of associated wireless MAC addresses across all routers
   /// Known GL.iNet model → CPU core count mapping.
-  static int _getGlInetCoreCount(String model) {
+  static int? _getGlInetCoreCount(String model) {
     // IPQ5332 (BE9300, BE6500): Quad-core Cortex-A53
     // IPQ8071A (B2200): Quad-core Cortex-A53
     // MT7981B (MT3000): Dual-core Cortex-A53
@@ -2965,7 +2949,7 @@ class AppState extends ChangeNotifier {
     if (model.contains('BE9300') || model.contains('BE6500')) return 4;
     if (model.contains('MT6000') || model.contains('B2200')) return 4;
     if (model.contains('MT3000') || model.contains('MT2500')) return 2;
-    return 4; // Safe default for modern GL.iNet routers
+    return null;
   }
 
   /// Enrich client map with GL.iNet API data (band, online, device class).

@@ -1,3 +1,5 @@
+import 'package:luci_mobile/utils/wifi_utils.dart';
+
 enum ConnectionType { wired, wireless, unknown }
 
 class Client {
@@ -242,16 +244,8 @@ class Client {
   String get connectionLabel {
     if (isOnline == false) return 'Offline';
     if (wifiBand != null) {
-      switch (wifiBand) {
-        case '2.4G':
-          return '2.4 GHz';
-        case '5G':
-          return '5 GHz';
-        case '6G':
-          return '6 GHz';
-        default:
-          return wifiBand!;
-      }
+      final formattedBand = formatWifiBand(wifiBand!);
+      return formattedBand.isEmpty ? wifiBand! : formattedBand;
     }
     switch (connectionType) {
       case ConnectionType.wireless:
