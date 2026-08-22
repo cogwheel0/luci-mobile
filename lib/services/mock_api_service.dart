@@ -12,6 +12,8 @@ class MockApiService implements IApiService {
   static int _baseTxBytes = 987654321;
   static int _baseRxPackets = 12345;
   static int _baseTxPackets = 9876;
+  // Scan cancellation token — incremented by cancelScan().
+  int _scanToken = 0;
   static int _baseLanRxBytes = 2345678901;
   static int _baseLanTxBytes = 1876543210;
   static int _baseLanRxPackets = 23456;
@@ -904,5 +906,184 @@ class MockApiService implements IApiService {
   }) async {
     // For mock service, just delegate to fetchAssociatedStations
     return await fetchAssociatedStations();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> scanWirelessNetworks({
+    required String ipAddress,
+    required String sysauth,
+    required bool useHttps,
+    required String device,
+    BuildContext? context,
+  }) async {
+    final token = _scanToken;
+    await Future.delayed(const Duration(seconds: 2)); // Simulate scan time
+    // Return empty list if scan was cancelled before completion.
+    if (_scanToken != token) return [];
+    return [
+      {
+        'ssid': 'Neighbor-WiFi',
+        'bssid': 'AA:BB:CC:11:22:33',
+        'mode': 'Master',
+        'channel': 1,
+        'signal': -45,
+        'quality': 65,
+        'quality_max': 70,
+        'encryption': {
+          'enabled': true,
+          'description': 'WPA2 PSK (CCMP)',
+          'wep': false,
+          'wpa': 2,
+          'auth_suites': ['PSK'],
+          'pair_ciphers': ['CCMP'],
+          'group_ciphers': ['CCMP'],
+        },
+      },
+      {
+        'ssid': 'CoffeeShop-Free',
+        'bssid': 'DD:EE:FF:44:55:66',
+        'mode': 'Master',
+        'channel': 6,
+        'signal': -62,
+        'quality': 48,
+        'quality_max': 70,
+        'encryption': {
+          'enabled': false,
+          'description': 'None',
+          'wep': false,
+          'wpa': 0,
+          'auth_suites': <String>[],
+          'pair_ciphers': <String>[],
+          'group_ciphers': <String>[],
+        },
+      },
+      {
+        'ssid': 'Office-5G',
+        'bssid': '11:22:33:AA:BB:CC',
+        'mode': 'Master',
+        'channel': 36,
+        'signal': -55,
+        'quality': 55,
+        'quality_max': 70,
+        'encryption': {
+          'enabled': true,
+          'description': 'WPA2 PSK (CCMP)',
+          'wep': false,
+          'wpa': 2,
+          'auth_suites': ['PSK'],
+          'pair_ciphers': ['CCMP'],
+          'group_ciphers': ['CCMP'],
+        },
+      },
+      {
+        'ssid': 'SmartHome-IoT',
+        'bssid': '77:88:99:DD:EE:FF',
+        'mode': 'Master',
+        'channel': 11,
+        'signal': -71,
+        'quality': 35,
+        'quality_max': 70,
+        'encryption': {
+          'enabled': true,
+          'description': 'WPA3 SAE (CCMP)',
+          'wep': false,
+          'wpa': 3,
+          'auth_suites': ['SAE'],
+          'pair_ciphers': ['CCMP'],
+          'group_ciphers': ['CCMP'],
+        },
+      },
+      {
+        'ssid': 'NETGEAR-Guest',
+        'bssid': 'CC:DD:EE:11:22:33',
+        'mode': 'Master',
+        'channel': 44,
+        'signal': -78,
+        'quality': 22,
+        'quality_max': 70,
+        'encryption': {
+          'enabled': true,
+          'description': 'WPA2 PSK (CCMP)',
+          'wep': false,
+          'wpa': 2,
+          'auth_suites': ['PSK'],
+          'pair_ciphers': ['CCMP'],
+          'group_ciphers': ['CCMP'],
+        },
+      },
+      {
+        'ssid': '',
+        'bssid': 'FF:00:11:22:33:44',
+        'mode': 'Master',
+        'channel': 3,
+        'signal': -82,
+        'quality': 15,
+        'quality_max': 70,
+        'encryption': {
+          'enabled': true,
+          'description': 'WPA2 PSK (CCMP)',
+          'wep': false,
+          'wpa': 2,
+          'auth_suites': ['PSK'],
+          'pair_ciphers': ['CCMP'],
+          'group_ciphers': ['CCMP'],
+        },
+      },
+    ];
+  }
+
+  @override
+  Future<dynamic> uciAdd(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String config,
+    required String type,
+    required Map<String, dynamic> values,
+    String? name,
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return [0, name ?? 'cfg_new_section'];
+  }
+
+  @override
+  Future<dynamic> uciDelete(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String config,
+    required String section,
+    String? option,
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    return [0, 'success'];
+  }
+
+  @override
+  Future<dynamic> uciGetAll(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String config,
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    // Just reuse the call method for uci.get
+    return await call(
+      ipAddress,
+      sysauth,
+      useHttps,
+      object: 'uci',
+      method: 'get',
+      params: {'config': config},
+      context: context?.mounted == true ? context : null,
+    );
+  }
+
+  @override
+  void cancelScan() {
+    _scanToken++; // invalidates any in-flight scan
   }
 }

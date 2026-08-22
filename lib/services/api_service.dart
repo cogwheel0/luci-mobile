@@ -152,6 +152,12 @@ String? _extractSysauthToken(Headers headers) {
 class RealApiService implements IApiService {
   final HttpClientManager _httpClientManager = HttpClientManager();
 
+  List<dynamic> _requireRpcSuccess(dynamic result, String operation) {
+    if (result is List && result.isNotEmpty && result[0] == 0) return result;
+    final detail = result is List && result.length > 1 ? result[1] : result;
+    throw Exception('$operation failed: $detail');
+  }
+
   Dio _createHttpClient(
     bool useHttps,
     String hostWithPort, {
@@ -408,6 +414,28 @@ class RealApiService implements IApiService {
     required String method,
     Map<String, dynamic>? params,
     BuildContext? context,
+  }) {
+    return _callWithTransport(
+      ipAddress,
+      sysauth,
+      useHttps,
+      object: object,
+      method: method,
+      params: params,
+      context: context,
+    );
+  }
+
+  Future<dynamic> _callWithTransport(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String object,
+    required String method,
+    Map<String, dynamic>? params,
+    BuildContext? context,
+    Duration? receiveTimeout,
+    CancelToken? cancelToken,
   }) async {
     final url = _buildUrl(ipAddress, useHttps, '/cgi-bin/luci/admin/ubus');
     final client = _createHttpClient(useHttps, ipAddress, context: context);
@@ -423,7 +451,11 @@ class RealApiService implements IApiService {
       final response = await client.post(
         url.toString(),
         data: jsonEncode(rpcPayload),
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        cancelToken: cancelToken,
+        options: Options(
+          headers: {'Content-Type': 'application/json'},
+          receiveTimeout: receiveTimeout,
+        ),
       );
 
       if (response.statusCode == 200) {
@@ -766,14 +798,17 @@ class RealApiService implements IApiService {
     required Map<String, String> values,
     BuildContext? context,
   }) async {
-    return await callWithContext(
-      ipAddress,
-      sysauth,
-      useHttps,
-      object: 'uci',
-      method: 'set',
-      params: {'config': config, 'section': section, 'values': values},
-      context: context,
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'set',
+        params: {'config': config, 'section': section, 'values': values},
+        context: context,
+      ),
+      'uci.set',
     );
   }
 
@@ -785,14 +820,17 @@ class RealApiService implements IApiService {
     required String config,
     BuildContext? context,
   }) async {
-    return await callWithContext(
-      ipAddress,
-      sysauth,
-      useHttps,
-      object: 'uci',
-      method: 'commit',
-      params: {'config': config},
-      context: context,
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'commit',
+        params: {'config': config},
+        context: context,
+      ),
+      'uci.commit',
     );
   }
 
@@ -810,14 +848,199 @@ class RealApiService implements IApiService {
     List<String> params = const [],
     BuildContext? context,
   }) async {
-    return await callWithContext(
-      ipAddress,
-      sysauth,
-      useHttps,
-      object: 'file',
-      method: 'exec',
-      params: {'command': command, 'params': params},
-      context: context,
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'file',
+        method: 'exec',
+        params: {'command': command, 'params': params},
+        context: context,
+      ),
+      'file.exec',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is Map && data['code'] is num && data['code'] != 0) {
+      throw Exception(
+        'file.exec failed: ${data['stderr'] ?? 'exit ${data['code']}'}',
+      );
+    }
+    return result;
+  }
+
+  CancelToken? _scanCancelToken;
+
+  @override
+  void cancelScan() {
+    _scanCancelToken?.cancel('Scan cancelled by user');
+    _scanCancelToken = null;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> scanWirelessNetworks({
+    required String ipAddress,
+    required String sysauth,
+    required bool useHttps,
+    required String device,
+    BuildContext? context,
+  }) async {
+    cancelScan();
+    final scanToken = CancelToken();
+    _scanCancelToken = scanToken;
+
+    Logger.info('WiFi scan starting on device: $device');
+
+    try {
+      final result = await _callWithTransport(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'iwinfo',
+        method: 'scan',
+        params: {'device': device},
+        context: context,
+        receiveTimeout: const Duration(seconds: 120),
+        cancelToken: scanToken,
+      );
+
+      Logger.info('WiFi scan raw result type: ${result.runtimeType}');
+
+      if (result is List) {
+        final statusCode = result.isNotEmpty ? result[0] : null;
+        if (statusCode != null && statusCode != 0) {
+          const ubusErrors = {
+            1: 'Invalid command',
+            2: 'Invalid argument',
+            3: 'Method not found',
+            4: 'Not found',
+            5: 'No data',
+            6: 'Permission denied',
+            7: 'Request timed out',
+          };
+          final errMsg = ubusErrors[statusCode] ?? 'Unknown error';
+          throw Exception(
+            'iwinfo scan failed: $errMsg (code $statusCode) on device "$device"',
+          );
+        }
+
+        if (result.length < 2 || result[1] == null) return [];
+
+        final data = result[1];
+        if (data is Map) {
+          if (data['results'] is List) {
+            return (data['results'] as List)
+                .whereType<Map<String, dynamic>>()
+                .toList();
+          }
+          for (final value in data.values) {
+            if (value is List && value.isNotEmpty && value.first is Map) {
+              return value.whereType<Map<String, dynamic>>().toList();
+            }
+          }
+          Logger.warning(
+            'WiFi scan: response is Map but no results. Keys: ${data.keys.toList()}',
+          );
+          return [];
+        }
+
+        if (data is List) {
+          return data.whereType<Map<String, dynamic>>().toList();
+        }
+
+        Logger.warning('WiFi scan: unexpected data type: ${data.runtimeType}');
+        return [];
+      }
+
+      Logger.warning('WiFi scan: result is not List: ${result.runtimeType}');
+      return [];
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) return [];
+      if (e.type == DioExceptionType.receiveTimeout) {
+        throw Exception('Scan timed out on "$device". The radio may be busy.');
+      }
+      Logger.exception('WiFi scan DioException', e, e.stackTrace);
+      rethrow;
+    } finally {
+      if (identical(_scanCancelToken, scanToken)) {
+        _scanCancelToken = null;
+      }
+    }
+  }
+
+  @override
+  Future<dynamic> uciAdd(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String config,
+    required String type,
+    required Map<String, dynamic> values,
+    String? name,
+    BuildContext? context,
+  }) async {
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'add',
+        params: {
+          'config': config,
+          'type': type,
+          'values': values,
+          'name': ?name,
+        },
+        context: context,
+      ),
+      'uci.add',
+    );
+  }
+
+  @override
+  Future<dynamic> uciDelete(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String config,
+    required String section,
+    String? option,
+    BuildContext? context,
+  }) async {
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'delete',
+        params: {'config': config, 'section': section, 'option': ?option},
+        context: context,
+      ),
+      'uci.delete',
+    );
+  }
+
+  @override
+  Future<dynamic> uciGetAll(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String config,
+    BuildContext? context,
+  }) async {
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'get',
+        params: {'config': config},
+        context: context,
+      ),
+      'uci.get',
     );
   }
 }

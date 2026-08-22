@@ -18,6 +18,7 @@ import 'package:luci_mobile/services/service_factory.dart';
 import 'package:luci_mobile/config/app_config.dart';
 import 'package:luci_mobile/utils/http_client_manager.dart';
 import 'package:luci_mobile/utils/logger.dart';
+import 'package:luci_mobile/models/wifi_scan_result.dart';
 
 class AppState extends ChangeNotifier {
   static AppState? _instance;
@@ -117,6 +118,13 @@ class AppState extends ChangeNotifier {
   AppState._() {
     _initialize();
   }
+
+  @visibleForTesting
+  AppState.forTesting({
+    required IApiService apiService,
+    required IAuthService authService,
+  }) : _apiService = apiService,
+       _authService = authService;
 
   static AppState get instance {
     return _instance ??= AppState._();
@@ -1515,6 +1523,194 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  /// Unwraps a LuCI `uci.get` RPC response into a flat section map.
+  ///
+  /// Real API shape: `[0, {"values": {"section": {...}, ...}}]`
+  /// Mock shape:     `[0, {"<configName>": {"section": {...}, ...}}]`
+  /// Some implementations return sections directly under `result[1]`.
+  ///
+  /// Returns `null` when the response cannot be parsed.
+  Map<String, dynamic>? _resolveUciSections(dynamic result, String configName) {
+    if (result is! List || result.length < 2) return null;
+    final outer = result[1];
+    if (outer is! Map) return null;
+    // Real API: sections under 'values'
+    if (outer['values'] is Map) {
+      return Map<String, dynamic>.from(outer['values'] as Map);
+    }
+    // Mock: sections under the config name key (e.g. 'wireless', 'firewall')
+    if (outer[configName] is Map) {
+      return Map<String, dynamic>.from(outer[configName] as Map);
+    }
+    // Flat map — sections directly at result[1]
+    return Map<String, dynamic>.from(outer);
+  }
+
+  bool _isUciDisabled(dynamic value) => value is List
+      ? value.any(_isUciDisabled)
+      : value == true || value?.toString() == '1';
+
+  /// Restarts a specific radio via UCI disable/enable cycle.
+  /// This is more reliable than `wifi reload` which doesn't work on all routers.
+  /// Throws if the re-enable step fails (leaving the radio disabled is worse
+  /// than surfacing the error to the caller).
+  Future<void> _restartRadioViaUci(
+    String radioName, {
+    BuildContext? context,
+    int delaySeconds = 5,
+  }) async {
+    final ip = _authService!.ipAddress!;
+    final auth = _authService!.sysauth!;
+    final https = _authService!.useHttps;
+    var disableStaged = false;
+    try {
+      await _apiService!.uciSet(
+        ip,
+        auth,
+        https,
+        config: 'wireless',
+        section: radioName,
+        values: {'disabled': '1'},
+        context: context,
+      );
+      disableStaged = true;
+      await _apiService!.uciCommit(
+        ip,
+        auth,
+        https,
+        config: 'wireless',
+        context: context?.mounted == true ? context : null,
+      );
+      await _apiService!.systemExec(
+        ip,
+        auth,
+        https,
+        command: '/sbin/wifi',
+        params: ['down', radioName],
+        context: context?.mounted == true ? context : null,
+      );
+      await Future.delayed(Duration(seconds: delaySeconds));
+
+      await _apiService!.uciSet(
+        ip,
+        auth,
+        https,
+        config: 'wireless',
+        section: radioName,
+        values: {'disabled': '0'},
+        context: context?.mounted == true ? context : null,
+      );
+      await _apiService!.uciCommit(
+        ip,
+        auth,
+        https,
+        config: 'wireless',
+        context: context?.mounted == true ? context : null,
+      );
+      await _apiService!.systemExec(
+        ip,
+        auth,
+        https,
+        command: '/sbin/wifi',
+        params: ['up', radioName],
+        context: context?.mounted == true ? context : null,
+      );
+      disableStaged = false;
+
+      await Future.delayed(Duration(seconds: delaySeconds));
+      try {
+        await fetchDashboardData();
+      } catch (_) {}
+    } catch (error, stack) {
+      Object? restoreError;
+      if (disableStaged) {
+        try {
+          await _apiService!.uciSet(
+            ip,
+            auth,
+            https,
+            config: 'wireless',
+            section: radioName,
+            values: {'disabled': '0'},
+            context: context?.mounted == true ? context : null,
+          );
+          await _apiService!.uciCommit(
+            ip,
+            auth,
+            https,
+            config: 'wireless',
+            context: context?.mounted == true ? context : null,
+          );
+          await _apiService!.systemExec(
+            ip,
+            auth,
+            https,
+            command: '/sbin/wifi',
+            params: ['up', radioName],
+            context: context?.mounted == true ? context : null,
+          );
+        } catch (e, restoreStack) {
+          restoreError = e;
+          Logger.exception(
+            'Failed to restore radio $radioName after restart failure',
+            e,
+            restoreStack,
+          );
+        }
+      }
+      if (restoreError != null) {
+        Error.throwWithStackTrace(
+          Exception('$error; radio restore also failed: $restoreError'),
+          stack,
+        );
+      }
+      Error.throwWithStackTrace(error, stack);
+    }
+  }
+
+  /// Helper: restarts all known radios via UCI disable/enable cycle.
+  /// Used after operations that need wifi to reload (toggle, modify, delete).
+  /// Propagates restart failures so callers cannot report stale runtime state.
+  Future<void> _wifiReload({BuildContext? context}) async {
+    final result = await _apiService!.uciGetAll(
+      _authService!.ipAddress!,
+      _authService!.sysauth!,
+      _authService!.useHttps,
+      config: 'wireless',
+      context: context,
+    );
+    final sections = _resolveUciSections(result, 'wireless');
+    if (sections == null) {
+      throw const FormatException('Invalid wireless configuration response');
+    }
+    final radios = sections.entries
+        .where(
+          (entry) =>
+              entry.value is Map &&
+              entry.value['.type']?.toString() == 'wifi-device' &&
+              !_isUciDisabled(entry.value['disabled']),
+        )
+        .map((entry) => entry.key)
+        .toList();
+
+    if (radios.isEmpty) {
+      Logger.info('_wifiReload: no enabled radios to restart');
+      try {
+        await fetchDashboardData();
+      } catch (_) {}
+      return;
+    }
+
+    // Cycle only enabled radios; disabled radios must remain disabled.
+    for (final radio in radios) {
+      await _restartRadioViaUci(
+        radio,
+        context: context?.mounted == true ? context : null,
+        delaySeconds: 3,
+      );
+    }
+  }
+
   Future<bool> setWirelessRadioState(
     String device,
     bool enabled, {
@@ -1571,6 +1767,842 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  /// Cancel any ongoing wireless network scan.
+  void cancelWirelessScan() {
+    _apiService?.cancelScan();
+  }
+
+  /// Scans for nearby wireless networks on a given radio interface.
+  /// [device] is the wireless device name (e.g., 'wlan0', 'phy0-ap0').
+  Future<List<WifiScanResult>> scanWirelessNetworks({
+    required String device,
+    BuildContext? context,
+  }) async {
+    if (_reviewerModeEnabled) {
+      // Use mock scan results in reviewer mode
+      final mockResults = await _apiService!.scanWirelessNetworks(
+        ipAddress: 'mock',
+        sysauth: 'mock',
+        useHttps: false,
+        device: device,
+        context: context,
+      );
+      return mockResults.map((r) => WifiScanResult.fromJson(r)).toList()
+        ..sort((a, b) => b.signal.compareTo(a.signal));
+    }
+
+    if (_authService?.sysauth == null || _authService?.ipAddress == null) {
+      throw Exception('Not authenticated');
+    }
+
+    try {
+      final results = await _apiService!.scanWirelessNetworks(
+        ipAddress: _authService!.ipAddress!,
+        sysauth: _authService!.sysauth!,
+        useHttps: _authService!.useHttps,
+        device: device,
+        context: context,
+      );
+
+      if (results.isEmpty) {
+        // Try with phy name (strip -ap0, -sta0 suffix) as fallback
+        final phyMatch = RegExp(r'^(phy\d+)-').firstMatch(device);
+        if (phyMatch != null) {
+          final phyName = phyMatch.group(1)!;
+          Logger.info('Scan returned empty on $device, retrying with $phyName');
+          final retryResults = await _apiService!.scanWirelessNetworks(
+            ipAddress: _authService!.ipAddress!,
+            sysauth: _authService!.sysauth!,
+            useHttps: _authService!.useHttps,
+            device: phyName,
+            context: context?.mounted == true ? context : null,
+          );
+          if (retryResults.isNotEmpty) {
+            return retryResults.map((r) => WifiScanResult.fromJson(r)).toList()
+              ..sort((a, b) => b.signal.compareTo(a.signal));
+          }
+        }
+      }
+
+      final scanResults =
+          results.map((r) => WifiScanResult.fromJson(r)).toList()
+            ..sort((a, b) => b.signal.compareTo(a.signal));
+      return scanResults;
+    } catch (e, stack) {
+      Logger.exception('Failed to scan wireless networks', e, stack);
+      rethrow; // Let the UI show the actual error
+    }
+  }
+
+  /// Returns a list of available wireless radio devices (e.g., wlan0, wlan1)
+  /// from the current dashboard data.
+  List<Map<String, String>> getAvailableRadioDevices() {
+    final wirelessData =
+        _dashboardData?['wireless'] as Map<String, dynamic>? ?? {};
+    final devices = <Map<String, String>>[];
+
+    wirelessData.forEach((radioName, radioData) {
+      if (radioData is Map<String, dynamic>) {
+        final interfaces = radioData['interfaces'] as List<dynamic>?;
+
+        // Determine band from frequency/channel.
+        // Only accept frequencies within known Wi-Fi ranges (MHz);
+        // out-of-range values fall through to channel-based classification.
+        final freq = radioData['frequency'];
+        final channel = radioData['channel'];
+        String band = '';
+        if (freq is int) {
+          // Valid Wi-Fi ranges: 2.4 GHz (2400–2500), 4.9 GHz (4900–5000),
+          // 5 GHz (5000–5925), 6 GHz (5925–7125).
+          final isValidFreq =
+              (freq >= 2400 && freq <= 2500) || (freq >= 4900 && freq <= 7125);
+          if (isValidFreq) {
+            band = freq >= 5925
+                ? '6 GHz'
+                : freq >= 5000
+                ? '5 GHz'
+                : freq >= 4900
+                ? '4.9 GHz'
+                : '2.4 GHz';
+          }
+        }
+        if (band.isEmpty && channel is int) {
+          // Frequency-based is preferred; channel fallback can't distinguish 6 GHz
+          band = channel >= 36 ? '5 GHz' : '2.4 GHz';
+        }
+
+        if (interfaces != null && interfaces.isNotEmpty) {
+          // Find the best interface for scanning:
+          // Prefer an AP interface, fall back to any active interface
+          String? bestIfname;
+          String bestSsid = radioName;
+          for (final iface in interfaces) {
+            final ifname = iface['ifname'] as String?;
+            if (ifname == null) continue;
+            final config = iface['config'] as Map<String, dynamic>? ?? {};
+            final iwinfo = iface['iwinfo'] as Map<String, dynamic>? ?? {};
+            final mode = config['mode']?.toString() ?? '';
+            final ssid = (iwinfo['ssid'] ?? config['ssid'] ?? '').toString();
+
+            if (bestIfname == null || mode == 'ap') {
+              bestIfname = ifname;
+              if (ssid.isNotEmpty) bestSsid = ssid;
+            }
+            // If we found an AP interface, stop looking
+            if (mode == 'ap') break;
+          }
+
+          devices.add({
+            'ifname': bestIfname ?? radioName,
+            'radioName': radioName,
+            'ssid': bestSsid,
+            'band': band,
+          });
+        } else {
+          // Radio exists but has no interfaces - still usable for scanning
+          devices.add({
+            'ifname': radioName,
+            'radioName': radioName,
+            'ssid': radioName,
+            'band': band,
+          });
+        }
+      }
+    });
+    return devices;
+  }
+
+  /// Restarts a wireless radio via UCI disable/enable cycle.
+  Future<bool> restartWirelessRadio(
+    String radioName, {
+    BuildContext? context,
+  }) async {
+    if (_reviewerModeEnabled) {
+      await Future.delayed(const Duration(seconds: 2));
+      await fetchDashboardData();
+      return true;
+    }
+
+    if (_authService?.sysauth == null || _authService?.ipAddress == null) {
+      return false;
+    }
+
+    try {
+      final result = await _apiService!.uciGetAll(
+        _authService!.ipAddress!,
+        _authService!.sysauth!,
+        _authService!.useHttps,
+        config: 'wireless',
+        context: context,
+      );
+      final sections = _resolveUciSections(result, 'wireless');
+      final radio = sections?[radioName];
+      if (radio is! Map) {
+        throw FormatException('Radio $radioName not found');
+      }
+      if (_isUciDisabled(radio['disabled'])) {
+        _dashboardError = 'Enable $radioName before restarting it';
+        notifyListeners();
+        return false;
+      }
+      Logger.info('Restarting radio $radioName via UCI cycle');
+      await _restartRadioViaUci(
+        radioName,
+        context: context?.mounted == true ? context : null,
+      );
+      return true;
+    } catch (e, stack) {
+      Logger.exception('Failed to restart radio $radioName', e, stack);
+      _dashboardError = 'Failed to restart radio: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Connects to a wireless network by creating a new wifi-iface in station mode.
+  ///
+  /// [radioDevice] is the radio to use (e.g., 'radio0').
+  /// [ssid] is the network SSID to connect to.
+  /// [encryption] is the OpenWrt encryption type (e.g., 'psk2', 'sae', 'none').
+  /// [password] is the network password (empty for open networks).
+  Future<bool> connectToWirelessNetwork({
+    required String radioDevice,
+    required String ssid,
+    required String encryption,
+    String password = '',
+    String? bssid,
+    BuildContext? context,
+  }) async {
+    if (_reviewerModeEnabled) {
+      await Future.delayed(const Duration(seconds: 2));
+      await fetchDashboardData();
+      return true;
+    }
+
+    if (_authService?.sysauth == null || _authService?.ipAddress == null) {
+      return false;
+    }
+
+    try {
+      final ip = _authService!.ipAddress!;
+      final auth = _authService!.sysauth!;
+      final https = _authService!.useHttps;
+
+      // Use radio-specific network name to avoid conflicts between radios
+      // radio0 -> wwan, radio1 -> wwan1, radio2 -> wwan2, etc
+      final radioIndex = int.tryParse(radioDevice.replaceAll('radio', '')) ?? 0;
+      final staNetworkName = radioIndex == 0 ? 'wwan' : 'wwan$radioIndex';
+
+      final wirelessResult = await _apiService!.uciGetAll(
+        ip,
+        auth,
+        https,
+        config: 'wireless',
+        context: context,
+      );
+      final wirelessSections = _resolveUciSections(wirelessResult, 'wireless');
+      if (wirelessSections == null) {
+        throw const FormatException('Invalid wireless configuration response');
+      }
+      final radio = wirelessSections[radioDevice];
+      if (radio is! Map) {
+        throw FormatException('Radio $radioDevice not found');
+      }
+      if (_isUciDisabled(radio['disabled'])) {
+        _dashboardError = 'Enable $radioDevice before connecting';
+        notifyListeners();
+        return false;
+      }
+
+      String? existingStaSection;
+      Map? existingStaConfig;
+      var maxWifinetIndex = -1;
+      for (final entry in wirelessSections.entries) {
+        final section = entry.value;
+        if (entry.key.startsWith('wifinet')) {
+          final index = int.tryParse(entry.key.substring('wifinet'.length));
+          if (index != null && index > maxWifinetIndex) {
+            maxWifinetIndex = index;
+          }
+        }
+        if (section is Map &&
+            section['device']?.toString() == radioDevice &&
+            section['mode']?.toString() == 'sta') {
+          existingStaSection = entry.key;
+          existingStaConfig = section;
+        }
+      }
+      final sectionName = existingStaSection ?? 'wifinet${maxWifinetIndex + 1}';
+
+      var createdNetwork = false;
+      var addedToWan = false;
+      var wanZoneIndex = -1;
+      var createdStation = false;
+      var updatedStation = false;
+      var restartAttempted = false;
+      try {
+        // Persist the dependency first. A wireless station is never staged or
+        // restarted unless its DHCP interface has committed successfully.
+        final networkResult = await _apiService!.uciGetAll(
+          ip,
+          auth,
+          https,
+          config: 'network',
+          context: context?.mounted == true ? context : null,
+        );
+        final networkSections = _resolveUciSections(networkResult, 'network');
+        if (networkSections == null) {
+          throw const FormatException('Invalid network configuration response');
+        }
+        if (!networkSections.containsKey(staNetworkName)) {
+          await _apiService!.uciAdd(
+            ip,
+            auth,
+            https,
+            config: 'network',
+            type: 'interface',
+            name: staNetworkName,
+            values: {'proto': 'dhcp'},
+            context: context?.mounted == true ? context : null,
+          );
+          createdNetwork = true;
+        }
+        await _apiService!.uciCommit(
+          ip,
+          auth,
+          https,
+          config: 'network',
+          context: context?.mounted == true ? context : null,
+        );
+
+        // WAN membership is optional when the firewall config is absent, but a
+        // failed read must abort before wireless is staged.
+        Map<String, dynamic>? firewallSections;
+        try {
+          final firewallResult = await _apiService!.uciGetAll(
+            ip,
+            auth,
+            https,
+            config: 'firewall',
+            context: context?.mounted == true ? context : null,
+          );
+          firewallSections = _resolveUciSections(firewallResult, 'firewall');
+        } on RpcException catch (e) {
+          if (e.status != 4) rethrow;
+          firewallSections = {};
+        }
+        if (firewallSections == null) {
+          throw const FormatException(
+            'Invalid firewall configuration response',
+          );
+        }
+        var zoneIndex = 0;
+        var foundInWan = false;
+        for (final entry in firewallSections.entries) {
+          final section = entry.value;
+          if (section is! Map || section['.type']?.toString() != 'zone') {
+            continue;
+          }
+          if (section['name']?.toString() == 'wan') {
+            wanZoneIndex = zoneIndex;
+            final networks = section['network'];
+            foundInWan = networks is List
+                ? networks
+                      .map((value) => value.toString())
+                      .contains(staNetworkName)
+                : networks
+                          ?.toString()
+                          .split(RegExp(r'\s+'))
+                          .contains(staNetworkName) ==
+                      true;
+            break;
+          }
+          zoneIndex++;
+        }
+        if (!foundInWan && wanZoneIndex >= 0) {
+          await _apiService!.systemExec(
+            ip,
+            auth,
+            https,
+            command: '/sbin/uci',
+            params: [
+              'add_list',
+              'firewall.@zone[$wanZoneIndex].network=$staNetworkName',
+            ],
+            context: context?.mounted == true ? context : null,
+          );
+          addedToWan = true;
+          await _apiService!.uciCommit(
+            ip,
+            auth,
+            https,
+            config: 'firewall',
+            context: context?.mounted == true ? context : null,
+          );
+        }
+
+        if (existingStaSection != null) {
+          await _apiService!.uciSet(
+            ip,
+            auth,
+            https,
+            config: 'wireless',
+            section: sectionName,
+            values: {
+              'network': staNetworkName,
+              'ssid': ssid,
+              'encryption': encryption,
+              if (password.isNotEmpty) 'key': password,
+              if (bssid?.isNotEmpty == true) 'bssid': bssid!,
+            },
+            context: context?.mounted == true ? context : null,
+          );
+          updatedStation = true;
+          if (password.isEmpty &&
+              existingStaConfig?.containsKey('key') == true) {
+            await _apiService!.uciDelete(
+              ip,
+              auth,
+              https,
+              config: 'wireless',
+              section: sectionName,
+              option: 'key',
+              context: context?.mounted == true ? context : null,
+            );
+          }
+          if (bssid?.isNotEmpty != true &&
+              existingStaConfig?.containsKey('bssid') == true) {
+            await _apiService!.uciDelete(
+              ip,
+              auth,
+              https,
+              config: 'wireless',
+              section: sectionName,
+              option: 'bssid',
+              context: context?.mounted == true ? context : null,
+            );
+          }
+        } else {
+          await _apiService!.uciAdd(
+            ip,
+            auth,
+            https,
+            config: 'wireless',
+            type: 'wifi-iface',
+            name: sectionName,
+            values: {
+              'device': radioDevice,
+              'network': staNetworkName,
+              'mode': 'sta',
+              'ssid': ssid,
+              'encryption': encryption,
+              if (password.isNotEmpty) 'key': password,
+              if (bssid?.isNotEmpty == true) 'bssid': bssid!,
+            },
+            context: context?.mounted == true ? context : null,
+          );
+          createdStation = true;
+        }
+        await _apiService!.uciCommit(
+          ip,
+          auth,
+          https,
+          config: 'wireless',
+          context: context?.mounted == true ? context : null,
+        );
+
+        restartAttempted = true;
+        await _restartRadioViaUci(
+          radioDevice,
+          context: context?.mounted == true ? context : null,
+        );
+      } catch (error, stack) {
+        final rollbackErrors = <String>[];
+        var wirelessRolledBack = false;
+
+        Future<void> attemptRollback(
+          String label,
+          Future<void> Function() action,
+        ) async {
+          try {
+            await action();
+          } catch (e, rollbackStack) {
+            rollbackErrors.add('$label: $e');
+            Logger.exception('Failed to roll back $label', e, rollbackStack);
+          }
+        }
+
+        if (createdStation) {
+          await attemptRollback('wireless section $sectionName', () async {
+            await _apiService!.uciDelete(
+              ip,
+              auth,
+              https,
+              config: 'wireless',
+              section: sectionName,
+              context: context?.mounted == true ? context : null,
+            );
+            await _apiService!.uciCommit(
+              ip,
+              auth,
+              https,
+              config: 'wireless',
+              context: context?.mounted == true ? context : null,
+            );
+            wirelessRolledBack = true;
+          });
+        } else if (updatedStation && existingStaConfig != null) {
+          await attemptRollback('wireless section $sectionName', () async {
+            const touchedOptions = {
+              'network',
+              'ssid',
+              'encryption',
+              'key',
+              'bssid',
+            };
+            final setOptions = {
+              'network',
+              'ssid',
+              'encryption',
+              if (password.isNotEmpty) 'key',
+              if (bssid?.isNotEmpty == true) 'bssid',
+            };
+            final originalValues = <String, String>{};
+            for (final option in touchedOptions) {
+              final value = existingStaConfig![option];
+              if (value != null) {
+                originalValues[option] = value is List
+                    ? value.join(' ')
+                    : value.toString();
+              }
+            }
+            if (originalValues.isNotEmpty) {
+              await _apiService!.uciSet(
+                ip,
+                auth,
+                https,
+                config: 'wireless',
+                section: sectionName,
+                values: originalValues,
+                context: context?.mounted == true ? context : null,
+              );
+            }
+            for (final option in setOptions) {
+              if (!existingStaConfig!.containsKey(option)) {
+                await _apiService!.uciDelete(
+                  ip,
+                  auth,
+                  https,
+                  config: 'wireless',
+                  section: sectionName,
+                  option: option,
+                  context: context?.mounted == true ? context : null,
+                );
+              }
+            }
+            await _apiService!.uciCommit(
+              ip,
+              auth,
+              https,
+              config: 'wireless',
+              context: context?.mounted == true ? context : null,
+            );
+            wirelessRolledBack = true;
+          });
+        }
+
+        final canRemoveDependencies =
+            (!createdStation && !updatedStation) || wirelessRolledBack;
+        if (canRemoveDependencies) {
+          var wanMembershipRolledBack = !addedToWan;
+          if (addedToWan) {
+            await attemptRollback('WAN firewall membership', () async {
+              await _apiService!.systemExec(
+                ip,
+                auth,
+                https,
+                command: '/sbin/uci',
+                params: [
+                  'del_list',
+                  'firewall.@zone[$wanZoneIndex].network=$staNetworkName',
+                ],
+                context: context?.mounted == true ? context : null,
+              );
+              await _apiService!.uciCommit(
+                ip,
+                auth,
+                https,
+                config: 'firewall',
+                context: context?.mounted == true ? context : null,
+              );
+              wanMembershipRolledBack = true;
+            });
+          }
+
+          if (createdNetwork && wanMembershipRolledBack) {
+            await attemptRollback(
+              'network interface $staNetworkName',
+              () async {
+                await _apiService!.uciDelete(
+                  ip,
+                  auth,
+                  https,
+                  config: 'network',
+                  section: staNetworkName,
+                  context: context?.mounted == true ? context : null,
+                );
+                await _apiService!.uciCommit(
+                  ip,
+                  auth,
+                  https,
+                  config: 'network',
+                  context: context?.mounted == true ? context : null,
+                );
+              },
+            );
+          } else if (createdNetwork) {
+            rollbackErrors.add(
+              'kept network interface $staNetworkName because WAN firewall '
+              'membership could not be removed',
+            );
+          }
+        } else {
+          rollbackErrors.add(
+            'kept $staNetworkName dependencies because wireless section '
+            '$sectionName could not be restored',
+          );
+        }
+
+        if (restartAttempted && wirelessRolledBack) {
+          await attemptRollback('wireless runtime state', () async {
+            await _apiService!.uciSet(
+              ip,
+              auth,
+              https,
+              config: 'wireless',
+              section: radioDevice,
+              values: {'disabled': '0'},
+              context: context?.mounted == true ? context : null,
+            );
+            await _apiService!.uciCommit(
+              ip,
+              auth,
+              https,
+              config: 'wireless',
+              context: context?.mounted == true ? context : null,
+            );
+            await _apiService!.systemExec(
+              ip,
+              auth,
+              https,
+              command: '/sbin/wifi',
+              params: ['up', radioDevice],
+              context: context?.mounted == true ? context : null,
+            );
+          });
+        }
+
+        if (rollbackErrors.isNotEmpty) {
+          Error.throwWithStackTrace(
+            Exception(
+              '$error; rollback incomplete: ${rollbackErrors.join('; ')}',
+            ),
+            stack,
+          );
+        }
+        Error.throwWithStackTrace(error, stack);
+      }
+
+      return true;
+    } catch (e, stack) {
+      Logger.exception('Failed to connect to wireless network', e, stack);
+      _dashboardError = 'Failed to connect to $ssid: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Enables or disables a specific wifi-iface UCI section.
+  ///
+  /// [uciSection] is the UCI section name (e.g., 'default_radio0', 'wifinet0').
+  /// [enabled] true to enable, false to disable.
+  Future<bool> setWirelessInterfaceEnabled(
+    String uciSection,
+    bool enabled, {
+    BuildContext? context,
+  }) async {
+    if (_reviewerModeEnabled) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      await fetchDashboardData();
+      return true;
+    }
+
+    if (_authService?.sysauth == null || _authService?.ipAddress == null) {
+      return false;
+    }
+
+    try {
+      Logger.info(
+        'Toggle interface $uciSection → ${enabled ? 'enabled' : 'disabled'}',
+      );
+
+      await _apiService!.uciSet(
+        _authService!.ipAddress!,
+        _authService!.sysauth!,
+        _authService!.useHttps,
+        config: 'wireless',
+        section: uciSection,
+        values: {'disabled': enabled ? '0' : '1'},
+        context: context,
+      );
+      Logger.info('UCI set done');
+
+      await _apiService!.uciCommit(
+        _authService!.ipAddress!,
+        _authService!.sysauth!,
+        _authService!.useHttps,
+        config: 'wireless',
+        context: context?.mounted == true ? context : null,
+      );
+      Logger.info('UCI commit done');
+    } catch (e, stack) {
+      // UCI operations failed — actual error
+      Logger.exception('Failed to toggle wireless interface (UCI)', e, stack);
+      _dashboardError = 'Failed to toggle interface: $e';
+      notifyListeners();
+      return false;
+    }
+
+    // UCI changes are committed — reload wireless to apply at runtime.
+    // Reload failure is handled here so the UI can show the snackbar
+    // and the toggle row does not remain stuck in its transitioning state.
+    try {
+      await _wifiReload(context: context?.mounted == true ? context : null);
+    } catch (e, stack) {
+      Logger.exception(
+        'Wireless reload failed after toggle (interface may still be disabled)',
+        e,
+        stack,
+      );
+      _dashboardError = 'Interface toggled but wireless reload failed: $e';
+      notifyListeners();
+      return false;
+    }
+    Logger.info('Toggle interface $uciSection complete');
+    return true;
+  }
+
+  /// Modifies properties of an existing wifi-iface UCI section.
+  ///
+  /// [uciSection] is the UCI section name (e.g., 'default_radio0').
+  /// [values] is a map of UCI option key-value pairs to set.
+  Future<bool> modifyWirelessInterface(
+    String uciSection,
+    Map<String, String> values, {
+    BuildContext? context,
+  }) async {
+    if (_reviewerModeEnabled) {
+      await Future.delayed(const Duration(seconds: 1));
+      await fetchDashboardData();
+      return true;
+    }
+
+    if (_authService?.sysauth == null || _authService?.ipAddress == null) {
+      return false;
+    }
+
+    try {
+      await _apiService!.uciSet(
+        _authService!.ipAddress!,
+        _authService!.sysauth!,
+        _authService!.useHttps,
+        config: 'wireless',
+        section: uciSection,
+        values: values,
+        context: context,
+      );
+
+      await _apiService!.uciCommit(
+        _authService!.ipAddress!,
+        _authService!.sysauth!,
+        _authService!.useHttps,
+        config: 'wireless',
+        context: context?.mounted == true ? context : null,
+      );
+    } catch (e, stack) {
+      Logger.exception('Failed to modify wireless interface (UCI)', e, stack);
+      _dashboardError = 'Failed to modify interface: $e';
+      notifyListeners();
+      return false;
+    }
+
+    try {
+      await _wifiReload(context: context?.mounted == true ? context : null);
+    } catch (e, stack) {
+      Logger.exception('Wireless reload failed after interface edit', e, stack);
+      _dashboardError = 'Interface modified but wireless reload failed: $e';
+      notifyListeners();
+      return false;
+    }
+    return true;
+  }
+
+  /// Deletes a wifi-iface UCI section.
+  ///
+  /// [uciSection] is the UCI section name to remove.
+  Future<bool> deleteWirelessInterface(
+    String uciSection, {
+    BuildContext? context,
+  }) async {
+    if (_reviewerModeEnabled) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      await fetchDashboardData();
+      return true;
+    }
+
+    if (_authService?.sysauth == null || _authService?.ipAddress == null) {
+      return false;
+    }
+
+    try {
+      await _apiService!.uciDelete(
+        _authService!.ipAddress!,
+        _authService!.sysauth!,
+        _authService!.useHttps,
+        config: 'wireless',
+        section: uciSection,
+        context: context,
+      );
+
+      await _apiService!.uciCommit(
+        _authService!.ipAddress!,
+        _authService!.sysauth!,
+        _authService!.useHttps,
+        config: 'wireless',
+        context: context?.mounted == true ? context : null,
+      );
+    } catch (e, stack) {
+      Logger.exception('Failed to delete wireless interface (UCI)', e, stack);
+      _dashboardError = 'Failed to delete interface: $e';
+      notifyListeners();
+      return false;
+    }
+
+    try {
+      await _wifiReload(context: context?.mounted == true ? context : null);
+    } catch (e, stack) {
+      Logger.exception(
+        'Wireless reload failed after interface deletion',
+        e,
+        stack,
+      );
+      _dashboardError = 'Interface deleted but wireless reload failed: $e';
+      notifyListeners();
+      return false;
+    }
+    return true;
   }
 
   Future<bool> tryAutoLogin({BuildContext? context}) async {
