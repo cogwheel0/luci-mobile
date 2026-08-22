@@ -75,8 +75,19 @@ class HttpClientManager {
   /// entry points await this so an early connection cannot miss stored pins.
   late final Future<void> _pinsLoaded;
 
+  // All pin-store mutations (load/migration, accept, clear) run through
+  // this queue in submission order - an acceptance completing after a
+  // clear can never resurrect a removed pin, and vice versa.
+  Future<void> _pinMutationQueue = Future<void>.value();
+
+  Future<T> _serializePinMutation<T>(Future<T> Function() action) {
+    final op = _pinMutationQueue.then((_) => action());
+    _pinMutationQueue = op.then((_) {}, onError: (_) {});
+    return op;
+  }
+
   HttpClientManager._internal() {
-    _pinsLoaded = _loadAcceptedCertificates();
+    _pinsLoaded = _serializePinMutation(_loadAcceptedCertificates);
   }
 
   /// Creates or returns a cached HTTP client for the given host
@@ -273,47 +284,43 @@ class HttpClientManager {
   }
 
   /// Clear accepted certificates (useful for logout or security reset)
-  Future<void> clearAcceptedCertificates() async {
-    // Flag first so an in-flight load defers to this operation, then let
-    // any pending load (and its migration write) finish before mutating
-    // memory/storage - otherwise cleared pins could be restored by a
-    // late-arriving write.
-    _pinsMutated = true;
-    await _pinsLoaded;
-    _acceptedCertFingerprints.clear();
+  Future<void> clearAcceptedCertificates() {
+    return _serializePinMutation(() async {
+      _pinsMutated = true;
+      _acceptedCertFingerprints.clear();
 
-    // Clear all cached HTTP clients
-    _closeAndRemoveClients((_) => true);
+      // Clear all cached HTTP clients
+      _closeAndRemoveClients((_) => true);
 
-    // Delete from secure storage
-    try {
-      final storage = const FlutterSecureStorage();
-      await storage.delete(key: _acceptedCertsKey);
-    } catch (e) {
-      Logger.warning('Failed to delete accepted certificates: $e');
-    }
+      // Delete from secure storage
+      try {
+        final storage = const FlutterSecureStorage();
+        await storage.delete(key: _acceptedCertsKey);
+      } catch (e) {
+        Logger.warning('Failed to delete accepted certificates: $e');
+      }
+    });
   }
 
   /// Clears pinned certificates and cached clients for a specific host
   /// (across all ports)
-  Future<void> clearCertificatesForHost(String host) async {
-    // Serialize behind any in-flight load/migration write (see
-    // clearAcceptedCertificates).
-    _pinsMutated = true;
-    await _pinsLoaded;
-    final hostname = _normalizePinHost(_extractHostname(host));
-    _acceptedCertFingerprints.removeWhere((key, value) {
-      final parsed = _parsePinKey(key);
-      return parsed != null && _normalizePinHost(parsed.$1) == hostname;
+  Future<void> clearCertificatesForHost(String host) {
+    return _serializePinMutation(() async {
+      _pinsMutated = true;
+      final hostname = _normalizePinHost(_extractHostname(host));
+      _acceptedCertFingerprints.removeWhere((key, value) {
+        final parsed = _parsePinKey(key);
+        return parsed != null && _normalizePinHost(parsed.$1) == hostname;
+      });
+
+      _closeAndRemoveClients(
+        (key) =>
+            _normalizePinHost(_extractHostname(_parseClientKey(key).$1)) ==
+            hostname,
+      );
+
+      await _saveAcceptedCertificates();
     });
-
-    _closeAndRemoveClients(
-      (key) =>
-          _normalizePinHost(_extractHostname(_parseClientKey(key).$1)) ==
-          hostname,
-    );
-
-    await _saveAcceptedCertificates();
   }
 
   /// Prompts user to pin the certificate for a given host.
@@ -490,10 +497,13 @@ class HttpClientManager {
       );
 
       if (result == true) {
-        // Pin the accepted certificate's fingerprint persistently.
-        _pinsMutated = true;
-        _acceptedCertFingerprints[certKey] = fingerprint;
-        await _saveAcceptedCertificates();
+        // Pin the accepted certificate's fingerprint persistently, in
+        // order with load/clear operations.
+        await _serializePinMutation(() async {
+          _pinsMutated = true;
+          _acceptedCertFingerprints[certKey] = fingerprint;
+          await _saveAcceptedCertificates();
+        });
         return true;
       }
     } catch (e) {
