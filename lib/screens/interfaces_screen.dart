@@ -613,11 +613,11 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
         (uciWirelessConfig?['wireless'] as Map?);
     if (uciValues != null) {
       uciValues.forEach((key, value) {
-        final typedValue = value as Map?;
-        if (typedValue?['.type'] == 'wifi-device') {
-          uciRadios[key] = typedValue!;
-        } else if (typedValue?['.type'] == 'wifi-iface') {
-          uciInterfaces[key] = Map<String, dynamic>.from(typedValue!);
+        if (value is! Map) return;
+        if (value['.type'] == 'wifi-device') {
+          uciRadios[key.toString()] = value;
+        } else if (value['.type'] == 'wifi-iface') {
+          uciInterfaces[key.toString()] = Map<String, dynamic>.from(value);
         }
       });
     }
@@ -1851,8 +1851,9 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
       'encryption': _selectedEncryption!,
     };
 
-    // Only update password if user typed one
-    if (_passwordController.text.isNotEmpty) {
+    if (!_requiresPassword) {
+      values['key'] = '';
+    } else if (_passwordController.text.isNotEmpty) {
       values['key'] = _passwordController.text;
     }
 

@@ -54,6 +54,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
   }
 
   void _loadRadioDevices() {
+    if (!mounted) return;
     final appState = ref.read(appStateProvider);
     final devices = appState.getAvailableRadioDevices();
     setState(() {
