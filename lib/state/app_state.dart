@@ -1757,14 +1757,22 @@ class AppState extends ChangeNotifier {
       if (radioData is Map<String, dynamic>) {
         final interfaces = radioData['interfaces'] as List<dynamic>?;
 
-        // Determine band from frequency/channel
+        // Determine band from frequency/channel.
+        // Only accept frequencies within known Wi-Fi ranges (MHz);
+        // out-of-range values fall through to channel-based classification.
         final freq = radioData['frequency'];
         final channel = radioData['channel'];
         String band = '';
         if (freq is int) {
-          // Check 6 GHz before 5 GHz — 6 GHz starts at 5925 MHz
-          band = freq >= 5925 ? '6 GHz' : freq >= 5000 ? '5 GHz' : freq >= 4000 ? '4 GHz' : '2.4 GHz';
-        } else if (channel is int) {
+          // Valid Wi-Fi ranges: 2.4 GHz (2400–2500), 4.9 GHz (4900–5000),
+          // 5 GHz (5000–5925), 6 GHz (5925–7125).
+          final isValidFreq = (freq >= 2400 && freq <= 2500) ||
+              (freq >= 4900 && freq <= 7125);
+          if (isValidFreq) {
+            band = freq >= 5925 ? '6 GHz' : freq >= 5000 ? '5 GHz' : freq >= 4000 ? '4 GHz' : '2.4 GHz';
+          }
+        }
+        if (band.isEmpty && channel is int) {
           // Frequency-based is preferred; channel fallback can't distinguish 6 GHz
           band = channel >= 36 ? '5 GHz' : '2.4 GHz';
         }

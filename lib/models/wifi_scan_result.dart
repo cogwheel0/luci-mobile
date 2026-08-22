@@ -28,7 +28,7 @@ class WifiScanResult {
       bssid: _safeString(json['bssid'], ''),
       mode: _safeString(json['mode'], 'Unknown'),
       channel: _safeInt(json['channel'], 0),
-      frequency: _safePositiveInt(json['frequency']),
+      frequency: _safeWifiFrequency(json['frequency']),
       signal: _safeInt(json['signal'], -100),
       quality: _safeInt(json['quality'], 0),
       qualityMax: _safeInt(json['quality_max'], 100),
@@ -53,6 +53,20 @@ class WifiScanResult {
   static int? _safePositiveInt(dynamic value) {
     final parsed = _safeInt(value, 0);
     return parsed > 0 ? parsed : null;
+  }
+
+  /// Returns a valid Wi-Fi frequency in MHz, or null if the value is missing,
+  /// zero, negative, or outside any known Wi-Fi band range.
+  /// Valid ranges: 2.4 GHz (2400–2500), 4.9 GHz (4900–5000),
+  ///               5 GHz (5000–5925), 6 GHz (5925–7125).
+  /// Out-of-range values must fall back to channel-based classification.
+  static int? _safeWifiFrequency(dynamic value) {
+    final parsed = _safeInt(value, 0);
+    if (parsed <= 0) return null;
+    if (parsed >= 2400 && parsed <= 2500) return parsed;
+    if (parsed >= 4900 && parsed <= 5000) return parsed;
+    if (parsed >= 5000 && parsed <= 7125) return parsed;
+    return null; // reject implausible values
   }
 
   /// Safely extract a String from a dynamic value.
