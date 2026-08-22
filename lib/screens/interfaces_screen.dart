@@ -72,16 +72,20 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     // across SSID edits and runtime/configuration-only transitions. Section
     // names are case-sensitive on the router, so preserve case here - two
     // sections may differ only by case and must not share a GlobalKey.
+    //
+    // Section- and ifname-derived keys use distinct namespaces so a missing
+    // section on one row cannot collide with another row whose section
+    // happens to equal an ifname (e.g. section 'wlan0' vs ifname 'wlan0').
     final section = (sectionName ?? '').trim();
     if (section.isNotEmpty) {
-      return 'wireless__$section';
+      return 'uci-section__$section';
     }
 
     // Runtime interfaces expose their OS interface name as a secondary
-    // unique identity.
+    // unique identity, in its own namespace (see above).
     final ifnameTrimmed = (ifname ?? '').trim();
     if (ifnameTrimmed.isNotEmpty) {
-      return 'wireless__$ifnameTrimmed';
+      return 'ifname__$ifnameTrimmed';
     }
 
     // Compose whatever distinct fields remain so records cannot collide on

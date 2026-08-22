@@ -21,6 +21,19 @@ String _normalizePinHost(String host) =>
     ? host.substring(1, host.length - 1)
     : host;
 
+/// Extracts the host portion of a stored pin key (`host:port`).
+///
+/// A bare IPv6 literal contains multiple colons and no port suffix, so it
+/// must not be split at the last colon (that would turn '::1:443' into the
+/// nonsense host '::1:'). Single-colon keys carry an explicit numeric port.
+String _pinKeyHost(String key) {
+  if (!key.startsWith('[') && ':'.allMatches(key).length > 1) {
+    return _normalizePinHost(key);
+  }
+  final match = RegExp(r'^(.*):(\d+)$').firstMatch(key);
+  return _normalizePinHost(match?.group(1) ?? key);
+}
+
 /// HTTP client manager that provides secure client instances with proper
 /// certificate validation and connection pooling.
 ///
@@ -256,9 +269,9 @@ class HttpClientManager {
   /// (across all ports)
   Future<void> clearCertificatesForHost(String host) async {
     _pinsMutated = true;
-    final hostname = _normalizePinHost(_extractHostname(host));
+    final hostname = _pinKeyHost(_normalizePinHost(host));
     _acceptedCertFingerprints.removeWhere(
-      (key, _) => _normalizePinHost(_extractHostname(key)) == hostname,
+      (key, _) => _pinKeyHost(key) == hostname,
     );
 
     _closeAndRemoveClients(
