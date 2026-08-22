@@ -2068,8 +2068,8 @@ class AppState extends ChangeNotifier {
           context: context?.mounted == true ? context : null,
         );
 
-        // WAN membership is optional for firewall-less routers, but when a WAN
-        // zone exists, add and commit the station network before wireless.
+        // WAN membership is optional when the firewall config is absent, but a
+        // failed read must abort before wireless is staged.
         Map<String, dynamic>? firewallSections;
         try {
           final firewallResult = await _apiService!.uciGetAll(
@@ -2080,33 +2080,37 @@ class AppState extends ChangeNotifier {
             context: context?.mounted == true ? context : null,
           );
           firewallSections = _resolveUciSections(firewallResult, 'firewall');
-        } catch (e) {
-          Logger.warning('Could not read firewall configuration: $e');
+        } on RpcException catch (e) {
+          if (e.status != 4) rethrow;
+          firewallSections = {};
+        }
+        if (firewallSections == null) {
+          throw const FormatException(
+            'Invalid firewall configuration response',
+          );
         }
         var zoneIndex = 0;
         var foundInWan = false;
-        if (firewallSections != null) {
-          for (final entry in firewallSections.entries) {
-            final section = entry.value;
-            if (section is! Map || section['.type']?.toString() != 'zone') {
-              continue;
-            }
-            if (section['name']?.toString() == 'wan') {
-              wanZoneIndex = zoneIndex;
-              final networks = section['network'];
-              foundInWan = networks is List
-                  ? networks
-                        .map((value) => value.toString())
-                        .contains(staNetworkName)
-                  : networks
-                            ?.toString()
-                            .split(RegExp(r'\s+'))
-                            .contains(staNetworkName) ==
-                        true;
-              break;
-            }
-            zoneIndex++;
+        for (final entry in firewallSections.entries) {
+          final section = entry.value;
+          if (section is! Map || section['.type']?.toString() != 'zone') {
+            continue;
           }
+          if (section['name']?.toString() == 'wan') {
+            wanZoneIndex = zoneIndex;
+            final networks = section['network'];
+            foundInWan = networks is List
+                ? networks
+                      .map((value) => value.toString())
+                      .contains(staNetworkName)
+                : networks
+                          ?.toString()
+                          .split(RegExp(r'\s+'))
+                          .contains(staNetworkName) ==
+                      true;
+            break;
+          }
+          zoneIndex++;
         }
         if (!foundInWan && wanZoneIndex >= 0) {
           await _apiService!.systemExec(

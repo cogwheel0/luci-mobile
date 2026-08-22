@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/mock_api_service.dart';
 import 'package:luci_mobile/services/mock_auth_service.dart';
 import 'package:luci_mobile/state/app_state.dart';
@@ -7,10 +8,12 @@ import 'package:luci_mobile/state/app_state.dart';
 class _FailingRestartApiService extends MockApiService {
   _FailingRestartApiService({
     this.failWirelessDelete = false,
+    this.failFirewallRead = false,
     this.radioDisabled = false,
   });
 
   final bool failWirelessDelete;
+  final bool failFirewallRead;
   final bool radioDisabled;
   final calls = <String>[];
 
@@ -22,6 +25,9 @@ class _FailingRestartApiService extends MockApiService {
     required String config,
     BuildContext? context,
   }) async {
+    if (config == 'firewall' && failFirewallRead) {
+      throw const RpcException(object: 'uci', method: 'get', status: 7);
+    }
     final values = switch (config) {
       'wireless' => {
         'radio0': {'.type': 'wifi-device', if (radioDisabled) 'disabled': '1'},
@@ -177,6 +183,27 @@ void main() {
     );
     expect(api.calls, isNot(contains('delete network.wwan')));
     expect(state.dashboardError, contains('wireless section wifinet0'));
+  });
+
+  test('firewall read failure aborts before staging wireless', () async {
+    final api = _FailingRestartApiService(failFirewallRead: true);
+    final state = AppState.forTesting(
+      apiService: api,
+      authService: MockAuthService(),
+    );
+    addTearDown(state.dispose);
+
+    final connected = await state.connectToWirelessNetwork(
+      radioDevice: 'radio0',
+      ssid: 'Test network',
+      encryption: 'psk2',
+      password: 'password123',
+    );
+
+    expect(connected, isFalse);
+    expect(api.calls, contains('delete network.wwan'));
+    expect(api.calls, isNot(contains('add wireless.wifinet0')));
+    expect(state.dashboardError, contains('timed out'));
   });
 
   test('interface reload leaves disabled radios disabled', () async {
