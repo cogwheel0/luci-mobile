@@ -28,7 +28,7 @@ class WifiScanResult {
       bssid: _safeString(json['bssid'], ''),
       mode: _safeString(json['mode'], 'Unknown'),
       channel: _safeInt(json['channel'], 0),
-      frequency: json['frequency'] != null ? _safeInt(json['frequency'], 0) : null,
+      frequency: _safePositiveInt(json['frequency']),
       signal: _safeInt(json['signal'], -100),
       quality: _safeInt(json['quality'], 0),
       qualityMax: _safeInt(json['quality_max'], 100),
@@ -46,6 +46,13 @@ class WifiScanResult {
     if (value is double) return value.round();
     if (value is String) return int.tryParse(value) ?? defaultValue;
     return defaultValue;
+  }
+
+  /// Safely extract a positive integer. Returns null for missing, zero, or
+  /// negative values so callers can fall back to channel-based logic.
+  static int? _safePositiveInt(dynamic value) {
+    final parsed = _safeInt(value, 0);
+    return parsed > 0 ? parsed : null;
   }
 
   /// Safely extract a String from a dynamic value.

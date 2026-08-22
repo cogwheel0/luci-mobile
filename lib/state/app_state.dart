@@ -1516,6 +1516,29 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  /// Unwraps a LuCI `uci.get` RPC response into a flat section map.
+  ///
+  /// Real API shape: `[0, {"values": {"section": {...}, ...}}]`
+  /// Mock shape:     `[0, {"<configName>": {"section": {...}, ...}}]`
+  /// Some implementations return sections directly under `result[1]`.
+  ///
+  /// Returns `null` when the response cannot be parsed.
+  Map<String, dynamic>? _resolveUciSections(dynamic result, String configName) {
+    if (result is! List || result.length < 2) return null;
+    final outer = result[1];
+    if (outer is! Map) return null;
+    // Real API: sections under 'values'
+    if (outer['values'] is Map) {
+      return Map<String, dynamic>.from(outer['values'] as Map);
+    }
+    // Mock: sections under the config name key (e.g. 'wireless', 'firewall')
+    if (outer[configName] is Map) {
+      return Map<String, dynamic>.from(outer[configName] as Map);
+    }
+    // Flat map — sections directly at result[1]
+    return Map<String, dynamic>.from(outer);
+  }
+
   /// Restarts a specific radio via UCI disable/enable cycle.
   /// This is more reliable than `wifi reload` which doesn't work on all routers.
   /// Throws if the re-enable step fails (leaving the radio disabled is worse
@@ -1860,18 +1883,7 @@ class AppState extends ChangeNotifier {
           config: 'wireless',
           context: context,
         );
-        // Unwrap LuCI's [status, {values: {...}}] response shape.
-        // Real API returns result[1]['values'], mock returns result[1]['wireless'].
-        Map<String, dynamic>? _resolveUciSections(dynamic uciResult) {
-          if (uciResult is! List || uciResult.length < 2) return null;
-          final outer = uciResult[1];
-          if (outer is! Map) return null;
-          if (outer['values'] is Map) return Map<String, dynamic>.from(outer['values'] as Map);
-          if (outer['wireless'] is Map) return Map<String, dynamic>.from(outer['wireless'] as Map);
-          // Flat map (some implementations return sections directly)
-          return Map<String, dynamic>.from(outer);
-        }
-        final wirelessSections = _resolveUciSections(uciResult);
+        final wirelessSections = _resolveUciSections(uciResult, 'wireless');
         if (wirelessSections != null) {
           final wirelessConfig = wirelessSections;
           final sections = wirelessConfig.keys.toSet();
@@ -1961,7 +1973,10 @@ class AppState extends ChangeNotifier {
 
         Logger.info('UCI add result: $addResult');
 
-        // 2. Create network interface (always — wwan may not exist on a fresh router)
+        // 2. Create network interface (always — wwan may not exist on a fresh router).
+        // Only suppress errors that indicate the section already exists; all other
+        // failures mean the network interface was not created and we must stop here
+        // (the station would be committed but reference a non-existent network).
         try {
           await _apiService!.uciAdd(
             ip, auth, https,
@@ -1973,7 +1988,19 @@ class AppState extends ChangeNotifier {
           );
           Logger.info('Created network interface: $staNetworkName');
         } catch (e) {
-          Logger.warning('Network interface may already exist: $e');
+          final msg = e.toString().toLowerCase();
+          final isDuplicate = msg.contains('already exist') ||
+              msg.contains('duplicate') ||
+              msg.contains('entry exists') ||
+              msg.contains('-6'); // EEXIST from ubus
+          if (!isDuplicate) {
+            Logger.exception(
+              'Failed to create network interface $staNetworkName; aborting connect', e, StackTrace.current);
+            _dashboardError = 'Failed to create network interface: $e';
+            notifyListeners();
+            return false;
+          }
+          Logger.warning('Network interface $staNetworkName already exists, continuing');
         }
         
         // 3. Add to firewall WAN zone if not already there
@@ -1985,16 +2012,7 @@ class AppState extends ChangeNotifier {
           );
           bool foundInWan = false;
           int wanZoneIndex = -1;
-          // Resolve sections (same unwrap logic as wireless config above)
-          Map<String, dynamic>? firewallSections;
-          if (firewallResult is List && firewallResult.length > 1 && firewallResult[1] is Map) {
-            final outer = firewallResult[1] as Map<String, dynamic>;
-            if (outer['values'] is Map) {
-              firewallSections = Map<String, dynamic>.from(outer['values'] as Map);
-            } else {
-              firewallSections = Map<String, dynamic>.from(outer);
-            }
-          }
+          final firewallSections = _resolveUciSections(firewallResult, 'firewall');
           if (firewallSections != null) {
             final firewallConfig = firewallSections;
             int zoneIndex = 0;
