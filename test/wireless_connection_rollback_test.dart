@@ -193,4 +193,18 @@ void main() {
     expect(modified, isTrue);
     expect(api.calls.where((call) => call.startsWith('/sbin/wifi ')), isEmpty);
   });
+
+  test('explicit restart refuses a disabled radio', () async {
+    final api = _FailingRestartApiService(radioDisabled: true);
+    final state = AppState.forTesting(
+      apiService: api,
+      authService: MockAuthService(),
+    );
+    addTearDown(state.dispose);
+
+    final restarted = await state.restartWirelessRadio('radio0');
+
+    expect(restarted, isFalse);
+    expect(api.calls.where((call) => call.startsWith('/sbin/wifi ')), isEmpty);
+  });
 }

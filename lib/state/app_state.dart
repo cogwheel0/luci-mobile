@@ -1546,6 +1546,10 @@ class AppState extends ChangeNotifier {
     return Map<String, dynamic>.from(outer);
   }
 
+  bool _isUciDisabled(dynamic value) => value is List
+      ? value.any(_isUciDisabled)
+      : value == true || value?.toString() == '1';
+
   /// Restarts a specific radio via UCI disable/enable cycle.
   /// This is more reliable than `wifi reload` which doesn't work on all routers.
   /// Throws if the re-enable step fails (leaving the radio disabled is worse
@@ -1679,15 +1683,12 @@ class AppState extends ChangeNotifier {
     if (sections == null) {
       throw const FormatException('Invalid wireless configuration response');
     }
-    bool isDisabled(dynamic value) => value is List
-        ? value.any(isDisabled)
-        : value == true || value?.toString() == '1';
     final radios = sections.entries
         .where(
           (entry) =>
               entry.value is Map &&
               entry.value['.type']?.toString() == 'wifi-device' &&
-              !isDisabled(entry.value['disabled']),
+              !_isUciDisabled(entry.value['disabled']),
         )
         .map((entry) => entry.key)
         .toList();
@@ -1929,8 +1930,28 @@ class AppState extends ChangeNotifier {
     }
 
     try {
+      final result = await _apiService!.uciGetAll(
+        _authService!.ipAddress!,
+        _authService!.sysauth!,
+        _authService!.useHttps,
+        config: 'wireless',
+        context: context,
+      );
+      final sections = _resolveUciSections(result, 'wireless');
+      final radio = sections?[radioName];
+      if (radio is! Map) {
+        throw FormatException('Radio $radioName not found');
+      }
+      if (_isUciDisabled(radio['disabled'])) {
+        _dashboardError = 'Enable $radioName before restarting it';
+        notifyListeners();
+        return false;
+      }
       Logger.info('Restarting radio $radioName via UCI cycle');
-      await _restartRadioViaUci(radioName, context: context);
+      await _restartRadioViaUci(
+        radioName,
+        context: context?.mounted == true ? context : null,
+      );
       return true;
     } catch (e, stack) {
       Logger.exception('Failed to restart radio $radioName', e, stack);
