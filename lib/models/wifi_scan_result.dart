@@ -4,6 +4,7 @@ class WifiScanResult {
   final String bssid;
   final String mode;
   final int channel;
+  final int? frequency; // MHz — null when not provided by the scan response
   final int signal;
   final int quality;
   final int qualityMax;
@@ -14,6 +15,7 @@ class WifiScanResult {
     required this.bssid,
     required this.mode,
     required this.channel,
+    this.frequency,
     required this.signal,
     required this.quality,
     required this.qualityMax,
@@ -26,6 +28,7 @@ class WifiScanResult {
       bssid: _safeString(json['bssid'], ''),
       mode: _safeString(json['mode'], 'Unknown'),
       channel: _safeInt(json['channel'], 0),
+      frequency: json['frequency'] != null ? _safeInt(json['frequency'], 0) : null,
       signal: _safeInt(json['signal'], -100),
       quality: _safeInt(json['quality'], 0),
       qualityMax: _safeInt(json['quality_max'], 100),
@@ -76,11 +79,16 @@ class WifiScanResult {
     return 0;
   }
 
-  /// Frequency band string based on channel number.
+  /// Frequency band derived from the scan frequency (MHz), with channel fallback.
   String get band {
+    if (frequency != null) {
+      if (frequency! >= 5925) return '6 GHz';
+      if (frequency! >= 5000) return '5 GHz';
+      return '2.4 GHz';
+    }
+    // Channel-based fallback cannot distinguish 6 GHz
     if (channel >= 1 && channel <= 14) return '2.4 GHz';
-    if (channel >= 32 && channel <= 177) return '5 GHz';
-    if (channel >= 1 && channel <= 233) return '6 GHz';
+    if (channel >= 32) return '5 GHz';
     return 'Unknown';
   }
 }
@@ -201,6 +209,13 @@ class WifiEncryption {
     if (wep) return 'wep-open';
     final hasSAE = authSuites.contains('SAE');
     final hasPSK = authSuites.contains('PSK');
+    final hasOWE = authSuites.contains('OWE');
+    final hasEAP = authSuites.contains('EAP') || authSuites.contains('802.1X');
+    // OWE: opportunistic wireless encryption
+    if (hasOWE) return 'owe';
+    // Enterprise: we cannot map to a PSK mode — return a sentinel so callers
+    // can block the connection instead of creating a broken config.
+    if (hasEAP && !hasSAE && !hasPSK) return 'wpa-eap';
     if (hasSAE && hasPSK) {
       return wpa >= 2 ? 'sae-mixed' : 'sae';
     }
@@ -211,5 +226,12 @@ class WifiEncryption {
   }
 
   /// Whether this encryption type requires a password.
-  bool get requiresPassword => enabled;
+  bool get requiresPassword => enabled && !authSuites.contains('OWE');
+
+  /// Whether this encryption type requires enterprise (EAP) credentials
+  /// that the app cannot configure.
+  bool get isEnterprise {
+    final hasEAP = authSuites.contains('EAP') || authSuites.contains('802.1X');
+    return hasEAP && !authSuites.contains('SAE') && !authSuites.contains('PSK');
+  }
 }

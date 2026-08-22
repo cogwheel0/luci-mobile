@@ -1751,6 +1751,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
   late TextEditingController _passwordController;
   late TextEditingController _networkController;
   late String _selectedEncryption;
+  late String _originalEncryption; // tracks what was set before editing
   bool _obscurePassword = true;
   bool _isSaving = false;
   String? _error;
@@ -1775,13 +1776,16 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
       text: widget.iface['network']?.toString() ?? 'lan',
     );
 
-    // Map the current encryption to our dropdown values
+    // Map the current encryption to our dropdown values, preserving it if
+    // supported. For unknown/enterprise values, keep them for display but
+    // prevent saving until the user makes a valid selection.
     final currentEnc = widget.iface['encryption']?.toString() ?? 'none';
+    _originalEncryption = currentEnc;
     _selectedEncryption = _encryptionOptions.any(
       (o) => o['value'] == currentEnc,
     )
         ? currentEnc
-        : 'psk2';
+        : currentEnc; // preserve the raw value; save is blocked for unknown modes
   }
 
   @override
@@ -1792,7 +1796,16 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
     super.dispose();
   }
 
-  bool get _requiresPassword => _selectedEncryption != 'none';
+  bool get _requiresPassword =>
+      _selectedEncryption != 'none' && _selectedEncryption != 'owe';
+
+  bool get _isEncryptionSupported =>
+      _encryptionOptions.any((o) => o['value'] == _selectedEncryption);
+
+  /// True when switching from an open interface to a password-protected one.
+  bool get _changingToEncrypted =>
+      (_originalEncryption == 'none' || _originalEncryption == 'owe') &&
+      _requiresPassword;
 
   Future<void> _save() async {
     final ssid = _ssidController.text.trim();
@@ -1801,10 +1814,23 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
       return;
     }
 
+    // Block unsupported encryption modes (e.g. enterprise WPA-EAP)
+    if (!_isEncryptionSupported) {
+      setState(() => _error =
+          'Encryption mode "$_selectedEncryption" cannot be edited here. '
+          'Please select a supported mode.');
+      return;
+    }
+
+    // Require a password when changing an open interface to an encrypted one
+    if (_changingToEncrypted && _passwordController.text.isEmpty) {
+      setState(() => _error = 'A password is required when enabling encryption.');
+      return;
+    }
+
     if (_requiresPassword &&
         _passwordController.text.isNotEmpty &&
-        _passwordController.text.length < 8 &&
-        _selectedEncryption != 'none') {
+        _passwordController.text.length < 8) {
       setState(
         () => _error = 'Password must be at least 8 characters.',
       );

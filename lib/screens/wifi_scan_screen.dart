@@ -20,6 +20,9 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
   String? _selectedRadio; // radioName key (e.g., 'radio0')
   List<Map<String, String>> _radioDevices = [];
   late AnimationController _pulseController;
+  // Scan generation counter — incremented whenever a scan is cancelled or
+  // superseded. Completions from older generations are ignored.
+  int _scanGeneration = 0;
 
   @override
   void initState() {
@@ -35,6 +38,10 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
 
   @override
   void dispose() {
+    // Invalidate any in-flight scan so it cannot update state after disposal.
+    _scanGeneration++;
+    final appState = ref.read(appStateProvider);
+    appState.cancelWirelessScan();
     _pulseController.dispose();
     super.dispose();
   }
@@ -64,6 +71,9 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
     final ifname = _selectedIfname;
     if (ifname == null) return;
 
+    // Increment generation to invalidate any previous in-flight scan.
+    final generation = ++_scanGeneration;
+
     setState(() {
       _isScanning = true;
       _error = null;
@@ -78,7 +88,8 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
         context: context,
       );
 
-      if (!mounted) return;
+      // Discard if a newer scan was started or this one was cancelled.
+      if (!mounted || generation != _scanGeneration) return;
       setState(() {
         _scanResults = results;
         _isScanning = false;
@@ -87,19 +98,22 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
         }
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || generation != _scanGeneration) return;
       setState(() {
         _isScanning = false;
         _error = 'Scan failed: $e';
       });
     }
-    if (mounted) {
+    if (mounted && generation == _scanGeneration) {
       _pulseController.stop();
       _pulseController.reset();
     }
   }
 
   void _stopScan() {
+    // Invalidate current generation before cancelling so the awaited future
+    // is ignored even if it completes before the cancel takes effect.
+    _scanGeneration++;
     final appState = ref.read(appStateProvider);
     appState.cancelWirelessScan();
     setState(() {
@@ -787,10 +801,13 @@ class _ConnectBottomSheet extends ConsumerStatefulWidget {
 
 class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
   final _passwordController = TextEditingController();
+  final _hiddenSsidController = TextEditingController();
   bool _obscurePassword = true;
   bool _isConnecting = false;
   String? _selectedRadio;
   String? _error;
+
+  bool get _isHidden => widget.network.ssid.isEmpty;
 
   @override
   void initState() {
@@ -807,6 +824,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
   @override
   void dispose() {
     _passwordController.dispose();
+    _hiddenSsidController.dispose();
     super.dispose();
   }
 
@@ -814,6 +832,22 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
     if (_selectedRadio == null) {
       setState(() {
         _error = 'Please select a radio device.';
+      });
+      return;
+    }
+
+    // For hidden networks, an SSID must be entered by the user.
+    if (_isHidden && _hiddenSsidController.text.trim().isEmpty) {
+      setState(() {
+        _error = 'Please enter the network name (SSID).';
+      });
+      return;
+    }
+
+    // Block unsupported enterprise networks.
+    if (widget.network.encryption.isEnterprise) {
+      setState(() {
+        _error = 'Enterprise (EAP) networks are not supported for connecting here.';
       });
       return;
     }
@@ -841,10 +875,15 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
       _error = null;
     });
 
+    // Use the entered SSID for hidden networks; otherwise use the scanned SSID.
+    final ssid = _isHidden
+        ? _hiddenSsidController.text.trim()
+        : widget.network.ssid;
+
     final appState = ref.read(appStateProvider);
     final success = await appState.connectToWirelessNetwork(
       radioDevice: _selectedRadio!,
-      ssid: widget.network.ssid,
+      ssid: ssid,
       encryption: widget.network.encryption.openwrtEncryption,
       password: _passwordController.text,
       bssid: widget.network.bssid,
@@ -1037,6 +1076,35 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
                   ),
                 ),
               ),
+
+              // Hidden network SSID field
+              if (_isHidden) ...[
+                const SizedBox(height: LuciSpacing.md),
+                Text(
+                  'Network Name (SSID):',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: LuciSpacing.sm),
+                TextField(
+                  controller: _hiddenSsidController,
+                  enabled: !_isConnecting,
+                  decoration: InputDecoration(
+                    hintText: 'Enter hidden network name',
+                    prefixIcon: const Icon(Icons.wifi_find),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: colorScheme.outline.withValues(alpha: 0.3),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
 
               // Password field (only for encrypted networks)
               if (network.encryption.requiresPassword) ...[

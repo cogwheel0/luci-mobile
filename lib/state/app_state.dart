@@ -1518,7 +1518,8 @@ class AppState extends ChangeNotifier {
 
   /// Restarts a specific radio via UCI disable/enable cycle.
   /// This is more reliable than `wifi reload` which doesn't work on all routers.
-  /// Never throws — failures are logged but don't fail the calling operation.
+  /// Throws if the re-enable step fails (leaving the radio disabled is worse
+  /// than surfacing the error to the caller).
   Future<void> _restartRadioViaUci(
     String radioName, {
     BuildContext? context,
@@ -1529,8 +1530,8 @@ class AppState extends ChangeNotifier {
     final https = _authService!.useHttps;
     final safeCtx = context?.mounted == true ? context : null;
 
+    // Disable — failure here is acceptable (radio was already up).
     try {
-      // Disable the radio
       await _apiService!.uciSet(
         ip, auth, https,
         config: 'wireless',
@@ -1543,27 +1544,28 @@ class AppState extends ChangeNotifier {
         config: 'wireless',
         context: safeCtx,
       );
-
-      await Future.delayed(Duration(seconds: delaySeconds));
-
-      // Re-enable the radio
-      await _apiService!.uciSet(
-        ip, auth, https,
-        config: 'wireless',
-        section: radioName,
-        values: {'disabled': '0'},
-        context: safeCtx,
-      );
-      await _apiService!.uciCommit(
-        ip, auth, https,
-        config: 'wireless',
-        context: safeCtx,
-      );
-
-      await Future.delayed(Duration(seconds: delaySeconds));
     } catch (e) {
-      Logger.warning('Radio restart via UCI failed for $radioName: $e');
+      Logger.warning('Radio disable failed for $radioName: $e — aborting restart');
+      rethrow;
     }
+
+    await Future.delayed(Duration(seconds: delaySeconds));
+
+    // Re-enable — must not suppress: a failure here leaves the radio disabled.
+    await _apiService!.uciSet(
+      ip, auth, https,
+      config: 'wireless',
+      section: radioName,
+      values: {'disabled': '0'},
+      context: safeCtx,
+    );
+    await _apiService!.uciCommit(
+      ip, auth, https,
+      config: 'wireless',
+      context: safeCtx,
+    );
+
+    await Future.delayed(Duration(seconds: delaySeconds));
 
     try {
       await fetchDashboardData();
@@ -1737,8 +1739,10 @@ class AppState extends ChangeNotifier {
         final channel = radioData['channel'];
         String band = '';
         if (freq is int) {
-          band = freq >= 5000 ? '5 GHz' : freq >= 4000 ? '4 GHz' : '2.4 GHz';
+          // Check 6 GHz before 5 GHz — 6 GHz starts at 5925 MHz
+          band = freq >= 5925 ? '6 GHz' : freq >= 5000 ? '5 GHz' : freq >= 4000 ? '4 GHz' : '2.4 GHz';
         } else if (channel is int) {
+          // Frequency-based is preferred; channel fallback can't distinguish 6 GHz
           band = channel >= 36 ? '5 GHz' : '2.4 GHz';
         }
 
@@ -1856,8 +1860,20 @@ class AppState extends ChangeNotifier {
           config: 'wireless',
           context: context,
         );
-        if (uciResult is List && uciResult.length > 1 && uciResult[1] is Map) {
-          final wirelessConfig = uciResult[1] as Map<String, dynamic>;
+        // Unwrap LuCI's [status, {values: {...}}] response shape.
+        // Real API returns result[1]['values'], mock returns result[1]['wireless'].
+        Map<String, dynamic>? _resolveUciSections(dynamic uciResult) {
+          if (uciResult is! List || uciResult.length < 2) return null;
+          final outer = uciResult[1];
+          if (outer is! Map) return null;
+          if (outer['values'] is Map) return Map<String, dynamic>.from(outer['values'] as Map);
+          if (outer['wireless'] is Map) return Map<String, dynamic>.from(outer['wireless'] as Map);
+          // Flat map (some implementations return sections directly)
+          return Map<String, dynamic>.from(outer);
+        }
+        final wirelessSections = _resolveUciSections(uciResult);
+        if (wirelessSections != null) {
+          final wirelessConfig = wirelessSections;
           final sections = wirelessConfig.keys.toSet();
 
           // Find existing STA on this radio - if exists, update it
@@ -1945,21 +1961,19 @@ class AppState extends ChangeNotifier {
 
         Logger.info('UCI add result: $addResult');
 
-        // 2. Create network interface if needed (for wwan1, wwan2, etc.)
-        if (staNetworkName != 'wwan') {
-          try {
-            await _apiService!.uciAdd(
-              ip, auth, https,
-              config: 'network',
-              type: 'interface',
-              name: staNetworkName,
-              values: {'proto': 'dhcp'},
-              context: context,
-            );
-            Logger.info('Created network interface: $staNetworkName');
-          } catch (e) {
-            Logger.warning('Network interface may already exist: $e');
-          }
+        // 2. Create network interface (always — wwan may not exist on a fresh router)
+        try {
+          await _apiService!.uciAdd(
+            ip, auth, https,
+            config: 'network',
+            type: 'interface',
+            name: staNetworkName,
+            values: {'proto': 'dhcp'},
+            context: context,
+          );
+          Logger.info('Created network interface: $staNetworkName');
+        } catch (e) {
+          Logger.warning('Network interface may already exist: $e');
         }
         
         // 3. Add to firewall WAN zone if not already there
@@ -1971,8 +1985,18 @@ class AppState extends ChangeNotifier {
           );
           bool foundInWan = false;
           int wanZoneIndex = -1;
+          // Resolve sections (same unwrap logic as wireless config above)
+          Map<String, dynamic>? firewallSections;
           if (firewallResult is List && firewallResult.length > 1 && firewallResult[1] is Map) {
-            final firewallConfig = firewallResult[1] as Map<String, dynamic>;
+            final outer = firewallResult[1] as Map<String, dynamic>;
+            if (outer['values'] is Map) {
+              firewallSections = Map<String, dynamic>.from(outer['values'] as Map);
+            } else {
+              firewallSections = Map<String, dynamic>.from(outer);
+            }
+          }
+          if (firewallSections != null) {
+            final firewallConfig = firewallSections;
             int zoneIndex = 0;
             for (final key in firewallConfig.keys) {
               final section = firewallConfig[key];
@@ -1983,15 +2007,16 @@ class AppState extends ChangeNotifier {
                   final zoneName = section['name']?.toString();
                   if (zoneName == 'wan') {
                     wanZoneIndex = zoneIndex;
-                    // Check if network is already in this zone
+                    // Check if network is already in this zone — use token comparison
                     final networks = section['network'];
-                    if (networks is String && networks == staNetworkName) {
-                      foundInWan = true;
-                      break;
-                    } else if (networks is String && networks.contains(staNetworkName)) {
-                      foundInWan = true;
-                      break;
-                    } else if (networks is List && networks.contains(staNetworkName)) {
+                    if (networks is String) {
+                      // Split space-separated UCI network list for exact token match
+                      final tokens = networks.split(RegExp(r'\s+'));
+                      if (tokens.contains(staNetworkName)) {
+                        foundInWan = true;
+                        break;
+                      }
+                    } else if (networks is List && networks.map((e) => e.toString()).contains(staNetworkName)) {
                       foundInWan = true;
                       break;
                     }
@@ -2113,11 +2138,8 @@ class AppState extends ChangeNotifier {
       return false;
     }
 
-    // UCI changes are committed — wait and refresh (don't cycle radios for toggle)
-    await Future.delayed(const Duration(seconds: 4));
-    try {
-      await fetchDashboardData();
-    } catch (_) {}
+    // UCI changes are committed — reload wireless to apply at runtime
+    await _wifiReload(context: context);
     Logger.info('Toggle interface $uciSection complete');
     return true;
   }

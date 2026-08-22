@@ -12,6 +12,8 @@ class MockApiService implements IApiService {
   static int _baseTxBytes = 987654321;
   static int _baseRxPackets = 12345;
   static int _baseTxPackets = 9876;
+  // Scan cancellation token — incremented by cancelScan().
+  int _scanToken = 0;
   static int _baseLanRxBytes = 2345678901;
   static int _baseLanTxBytes = 1876543210;
   static int _baseLanRxPackets = 23456;
@@ -914,7 +916,10 @@ class MockApiService implements IApiService {
     required String device,
     BuildContext? context,
   }) async {
+    final token = _scanToken;
     await Future.delayed(const Duration(seconds: 2)); // Simulate scan time
+    // Return empty list if scan was cancelled before completion.
+    if (_scanToken != token) return [];
     return [
       {
         'ssid': 'Neighbor-WiFi',
@@ -1077,5 +1082,7 @@ class MockApiService implements IApiService {
   }
 
   @override
-  void cancelScan() {}
+  void cancelScan() {
+    _scanToken++; // invalidates any in-flight scan
+  }
 }
