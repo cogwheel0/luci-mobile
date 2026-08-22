@@ -678,11 +678,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                 ? _uciString(config['mode']).toUpperCase()
                 : (iwinfo['mode']?.toString().toUpperCase() ?? 'N/A');
             final glInetRadio = glInetData?.radios[radioName];
-            final uciCh = _uciString(config['channel']);
             final channel =
-                iwinfo['channel']?.toString() ??
-                (uciCh.isNotEmpty ? uciCh : null) ??
-                glInetRadio?.channel?.toString() ??
+                normalizeWifiChannel(iwinfo['channel']) ??
+                normalizeWifiChannel(config['channel']) ??
+                normalizeWifiChannel(glInetRadio?.channel) ??
                 'N/A';
             final bandStr =
                 glInetRadio?.band ?? config['band']?.toString() ?? '';
@@ -719,7 +718,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               'network': (config['network'] is List)
                   ? (config['network'] as List).join(', ')
                   : config['network']?.toString() ?? '',
-              'channel': iwinfo['channel']?.toString() ?? 'auto',
+              'channel': channel,
               'signal': iwinfo['signal']?.toString() ?? '--',
               'details': {
                 'Device': _uciString(config['device'], radioName),

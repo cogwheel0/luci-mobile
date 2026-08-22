@@ -6,6 +6,7 @@ import 'package:luci_mobile/models/client.dart';
 import 'package:luci_mobile/services/glinet_api_service.dart';
 import 'package:luci_mobile/services/mock_glinet_api_service.dart';
 import 'package:luci_mobile/utils/http_client_manager.dart';
+import 'package:luci_mobile/utils/wifi_utils.dart';
 
 void main() {
   test('session state can be cleared', () {
@@ -30,6 +31,12 @@ void main() {
     );
 
     expect(client.connectionLabel, '2.4 GHz');
+  });
+
+  test('ignores Wi-Fi channel placeholders', () {
+    expect(normalizeWifiChannel('auto'), isNull);
+    expect(normalizeWifiChannel('N/A'), isNull);
+    expect(normalizeWifiChannel(' 44 '), '44');
   });
 
   test('parses firmware value variants independently', () async {

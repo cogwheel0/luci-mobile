@@ -12,3 +12,20 @@ String formatWifiBand(String band) {
       return '';
   }
 }
+
+/// Returns a usable Wi-Fi channel, ignoring common placeholder values.
+String? normalizeWifiChannel(Object? value) {
+  final channel = value?.toString().trim() ?? '';
+  if (channel.isEmpty ||
+      const {
+        '0',
+        'auto',
+        'n/a',
+        'na',
+        'unknown',
+        '--',
+      }.contains(channel.toLowerCase())) {
+    return null;
+  }
+  return channel;
+}

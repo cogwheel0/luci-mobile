@@ -885,11 +885,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             final isEnabled = !(config['disabled'] as bool? ?? false);
             final glInetRadio = glInetData?.radios[radioName];
             final channel =
-                (iwinfo['channel'] ??
-                        config['channel'] ??
-                        glInetRadio?.channel ??
-                        'N/A')
-                    .toString();
+                normalizeWifiChannel(iwinfo['channel']) ??
+                normalizeWifiChannel(config['channel']) ??
+                normalizeWifiChannel(glInetRadio?.channel) ??
+                'N/A';
             final bandStr =
                 glInetRadio?.band ?? config['band']?.toString() ?? '';
             final bandLabel = formatWifiBand(bandStr);
