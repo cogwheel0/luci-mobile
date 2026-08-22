@@ -80,6 +80,37 @@ void main() {
       }
     });
 
+    test('malformed stats value falls back to direct counters', () async {
+      final service = ThroughputService();
+      // Seed baseline with valid direct counters.
+      service.updateThroughput(
+        {
+          'eth0': {'rx_bytes': 1000, 'tx_bytes': 500},
+        },
+        {'eth0'},
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+
+      // Firmware returning a non-map `stats` value must not throw; the
+      // direct counters still drive the rate calculation.
+      service.updateThroughput(
+        {
+          'eth0': {
+            'stats': 'unavailable',
+            'rx_bytes': 21000,
+            'tx_bytes': 10500,
+          },
+        },
+        {'eth0'},
+      );
+
+      expect(service.currentRxRate, greaterThan(0));
+      expect(service.currentRxRate.isFinite, isTrue);
+      expect(service.currentTxRate, greaterThan(0));
+      expect(service.currentTxRate.isFinite, isTrue);
+    });
+
     test('finite string counters produce positive finite rates', () async {
       final service = ThroughputService();
       service.updateThroughput(

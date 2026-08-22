@@ -1203,6 +1203,9 @@ class AppState extends ChangeNotifier {
         // The RPC reported failure - don't leave the UI stuck in the
         // rebooting state polling for a router that never restarted.
         _isRebooting = false;
+        // The timer was cancelled before the RPC; the router never went
+        // down, so resume throughput polling.
+        _startThroughputTimer();
         notifyListeners();
         return false;
       }
@@ -1220,6 +1223,8 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       if (cycle == _rebootCycleId && token == _sessionToken) {
         _isRebooting = false;
+        // The router never went down; resume throughput polling.
+        _startThroughputTimer();
         notifyListeners();
       }
       return false;

@@ -70,22 +70,25 @@ class HttpClientManager {
   }
 
   String _extractHostname(String hostWithPort) {
-    // Remove port if present (handles both IPv4 and IPv6)
     if (hostWithPort.startsWith('[')) {
       // IPv6 address
       final endBracket = hostWithPort.indexOf(']');
       if (endBracket != -1) {
         return hostWithPort.substring(0, endBracket + 1);
       }
-    } else {
-      // IPv4 or hostname
-      final colonIndex = hostWithPort.lastIndexOf(':');
-      if (colonIndex != -1) {
-        // Check if what follows the colon is a port number
-        final portPart = hostWithPort.substring(colonIndex + 1);
-        if (int.tryParse(portPart) != null) {
-          return hostWithPort.substring(0, colonIndex);
-        }
+    }
+    // Unbracketed IPv6 literals contain 2+ colons and cannot carry a port
+    // suffix - the whole input is the host. (lastIndexOf(':') would
+    // otherwise misread e.g. '2001:db8::1' as host '2001:db8:'.)
+    if (':'.allMatches(hostWithPort).length > 1) {
+      return hostWithPort;
+    }
+    // IPv4/hostname, optionally with an explicit port
+    final colonIndex = hostWithPort.lastIndexOf(':');
+    if (colonIndex != -1) {
+      final portPart = hostWithPort.substring(colonIndex + 1);
+      if (portPart.isNotEmpty && int.tryParse(portPart) != null) {
+        return hostWithPort.substring(0, colonIndex);
       }
     }
     return hostWithPort;
@@ -98,12 +101,14 @@ class HttpClientManager {
         return int.tryParse(hostWithPort.substring(endBracket + 2)) ??
             (useHttps ? 443 : 80);
       }
-    } else {
-      final colonIndex = hostWithPort.lastIndexOf(':');
-      if (colonIndex != -1) {
-        final port = int.tryParse(hostWithPort.substring(colonIndex + 1));
-        if (port != null) return port;
-      }
+    }
+    // Only a single colon can denote an explicit port; bare IPv6 literals
+    // have none.
+    if (':'.allMatches(hostWithPort).length == 1) {
+      final port = int.tryParse(
+        hostWithPort.substring(hostWithPort.lastIndexOf(':') + 1),
+      );
+      if (port != null) return port;
     }
     return useHttps ? 443 : 80;
   }
@@ -294,7 +299,14 @@ class HttpClientManager {
     };
 
     try {
-      final uri = Uri.parse('https://$hostWithPort');
+      // Build the probe URI structurally: string interpolation breaks for
+      // unbracketed IPv6 literals, while the Uri constructor brackets them.
+      final port = _effectivePort(hostWithPort, useHttps);
+      final uri = Uri(
+        scheme: 'https',
+        host: _normalizePinHost(host),
+        port: port == 443 ? null : port,
+      );
       final request = await testClient.getUrl(uri);
       await request.close();
 

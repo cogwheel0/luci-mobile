@@ -15,11 +15,15 @@ class LoginResult {
 
 Uri _buildUrl(String ipAddress, bool useHttps, String path) {
   final scheme = useHttps ? 'https' : 'http';
-  // Handle cases where ipAddress might already include a port
+  // Handle cases where ipAddress might already include a scheme
   String host = ipAddress;
-  // Don't add scheme if the address already has one (shouldn't happen with our parser)
   if (host.startsWith('http://') || host.startsWith('https://')) {
     return Uri.parse('$host$path');
+  }
+  // Bracket bare IPv6 literals (2+ colons) - string interpolation into
+  // Uri.parse produces an invalid authority otherwise.
+  if (!host.startsWith('[') && ':'.allMatches(host).length > 1) {
+    host = '[$host]';
   }
   return Uri.parse('$scheme://$host$path');
 }

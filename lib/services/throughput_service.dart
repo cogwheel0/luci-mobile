@@ -137,6 +137,17 @@ class ThroughputService {
     return 0;
   }
 
+  /// Reads a byte counter that may live under `stats.<key>` or directly at
+  /// `<key>`. Some firmware builds return a non-map `stats` value - treat
+  /// that as absent and fall back to the direct field.
+  static Object? _counterValue(Map<String, dynamic> device, String key) {
+    final stats = device['stats'];
+    if (stats is Map) {
+      return stats[key] ?? device[key];
+    }
+    return device[key];
+  }
+
   void _updateInterfaceThroughput(
     String interface,
     dynamic devData,
@@ -163,19 +174,12 @@ class ThroughputService {
         now.difference(lastTimestamp).inMilliseconds / 1000.0;
 
     if (elapsedSeconds >= _minElapsedSeconds) {
-      // Handle both formats: stats.rx_bytes and direct rx_bytes
-      final lastRx = _asNum(
-        lastStats['stats']?['rx_bytes'] ?? lastStats['rx_bytes'],
-      );
-      final lastTx = _asNum(
-        lastStats['stats']?['tx_bytes'] ?? lastStats['tx_bytes'],
-      );
-      final currentRx = _asNum(
-        devData['stats']?['rx_bytes'] ?? devData['rx_bytes'],
-      );
-      final currentTx = _asNum(
-        devData['stats']?['tx_bytes'] ?? devData['tx_bytes'],
-      );
+      // Handle both formats: stats.rx_bytes and direct rx_bytes, tolerating
+      // malformed `stats` values from non-standard firmware.
+      final lastRx = _asNum(_counterValue(lastStats, 'rx_bytes'));
+      final lastTx = _asNum(_counterValue(lastStats, 'tx_bytes'));
+      final currentRx = _asNum(_counterValue(devData, 'rx_bytes'));
+      final currentTx = _asNum(_counterValue(devData, 'tx_bytes'));
 
       final rxRate = max(0, (currentRx - lastRx) / elapsedSeconds);
       final txRate = max(0, (currentTx - lastTx) / elapsedSeconds);

@@ -85,7 +85,8 @@ class SecureStorageService {
       }
     }
     if (firstFailure != null) {
-      throw firstFailure;
+      // Preserve the original trace of the first deletion failure.
+      Error.throwWithStackTrace(firstFailure, firstTrace ?? StackTrace.current);
     }
   }
 
