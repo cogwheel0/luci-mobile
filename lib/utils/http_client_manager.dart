@@ -292,7 +292,9 @@ class HttpClientManager {
     final testClient = HttpClient();
     testClient.connectionTimeout = const Duration(seconds: 5);
     testClient.badCertificateCallback = (cert, certHost, port) {
-      presentedCert = cert;
+      // Keep the certificate of the originally requested host; a redirect
+      // target's certificate must not be pinned under this host's key.
+      presentedCert ??= cert;
       // Accept for this probe only so we can inspect the certificate;
       // nothing is persisted unless the user approves below.
       return true;
@@ -308,6 +310,8 @@ class HttpClientManager {
         port: port == 443 ? null : port,
       );
       final request = await testClient.getUrl(uri);
+      // Never pin a redirect target's certificate under this host.
+      request.followRedirects = false;
       await request.close();
 
       if (presentedCert == null) {

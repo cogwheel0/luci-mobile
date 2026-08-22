@@ -61,6 +61,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     String? deviceName,
     String? name,
     String? sectionName,
+    String? ifname,
   }) {
     final radio = (radioName ?? '').trim();
     final ssidTrimmed = (ssid ?? '').trim();
@@ -76,23 +77,26 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
       return 'wireless__$section';
     }
 
-    // If SSID is empty, we need to ensure uniqueness even with same radio
-    if (ssidTrimmed.isEmpty) {
-      // Use device name as fallback for uniqueness
-      final device = (deviceName ?? '').trim();
-      if (device.isNotEmpty && device != radio) {
-        return '${ssidTrimmed.toLowerCase()}__${device.toLowerCase()}';
-      }
-      // Use interface name as fallback
-      final interfaceName = (name ?? '').trim();
-      if (interfaceName.isNotEmpty && interfaceName != radio) {
-        return '${ssidTrimmed.toLowerCase()}__${interfaceName.toLowerCase()}';
-      }
-      return '${ssidTrimmed.toLowerCase()}__${radio.toLowerCase()}';
+    // Runtime interfaces expose their OS interface name as a secondary
+    // unique identity.
+    final ifnameTrimmed = (ifname ?? '').trim();
+    if (ifnameTrimmed.isNotEmpty) {
+      return 'wireless__$ifnameTrimmed';
     }
 
-    // If SSID is not empty, use SSID + radio
-    return '${ssidTrimmed.toLowerCase()}__${radio.toLowerCase()}';
+    // Compose whatever distinct fields remain so records cannot collide on
+    // a shared prefix; two records agreeing on every field are data-wise
+    // indistinguishable.
+    final parts = <String>[
+      if (ssidTrimmed.isNotEmpty) ssidTrimmed.toLowerCase(),
+      if (deviceName != null && deviceName.trim().isNotEmpty)
+        deviceName.trim().toLowerCase(),
+      if (name != null && name.trim().isNotEmpty) name.trim().toLowerCase(),
+    ];
+    if (parts.isNotEmpty) {
+      return ['wireless', ...parts].join('__');
+    }
+    return 'wireless__$radio';
   }
 
   @override
@@ -193,6 +197,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                       deviceName: _uciString(config['device'], radioName),
                       name: interface['name'] ?? '',
                       sectionName: sectionName,
+                      ifname: interface['ifname'] as String?,
                     );
                     return;
                   }
@@ -225,6 +230,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                     deviceName: deviceName,
                     name: name,
                     sectionName: sectionName,
+                    ifname: interface['ifname'] as String?,
                   );
                   // Keys preserve section case (distinct sections must not
                   // share a GlobalKey), but target matching normalizes case
@@ -611,6 +617,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               'ssid': ssid,
               'interfaceName': name,
               'section': uciName,
+              'ifname': iface['ifname'] as String?,
               'details': {
                 'Device': _uciString(config['device'], radioName),
                 'Mode': _uciString(config['mode']).isNotEmpty
@@ -689,6 +696,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
           deviceName: deviceName,
           name: name,
           sectionName: iface['section'] as String?,
+          ifname: iface['ifname'] as String?,
         );
         final key = _interfaceKeys.putIfAbsent(keyStr, () => GlobalKey());
         final displayName = ssid.toString().isNotEmpty

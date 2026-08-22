@@ -276,6 +276,9 @@ class AppState extends ChangeNotifier {
       }
     } catch (e, stack) {
       Logger.exception('Failed to load dashboard preferences', e, stack);
+      // A stale read must not reset the newly selected router's
+      // preferences to defaults (a later save would persist them).
+      if (expectedToken != null && expectedToken != _sessionToken) return;
       _dashboardPreferences = DashboardPreferences();
     }
   }
@@ -447,10 +450,17 @@ class AppState extends ChangeNotifier {
     // previous one. A manual login also supersedes any pending reboot
     // recovery - that recovery belongs to the session that started it and
     // must not adopt the replacement session.
-    _sessionToken++;
+    //
+    // When delegated from selectRouter, the selection already bumped the
+    // token and captured it - incrementing again here would make every
+    // post-login check in selectRouter see a stale session (e.g. failed
+    // saved-router logins could never surface their error).
+    if (!fromRouter) {
+      _sessionToken++;
+      _cancelRebootPolling();
+      _isRebooting = false;
+    }
     final token = _sessionToken;
-    _cancelRebootPolling();
-    _isRebooting = false;
     _isLoading = true;
     _errorMessage = null;
 
