@@ -21,18 +21,30 @@ String _normalizePinHost(String host) =>
     ? host.substring(1, host.length - 1)
     : host;
 
-/// Extracts the host portion of a stored pin key (`host:port`).
+/// Extracts the host portion of a stored pin key.
 ///
-/// A bare IPv6 literal contains multiple colons and no port suffix, so it
-/// must not be split at the last colon (that would turn '::1:443' into the
-/// nonsense host '::1:'). Single-colon keys carry an explicit numeric port.
-String _pinKeyHost(String key) {
-  if (!key.startsWith('[') && ':'.allMatches(key).length > 1) {
-    return _normalizePinHost(key);
+/// Canonical keys are `[host]:port` (brackets always present), so parsing
+/// is unambiguous for every address family. Legacy keys were bare
+/// `host:port`; those are split at the last colon, which is correct for
+/// keys this app generated because the port suffix was always appended by
+/// us (bare IPv6 literals in legacy keys therefore parse correctly too).
+(String, int)? _parsePinKey(String key) {
+  if (key.startsWith('[')) {
+    final close = key.indexOf(']');
+    if (close == -1) return null;
+    final host = _normalizePinHost(key.substring(1, close));
+    final port = int.tryParse(key.substring(close + 2));
+    if (port == null) return null;
+    return (host, port);
   }
-  final match = RegExp(r'^(.*):(\d+)$').firstMatch(key);
-  return _normalizePinHost(match?.group(1) ?? key);
+  final match = RegExp(r'^(.+):(\d+)$').firstMatch(key);
+  if (match == null) return null;
+  return (_normalizePinHost(match.group(1)!), int.parse(match.group(2)!));
 }
+
+/// Builds the canonical, unambiguous pin key. Bare IPv6 hosts are bracketed
+/// so the appended port can never be confused with part of the address.
+String _pinKey(String host, int port) => '[${_normalizePinHost(host)}]:$port';
 
 /// HTTP client manager that provides secure client instances with proper
 /// certificate validation and connection pooling.
@@ -187,8 +199,7 @@ class HttpClientManager {
         httpClient.badCertificateCallback = (cert, certHost, port) {
           // Trust the certificate only if its fingerprint was accepted
           // for this exact host:port pair.
-          final expected =
-              _acceptedCertFingerprints['${_normalizePinHost(certHost)}:$port'];
+          final expected = _acceptedCertFingerprints[_pinKey(certHost, port)];
           return expected != null && expected == _certificateFingerprint(cert);
         };
         return httpClient;
@@ -204,6 +215,8 @@ class HttpClientManager {
   /// Entries written by older app versions stored plain `true` booleans
   /// without a fingerprint; those are discarded so affected hosts get a
   /// fresh acceptance prompt under the stricter pinning scheme.
+  /// Loads persisted pins, migrating legacy key formats to the canonical
+  /// `[host]:port` form in memory.
   Future<void> _loadAcceptedCertificates() async {
     try {
       final storage = const FlutterSecureStorage();
@@ -213,11 +226,22 @@ class HttpClientManager {
       if (_pinsMutated) return;
       if (certsJson != null) {
         final certs = Map<String, dynamic>.from(jsonDecode(certsJson));
+        var migrated = false;
         certs.forEach((key, value) {
-          if (value is String && value.isNotEmpty) {
-            _acceptedCertFingerprints.putIfAbsent(key, () => value);
-          }
+          if (value is! String || value.isEmpty) return;
+          final parsed = _parsePinKey(key);
+          if (parsed == null) return;
+          final (host, port) = parsed;
+          final canonical = _pinKey(host, port);
+          if (_pinsMutated) return;
+          _acceptedCertFingerprints.putIfAbsent(canonical, () => value);
+          if (canonical != key) migrated = true;
         });
+        // Persist the rewritten keys so the legacy format disappears even
+        // if nothing else changes this session. Mutations that raced the
+        // load already saved their own state; only rewrite when we know
+        // the in-memory map reflects disk.
+        if (migrated && !_pinsMutated) await _saveAcceptedCertificates();
       }
     } catch (e) {
       Logger.warning('Failed to load accepted certificates: $e');
@@ -239,7 +263,7 @@ class HttpClientManager {
 
   /// Whether [cert] matches the pinned fingerprint for `host:port`.
   bool isCertificatePinned(String host, int port, X509Certificate cert) {
-    return _acceptedCertFingerprints['${_normalizePinHost(host)}:$port'] ==
+    return _acceptedCertFingerprints[_pinKey(host, port)] ==
         _certificateFingerprint(cert);
   }
 
@@ -269,10 +293,11 @@ class HttpClientManager {
   /// (across all ports)
   Future<void> clearCertificatesForHost(String host) async {
     _pinsMutated = true;
-    final hostname = _pinKeyHost(_normalizePinHost(host));
-    _acceptedCertFingerprints.removeWhere(
-      (key, _) => _pinKeyHost(key) == hostname,
-    );
+    final hostname = _normalizePinHost(_extractHostname(host));
+    _acceptedCertFingerprints.removeWhere((key, value) {
+      final parsed = _parsePinKey(key);
+      return parsed != null && _normalizePinHost(parsed.$1) == hostname;
+    });
 
     _closeAndRemoveClients(
       (key) =>
@@ -332,8 +357,7 @@ class HttpClientManager {
         return true;
       }
 
-      final certKey =
-          '${_normalizePinHost(host)}:${_effectivePort(hostWithPort, useHttps)}';
+      final certKey = _pinKey(host, _effectivePort(hostWithPort, useHttps));
       final fingerprint = _certificateFingerprint(presentedCert!);
 
       // Already pinned with this exact certificate.
