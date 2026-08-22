@@ -695,21 +695,23 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             ? ssid.toString()
             : deviceName.toString();
 
-        // Check if this is the target interface for expansion. An exact
-        // (case-sensitive) section match always wins; normalized aliases
-        // apply otherwise.
+        // Check if this is the target interface for expansion. When an
+        // exact (case-sensitive) section match exists anywhere, only that
+        // card expands via its section - alias matches stay disabled so a
+        // case variant can't expand through its SSID/device/name.
         final section = iface['section'] as String?;
         final isTargetInterface =
             target != null &&
-            (_normalizeInterfaceKey(ssid) == _normalizeInterfaceKey(target) ||
-                _normalizeInterfaceKey(deviceName) ==
-                    _normalizeInterfaceKey(target) ||
-                _normalizeInterfaceKey(name) ==
-                    _normalizeInterfaceKey(target) ||
-                (!exactSectionMatchExists &&
-                    _normalizeInterfaceKey(section) ==
-                        _normalizeInterfaceKey(target)) ||
-                (exactSectionMatchExists && section?.trim() == target.trim()));
+            (exactSectionMatchExists
+                ? section?.trim() == target.trim()
+                : (_normalizeInterfaceKey(ssid) ==
+                          _normalizeInterfaceKey(target) ||
+                      _normalizeInterfaceKey(deviceName) ==
+                          _normalizeInterfaceKey(target) ||
+                      _normalizeInterfaceKey(name) ==
+                          _normalizeInterfaceKey(target) ||
+                      _normalizeInterfaceKey(section) ==
+                          _normalizeInterfaceKey(target)));
 
         final shouldExpand = isTargetInterface || _expandedInterface == keyStr;
         return Padding(
