@@ -508,6 +508,11 @@ class RealApiService implements IApiService {
     required bool useHttps,
     BuildContext? context,
   }) async {
+    const invalidResponse = RpcException(
+      object: 'luci-rpc',
+      method: 'getWirelessDevices',
+      detail: 'invalid response',
+    );
     try {
       // First, get wireless device information to find all wireless interfaces
       final wirelessResult = await callWithContext(
@@ -524,11 +529,7 @@ class RealApiService implements IApiService {
           wirelessResult[0] == 0) {
         final data = wirelessResult[1];
         if (data is! Map<String, dynamic>) {
-          throw const RpcException(
-            object: 'luci-rpc',
-            method: 'getWirelessDevices',
-            detail: 'invalid response',
-          );
+          throw invalidResponse;
         }
         final wirelessData = data;
 
@@ -540,36 +541,36 @@ class RealApiService implements IApiService {
 
         // For each wireless radio, get the associated stations
         for (final entry in wirelessData.entries) {
-          final radioData = entry.value as Map<String, dynamic>?;
-          if (radioData == null || radioData['interfaces'] == null) continue;
+          final radioData = entry.value;
+          if (radioData is! Map<String, dynamic>) throw invalidResponse;
+          final rawInterfaces = radioData['interfaces'];
+          if (rawInterfaces == null) continue;
+          if (rawInterfaces is! List) throw invalidResponse;
 
-          final interfaces = radioData['interfaces'] as List?;
-          if (interfaces == null) continue;
-
-          for (final iface in interfaces) {
-            if (iface is Map<String, dynamic>) {
-              final config = iface['config'];
-              if (config is Map && config['mode'] == 'sta') continue;
-              final ifname = iface['ifname'] as String?;
-              if (ifname != null) {
-                attempted++;
-                try {
-                  final stations = await fetchAssociatedStationsWithContext(
-                    ipAddress: ipAddress,
-                    sysauth: sysauth,
-                    useHttps: useHttps,
-                    interface: ifname,
-                    context: context?.mounted == true ? context : null,
-                  );
-                  succeeded++;
-                  if (stations.isNotEmpty) {
-                    result[ifname] = stations.toSet();
-                  }
-                } catch (e, stack) {
-                  firstError ??= e;
-                  firstStack ??= stack;
-                }
+          for (final iface in rawInterfaces) {
+            if (iface is! Map<String, dynamic>) throw invalidResponse;
+            final config = iface['config'];
+            if (config != null && config is! Map) throw invalidResponse;
+            if (config is Map && config['mode'] == 'sta') continue;
+            final ifname = iface['ifname'];
+            if (ifname == null) continue;
+            if (ifname is! String) throw invalidResponse;
+            attempted++;
+            try {
+              final stations = await fetchAssociatedStationsWithContext(
+                ipAddress: ipAddress,
+                sysauth: sysauth,
+                useHttps: useHttps,
+                interface: ifname,
+                context: context?.mounted == true ? context : null,
+              );
+              succeeded++;
+              if (stations.isNotEmpty) {
+                result[ifname] = stations.toSet();
               }
+            } catch (e, stack) {
+              firstError ??= e;
+              firstStack ??= stack;
             }
           }
         }
@@ -578,11 +579,7 @@ class RealApiService implements IApiService {
         }
         return result;
       }
-      throw const RpcException(
-        object: 'luci-rpc',
-        method: 'getWirelessDevices',
-        detail: 'invalid response',
-      );
+      throw invalidResponse;
     } catch (e, stack) {
       Logger.exception('Failed to fetch all associated stations', e, stack);
       rethrow;
@@ -598,6 +595,11 @@ class RealApiService implements IApiService {
     required String interface,
     BuildContext? context,
   }) async {
+    const invalidResponse = RpcException(
+      object: 'iwinfo',
+      method: 'assoclist',
+      detail: 'invalid response',
+    );
     try {
       final result = await callWithContext(
         ipAddress,
@@ -613,20 +615,16 @@ class RealApiService implements IApiService {
         final data = result[1];
         if (data is Map && data['results'] is List) {
           final resultsList = data['results'] as List;
-          return resultsList
-              .map(
-                (entry) => (entry as Map<String, dynamic>)['mac']?.toString(),
-              )
-              .where((mac) => mac != null)
-              .cast<String>()
-              .toList();
+          final macs = <String>[];
+          for (final entry in resultsList) {
+            if (entry is! Map<String, dynamic>) throw invalidResponse;
+            final mac = entry['mac'];
+            if (mac != null) macs.add(mac.toString());
+          }
+          return macs;
         }
       }
-      throw const RpcException(
-        object: 'iwinfo',
-        method: 'assoclist',
-        detail: 'invalid response',
-      );
+      throw invalidResponse;
     } catch (e, stack) {
       Logger.exception('Failed to fetch associated stations', e, stack);
       rethrow;

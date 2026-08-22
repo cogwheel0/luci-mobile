@@ -104,13 +104,59 @@ void main() {
       throwsA(isA<RpcException>()),
     );
   });
+
+  test('associated stations reject an invalid radio payload', () async {
+    final api = _StationApi(
+      stations: {},
+      wirelessResponse: [
+        0,
+        {'radio0': 1},
+      ],
+    );
+
+    expect(
+      api.fetchAllAssociatedWirelessMacsWithContext(
+        ipAddress: 'router',
+        sysauth: 'token',
+        useHttps: false,
+      ),
+      throwsA(isA<RpcException>()),
+    );
+  });
+
+  test('associated stations reject an invalid station entry', () async {
+    final api = _StationApi(
+      stations: {},
+      stationResponse: [
+        0,
+        {
+          'results': ['bad'],
+        },
+      ],
+    );
+
+    expect(
+      api.fetchAssociatedStationsWithContext(
+        ipAddress: 'router',
+        sysauth: 'token',
+        useHttps: false,
+        interface: 'wlan0',
+      ),
+      throwsA(isA<RpcException>()),
+    );
+  });
 }
 
 class _StationApi extends RealApiService {
   final Map<String, Object> stations;
   final dynamic wirelessResponse;
+  final dynamic stationResponse;
 
-  _StationApi({required this.stations, this.wirelessResponse});
+  _StationApi({
+    required this.stations,
+    this.wirelessResponse,
+    this.stationResponse,
+  });
 
   @override
   Future<dynamic> callWithContext(
@@ -122,6 +168,9 @@ class _StationApi extends RealApiService {
     Map<String, dynamic>? params,
     BuildContext? context,
   }) async {
+    if (method == 'assoclist' && stationResponse != null) {
+      return stationResponse;
+    }
     if (wirelessResponse != null) return wirelessResponse;
     return [
       0,
@@ -148,6 +197,15 @@ class _StationApi extends RealApiService {
     required String interface,
     BuildContext? context,
   }) async {
+    if (stationResponse != null) {
+      return super.fetchAssociatedStationsWithContext(
+        ipAddress: ipAddress,
+        sysauth: sysauth,
+        useHttps: useHttps,
+        interface: interface,
+        context: context,
+      );
+    }
     final result = stations[interface]!;
     if (result is Exception) throw result;
     return result as List<String>;
