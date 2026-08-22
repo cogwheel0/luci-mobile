@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/models/wifi_scan_result.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
+import 'package:luci_mobile/state/app_state.dart';
 
 class WifiScanScreen extends ConsumerStatefulWidget {
   const WifiScanScreen({super.key});
@@ -20,6 +21,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
   String? _selectedRadio; // radioName key (e.g., 'radio0')
   List<Map<String, String>> _radioDevices = [];
   late AnimationController _pulseController;
+  AppState? _appState;
   // Scan generation counter — incremented whenever a scan is cancelled or
   // superseded. Completions from older generations are ignored.
   int _scanGeneration = 0;
@@ -37,11 +39,16 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _appState ??= ref.read(appStateProvider);
+  }
+
+  @override
   void dispose() {
     // Invalidate any in-flight scan so it cannot update state after disposal.
     _scanGeneration++;
-    final appState = ref.read(appStateProvider);
-    appState.cancelWirelessScan();
+    _appState?.cancelWirelessScan();
     _pulseController.dispose();
     super.dispose();
   }

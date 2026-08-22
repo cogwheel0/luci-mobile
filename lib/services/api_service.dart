@@ -886,7 +886,8 @@ class RealApiService implements IApiService {
     BuildContext? context,
   }) async {
     cancelScan();
-    _scanCancelToken = CancelToken();
+    final scanToken = CancelToken();
+    _scanCancelToken = scanToken;
 
     Logger.info('WiFi scan starting on device: $device');
 
@@ -900,9 +901,8 @@ class RealApiService implements IApiService {
         params: {'device': device},
         context: context,
         receiveTimeout: const Duration(seconds: 120),
-        cancelToken: _scanCancelToken,
+        cancelToken: scanToken,
       );
-      _scanCancelToken = null;
 
       Logger.info('WiFi scan raw result type: ${result.runtimeType}');
 
@@ -961,6 +961,10 @@ class RealApiService implements IApiService {
       }
       Logger.exception('WiFi scan DioException', e, e.stackTrace);
       rethrow;
+    } finally {
+      if (identical(_scanCancelToken, scanToken)) {
+        _scanCancelToken = null;
+      }
     }
   }
 

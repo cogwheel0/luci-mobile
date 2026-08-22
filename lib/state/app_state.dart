@@ -2511,16 +2511,22 @@ class AppState extends ChangeNotifier {
         config: 'wireless',
         context: context?.mounted == true ? context : null,
       );
-
-      await _wifiReload(context: context?.mounted == true ? context : null);
-
-      return true;
     } catch (e, stack) {
-      Logger.exception('Failed to modify wireless interface', e, stack);
+      Logger.exception('Failed to modify wireless interface (UCI)', e, stack);
       _dashboardError = 'Failed to modify interface: $e';
       notifyListeners();
       return false;
     }
+
+    try {
+      await _wifiReload(context: context?.mounted == true ? context : null);
+    } catch (e, stack) {
+      Logger.exception('Wireless reload failed after interface edit', e, stack);
+      _dashboardError = 'Interface modified but wireless reload failed: $e';
+      notifyListeners();
+      return false;
+    }
+    return true;
   }
 
   /// Deletes a wifi-iface UCI section.
@@ -2557,16 +2563,26 @@ class AppState extends ChangeNotifier {
         config: 'wireless',
         context: context?.mounted == true ? context : null,
       );
-
-      await _wifiReload(context: context?.mounted == true ? context : null);
-
-      return true;
     } catch (e, stack) {
-      Logger.exception('Failed to delete wireless interface', e, stack);
+      Logger.exception('Failed to delete wireless interface (UCI)', e, stack);
       _dashboardError = 'Failed to delete interface: $e';
       notifyListeners();
       return false;
     }
+
+    try {
+      await _wifiReload(context: context?.mounted == true ? context : null);
+    } catch (e, stack) {
+      Logger.exception(
+        'Wireless reload failed after interface deletion',
+        e,
+        stack,
+      );
+      _dashboardError = 'Interface deleted but wireless reload failed: $e';
+      notifyListeners();
+      return false;
+    }
+    return true;
   }
 
   Future<bool> tryAutoLogin({BuildContext? context}) async {

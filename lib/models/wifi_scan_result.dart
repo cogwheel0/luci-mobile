@@ -98,6 +98,7 @@ class WifiScanResult {
     if (frequency != null) {
       if (frequency! >= 5925) return '6 GHz';
       if (frequency! >= 5000) return '5 GHz';
+      if (frequency! >= 4900) return '4.9 GHz';
       return '2.4 GHz';
     }
     // Channel-based fallback cannot distinguish 6 GHz

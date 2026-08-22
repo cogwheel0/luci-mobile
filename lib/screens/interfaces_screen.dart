@@ -652,7 +652,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                 : (iwinfo['mode']?.toString().toUpperCase() ?? 'N/A');
 
             // Build encryption description
-            final encIwinfo = iwinfo['encryption'] as Map<String, dynamic>?;
+            final rawEncIwinfo = iwinfo['encryption'];
+            final encIwinfo = rawEncIwinfo is Map ? rawEncIwinfo : null;
             final encDescription =
                 encIwinfo?['description'] ??
                 _uciString(config['encryption'], 'N/A');
@@ -674,7 +675,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               'uciSection': uciName,
               'ifname': iface['ifname'] as String?,
               'mode': mode,
-              'encryption': config['encryption'] ?? '',
+              'encryption': _uciString(config['encryption']),
               'encryptionDescription': encDescription,
               'network': (config['network'] is List)
                   ? (config['network'] as List).join(', ')
@@ -723,8 +724,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
           'section': uciName,
           'uciSection': uciName,
           'mode': mode,
-          'encryption': config['encryption'] ?? '',
-          'encryptionDescription': config['encryption'] ?? 'N/A',
+          'encryption': _uciString(config['encryption']),
+          'encryptionDescription': _uciString(config['encryption'], 'N/A'),
           'network': (config['network'] is List)
               ? (config['network'] as List).join(', ')
               : config['network']?.toString() ?? '',
@@ -1741,7 +1742,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
   late TextEditingController _ssidController;
   late TextEditingController _passwordController;
   late TextEditingController _networkController;
-  late String _selectedEncryption;
+  String? _selectedEncryption;
   late String _originalEncryption; // tracks what was set before editing
   bool _obscurePassword = true;
   bool _isSaving = false;
@@ -1767,12 +1768,15 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
       text: widget.iface['network']?.toString() ?? 'lan',
     );
 
-    // Map the current encryption to our dropdown values, preserving it if
-    // supported. For unknown/enterprise values, keep them for display but
-    // prevent saving until the user makes a valid selection.
-    final currentEnc = widget.iface['encryption']?.toString() ?? 'none';
+    final rawEncryption = widget.iface['encryption']?.toString().trim() ?? '';
+    final currentEnc = (rawEncryption.isEmpty ? 'none' : rawEncryption)
+        .split('+')
+        .first;
     _originalEncryption = currentEnc;
-    _selectedEncryption = currentEnc;
+    _selectedEncryption =
+        _encryptionOptions.any((option) => option['value'] == currentEnc)
+        ? currentEnc
+        : null;
   }
 
   @override
@@ -1784,9 +1788,12 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
   }
 
   bool get _requiresPassword =>
-      _selectedEncryption != 'none' && _selectedEncryption != 'owe';
+      _selectedEncryption != null &&
+      _selectedEncryption != 'none' &&
+      _selectedEncryption != 'owe';
 
   bool get _isEncryptionSupported =>
+      _selectedEncryption != null &&
       _encryptionOptions.any((o) => o['value'] == _selectedEncryption);
 
   /// True when switching from an open interface to a password-protected one.
@@ -1804,9 +1811,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
     // Block unsupported encryption modes (e.g. enterprise WPA-EAP)
     if (!_isEncryptionSupported) {
       setState(
-        () => _error =
-            'Encryption mode "$_selectedEncryption" cannot be edited here. '
-            'Please select a supported mode.',
+        () => _error = 'Select a supported encryption mode before saving.',
       );
       return;
     }
@@ -1843,7 +1848,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
     // Build values to update
     final values = <String, String>{
       'ssid': ssid,
-      'encryption': _selectedEncryption,
+      'encryption': _selectedEncryption!,
     };
 
     // Only update password if user typed one
@@ -1867,8 +1872,9 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
     if (!mounted) return;
 
     if (success) {
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Row(
             children: [
@@ -2023,7 +2029,12 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
               // Password field (only for encrypted networks)
               if (_requiresPassword) ...[
                 const SizedBox(height: 16),
-                _buildLabel(context, 'Password (leave empty to keep current)'),
+                _buildLabel(
+                  context,
+                  _changingToEncrypted
+                      ? 'Password (required)'
+                      : 'Password (leave empty to keep current)',
+                ),
                 const SizedBox(height: 6),
                 TextField(
                   controller: _passwordController,
@@ -2233,10 +2244,12 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
 
     if (!mounted) return;
 
+    final messenger = ScaffoldMessenger.of(context);
+    final errorColor = Theme.of(context).colorScheme.error;
     Navigator.of(context).pop();
 
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Row(
             children: [
@@ -2254,10 +2267,10 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
         ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: const Text('Failed to remove interface'),
-          backgroundColor: Theme.of(context).colorScheme.error,
+          backgroundColor: errorColor,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -2275,9 +2288,7 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
     final isStaMode =
         modeLower.contains('sta') ||
         modeLower.contains('client') ||
-        modeLower == 'station' ||
-        modeLower == 'n/a' ||
-        widget.mode.isEmpty;
+        modeLower == 'station';
     final warningMessage = isStaMode
         ? 'This will remove the STA connection from this radio.'
         : 'WiFi will restart. Clients on this network will be disconnected.';

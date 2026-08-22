@@ -176,6 +176,7 @@ void main() {
       isNot(contains('/sbin/uci del_list firewall.@zone[1].network=wwan')),
     );
     expect(api.calls, isNot(contains('delete network.wwan')));
+    expect(state.dashboardError, contains('wireless section wifinet0'));
   });
 
   test('interface reload leaves disabled radios disabled', () async {
