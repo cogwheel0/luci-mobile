@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/models/client.dart';
 import 'package:luci_mobile/main.dart';
+import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
@@ -129,14 +130,18 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                       );
                     }
 
-                    if (dashboardError != null && aggregatedClients.isEmpty) {
+                    final loadError = snapshot.hasError
+                        ? userFacingApiError(snapshot.error!)
+                        : dashboardError;
+                    if (loadError != null && aggregatedClients.isEmpty) {
                       return LuciErrorDisplay(
                         title: 'Failed to Load Clients',
-                        message:
-                            'Could not connect to the router. Please check your network connection and the router\'s IP address.',
+                        message: loadError,
                         actionLabel: 'Retry',
-                        onAction: () =>
-                            ref.read(appStateProvider).fetchDashboardData(),
+                        onAction: () async {
+                          await ref.read(appStateProvider).fetchDashboardData();
+                          if (mounted) setState(_computeClientsFuture);
+                        },
                         icon: Icons.wifi_off_rounded,
                       );
                     }

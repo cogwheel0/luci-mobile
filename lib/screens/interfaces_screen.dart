@@ -456,8 +456,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                   if (dashboardError != null && dashboardData == null) {
                     return LuciErrorDisplay(
                       title: 'Failed to Load Interfaces',
-                      message:
-                          'Could not connect to the router. Please check your network connection and router settings.',
+                      message: dashboardError,
                       actionLabel: 'Retry',
                       onAction: () => appState.fetchDashboardData(),
                       icon: Icons.wifi_off_rounded,

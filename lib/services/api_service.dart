@@ -13,6 +13,114 @@ class LoginResult {
   LoginResult({required this.token, required this.actualUseHttps});
 }
 
+class RpcException implements Exception {
+  final int? status;
+  final String object;
+  final String method;
+  final String? detail;
+
+  const RpcException({
+    required this.object,
+    required this.method,
+    this.status,
+    this.detail,
+  });
+
+  @override
+  String toString() {
+    final call = '$object.$method';
+    final unavailable =
+        status == 3 ||
+        status == 4 ||
+        status == 8 ||
+        detail?.toLowerCase().contains('not found') == true ||
+        detail?.toLowerCase().contains('not supported') == true;
+    if (unavailable && object == 'luci-rpc') {
+      return 'Router RPC support is missing: $call is unavailable. Install '
+          'rpcd-mod-luci, restart rpcd, then reconnect.';
+    }
+    if (unavailable && object == 'iwinfo') {
+      return 'Wireless client support is missing: $call is unavailable. '
+          'Install rpcd-mod-iwinfo, restart rpcd, then refresh.';
+    }
+    if (status == 6 ||
+        detail?.toLowerCase().contains('access denied') == true) {
+      return 'This account does not have permission for $call. Sign in with '
+          'an administrator account or grant the required RPC access.';
+    }
+
+    final reason = switch (status) {
+      1 => 'invalid command',
+      2 => 'invalid argument',
+      3 => 'method not found',
+      4 => 'object not found',
+      5 => 'no data',
+      7 => 'timed out',
+      8 => 'not supported',
+      9 => 'unknown error',
+      10 => 'connection failed',
+      _ => detail ?? 'unknown error',
+    };
+    return 'Router RPC call $call failed: ${detail ?? reason}.';
+  }
+}
+
+/// Validates the ubus `[status, data]` envelope while preserving it for
+/// existing callers.
+dynamic validateRpcResult(
+  dynamic result, {
+  required String object,
+  required String method,
+}) {
+  if (result is! List ||
+      result.isEmpty ||
+      result.length > 2 ||
+      result.first is! int) {
+    throw RpcException(
+      object: object,
+      method: method,
+      detail: 'invalid response',
+    );
+  }
+
+  final status = result.first as int;
+  if (status != 0) {
+    throw RpcException(
+      object: object,
+      method: method,
+      status: status,
+      detail: result.length > 1 ? result[1]?.toString() : null,
+    );
+  }
+  return result;
+}
+
+bool? rpcAccessAllowed(dynamic result) {
+  if (result is List &&
+      result.length == 2 &&
+      result[0] is int &&
+      result[0] == 0) {
+    final data = result[1];
+    if (data is Map && data['access'] is bool) return data['access'] as bool;
+  }
+  return null;
+}
+
+String userFacingApiError(Object error) {
+  if (error is RpcException) return error.toString();
+  if (error is DioException) {
+    final status = error.response?.statusCode;
+    if (status == 401 || status == 403) {
+      return 'The router rejected this session. Reconnect and check the '
+          'account\'s RPC permissions.';
+    }
+    if (status != null) return 'The router returned HTTP $status.';
+    return 'Could not connect to the router. Check its address and your '
+        'network connection, then try again.';
+  }
+  return error.toString().replaceFirst('Exception: ', '');
+}
+
 Uri _buildUrl(String ipAddress, bool useHttps, String path) {
   final scheme = useHttps ? 'https' : 'http';
   // Handle cases where ipAddress might already include a scheme
@@ -322,18 +430,26 @@ class RealApiService implements IApiService {
         final decoded = response.data is String
             ? jsonDecode(response.data as String)
             : response.data;
+        if (decoded is! Map) {
+          throw RpcException(
+            object: object,
+            method: method,
+            detail: 'invalid response',
+          );
+        }
         if (decoded['error'] != null) {
-          throw Exception('RPC error: ${decoded['error']['message']}');
+          final error = decoded['error'];
+          throw RpcException(
+            object: object,
+            method: method,
+            detail: error is Map ? error['message']?.toString() : '$error',
+          );
         }
-        // Return in LuCI RPC format: [status, data]
-        final result = decoded['result'];
-        if (result is List && result.isNotEmpty) {
-          // Result is already in [status, data] format
-          return result;
-        } else {
-          // Wrap single result in format: [0, data]
-          return [0, result];
-        }
+        return validateRpcResult(
+          decoded['result'],
+          object: object,
+          method: method,
+        );
       } else {
         throw Exception('Failed to call RPC: HTTP ${response.statusCode}');
       }
@@ -404,6 +520,11 @@ class RealApiService implements IApiService {
     required bool useHttps,
     BuildContext? context,
   }) async {
+    const invalidResponse = RpcException(
+      object: 'luci-rpc',
+      method: 'getWirelessDevices',
+      detail: 'invalid response',
+    );
     try {
       // First, get wireless device information to find all wireless interfaces
       final wirelessResult = await callWithContext(
@@ -418,44 +539,62 @@ class RealApiService implements IApiService {
       if (wirelessResult is List &&
           wirelessResult.length > 1 &&
           wirelessResult[0] == 0) {
-        final wirelessData = wirelessResult[1] as Map<String, dynamic>?;
-        if (wirelessData == null) return {};
+        final data = wirelessResult[1];
+        if (data is! Map<String, dynamic>) {
+          throw invalidResponse;
+        }
+        final wirelessData = data;
 
         final result = <String, Set<String>>{};
+        Object? firstError;
+        StackTrace? firstStack;
+        var attempted = 0;
+        var succeeded = 0;
 
         // For each wireless radio, get the associated stations
         for (final entry in wirelessData.entries) {
-          final radioData = entry.value as Map<String, dynamic>?;
-          if (radioData == null || radioData['interfaces'] == null) continue;
+          final radioData = entry.value;
+          if (radioData is! Map<String, dynamic>) throw invalidResponse;
+          final rawInterfaces = radioData['interfaces'];
+          if (rawInterfaces == null) continue;
+          if (rawInterfaces is! List) throw invalidResponse;
 
-          final interfaces = radioData['interfaces'] as List?;
-          if (interfaces == null) continue;
-
-          for (final iface in interfaces) {
-            if (iface is Map<String, dynamic>) {
-              final ifname = iface['ifname'] as String?;
-              if (ifname != null) {
-                // Fetch associated stations for this interface
-                final stations = await fetchAssociatedStationsWithContext(
-                  ipAddress: ipAddress,
-                  sysauth: sysauth,
-                  useHttps: useHttps,
-                  interface: ifname,
-                  context: context?.mounted == true ? context : null,
-                );
-                if (stations.isNotEmpty) {
-                  result[ifname] = stations.toSet();
-                }
+          for (final iface in rawInterfaces) {
+            if (iface is! Map<String, dynamic>) throw invalidResponse;
+            final config = iface['config'];
+            if (config != null && config is! Map) throw invalidResponse;
+            if (config is Map && config['mode'] == 'sta') continue;
+            final ifname = iface['ifname'];
+            if (ifname == null) continue;
+            if (ifname is! String) throw invalidResponse;
+            attempted++;
+            try {
+              final stations = await fetchAssociatedStationsWithContext(
+                ipAddress: ipAddress,
+                sysauth: sysauth,
+                useHttps: useHttps,
+                interface: ifname,
+                context: context?.mounted == true ? context : null,
+              );
+              succeeded++;
+              if (stations.isNotEmpty) {
+                result[ifname] = stations.toSet();
               }
+            } catch (e, stack) {
+              firstError ??= e;
+              firstStack ??= stack;
             }
           }
         }
+        if (attempted > 0 && succeeded == 0 && firstError != null) {
+          Error.throwWithStackTrace(firstError, firstStack!);
+        }
         return result;
       }
-      return {};
+      throw invalidResponse;
     } catch (e, stack) {
       Logger.exception('Failed to fetch all associated stations', e, stack);
-      return {};
+      rethrow;
     }
   }
 
@@ -468,6 +607,11 @@ class RealApiService implements IApiService {
     required String interface,
     BuildContext? context,
   }) async {
+    const invalidResponse = RpcException(
+      object: 'iwinfo',
+      method: 'assoclist',
+      detail: 'invalid response',
+    );
     try {
       final result = await callWithContext(
         ipAddress,
@@ -483,19 +627,19 @@ class RealApiService implements IApiService {
         final data = result[1];
         if (data is Map && data['results'] is List) {
           final resultsList = data['results'] as List;
-          return resultsList
-              .map(
-                (entry) => (entry as Map<String, dynamic>)['mac']?.toString(),
-              )
-              .where((mac) => mac != null)
-              .cast<String>()
-              .toList();
+          final macs = <String>[];
+          for (final entry in resultsList) {
+            if (entry is! Map<String, dynamic>) throw invalidResponse;
+            final mac = entry['mac'];
+            if (mac != null) macs.add(mac.toString());
+          }
+          return macs;
         }
       }
-      return [];
+      throw invalidResponse;
     } catch (e, stack) {
       Logger.exception('Failed to fetch associated stations', e, stack);
-      return [];
+      rethrow;
     }
   }
 

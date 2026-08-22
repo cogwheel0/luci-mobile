@@ -307,18 +307,36 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 final isRebooting = ref.watch(
                   appStateProvider.select((state) => state.isRebooting),
                 );
+                final canReboot = ref.watch(
+                  appStateProvider.select((state) => state.canReboot),
+                );
+                final accessError = ref.watch(
+                  appStateProvider.select((state) => state.rebootAccessError),
+                );
+                final rebootEnabled = canReboot == true && !isRebooting;
                 return _MoreScreenSection(
                   tiles: [
                     _buildMoreTile(
                       context,
-                      icon: Icons.restart_alt,
+                      icon: accessError != null
+                          ? Icons.error_outline
+                          : canReboot == false
+                          ? Icons.lock_outline
+                          : Icons.restart_alt,
                       iconColor: Theme.of(context).colorScheme.primary,
                       title: 'Reboot Router',
-                      subtitle: 'Perform a system restart',
-                      onTap: isRebooting
-                          ? null
-                          : () => _showRebootDialog(context),
-                      enabled: !isRebooting,
+                      subtitle:
+                          accessError ??
+                          switch (canReboot) {
+                            false =>
+                              'View only — administrator access required',
+                            null => 'Checking administrator access…',
+                            true => 'Perform a system restart',
+                          },
+                      onTap: rebootEnabled
+                          ? () => _showRebootDialog(context)
+                          : null,
+                      enabled: rebootEnabled,
                       showSpinner: isRebooting,
                     ),
                   ],
