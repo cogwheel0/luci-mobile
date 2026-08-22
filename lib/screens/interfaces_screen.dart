@@ -671,17 +671,49 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     if (interfaces.isEmpty) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
-    // Exact-first targeting: when any wireless section matches the target
-    // case-sensitively, only that card expands via its section - case
-    // variants must not expand through the normalized fallback.
     final target = _targetInterface;
-    final exactSectionMatchExists =
-        target != null &&
-        interfaces.any(
-          (iface) =>
-              (iface['section'] as String?)?.trim() == target.trim() &&
-              (iface['section'] as String?)!.trim().isNotEmpty,
-        );
+
+    // Resolve the target to exactly ONE wireless card key, using the same
+    // exact-section-first then normalized-alias order as the scroll
+    // targeting path. Resolving up front guarantees a case-insensitive
+    // target (e.g. "GUEST") cannot expand several case-variant cards at
+    // once - only the card the screen would scroll to expands.
+    String? resolvedTargetKey;
+    if (target != null) {
+      String? keyOf(Map<String, dynamic> iface) => _interfaceKeyForWireless(
+        ssid: iface['ssid'] ?? '',
+        radioName: iface['radioName'] ?? '',
+        deviceName: iface['deviceName'] ?? '',
+        name: iface['interfaceName'] ?? '',
+        sectionName: iface['section'] as String?,
+        ifname: iface['ifname'] as String?,
+      );
+      // Pass 1: exact (case-sensitive) section match.
+      for (final iface in interfaces) {
+        final section = (iface['section'] as String?)?.trim() ?? '';
+        if (section.isNotEmpty && section == target.trim()) {
+          resolvedTargetKey = keyOf(iface);
+          break;
+        }
+      }
+      // Pass 2: normalized alias fallback (SSID/device/name/section).
+      final normalizedTarget = _normalizeInterfaceKey(target);
+      if (resolvedTargetKey == null) {
+        for (final iface in interfaces) {
+          if (normalizedTarget == _normalizeInterfaceKey(iface['ssid'] ?? '') ||
+              normalizedTarget ==
+                  _normalizeInterfaceKey(iface['deviceName'] ?? '') ||
+              normalizedTarget ==
+                  _normalizeInterfaceKey(iface['interfaceName'] ?? '') ||
+              normalizedTarget ==
+                  _normalizeInterfaceKey(iface['section'] as String?)) {
+            resolvedTargetKey = keyOf(iface);
+            break;
+          }
+        }
+      }
+    }
+
     return SliverList(
       delegate: SliverChildBuilderDelegate((context, index) {
         final iface = interfaces[index];
@@ -703,23 +735,9 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             ? ssid.toString()
             : deviceName.toString();
 
-        // Check if this is the target interface for expansion. When an
-        // exact (case-sensitive) section match exists anywhere, only that
-        // card expands via its section - alias matches stay disabled so a
-        // case variant can't expand through its SSID/device/name.
-        final section = iface['section'] as String?;
+        // Only the single resolved card expands; see resolution above.
         final isTargetInterface =
-            target != null &&
-            (exactSectionMatchExists
-                ? section?.trim() == target.trim()
-                : (_normalizeInterfaceKey(ssid) ==
-                          _normalizeInterfaceKey(target) ||
-                      _normalizeInterfaceKey(deviceName) ==
-                          _normalizeInterfaceKey(target) ||
-                      _normalizeInterfaceKey(name) ==
-                          _normalizeInterfaceKey(target) ||
-                      _normalizeInterfaceKey(section) ==
-                          _normalizeInterfaceKey(target)));
+            resolvedTargetKey != null && keyStr == resolvedTargetKey;
 
         final shouldExpand = isTargetInterface || _expandedInterface == keyStr;
         return Padding(
