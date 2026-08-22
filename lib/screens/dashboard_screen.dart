@@ -1593,8 +1593,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     return RefreshIndicator(
       onRefresh: () => appState.fetchDashboardData(),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
+      child: Builder(
+        builder: (context) {
           final isLandscape =
               MediaQuery.of(context).orientation == Orientation.landscape;
 
@@ -1630,40 +1630,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             );
           } else {
-            // Portrait mode: Fill available height exactly without scrolling
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                return RefreshIndicator(
-                  onRefresh: () => appState.fetchDashboardData(),
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    child: SizedBox(
-                      height: constraints.maxHeight,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 16),
-                            _buildDeviceInfoCard(appState),
-                            const SizedBox(height: 12),
-                            Expanded(
-                              child: _buildRealtimeThroughputCard(appState),
-                            ),
-                            const SizedBox(height: 12),
-                            _buildSystemVitalsCard(appState),
-                            const SizedBox(height: 12),
-                            _buildWirelessNetworksCard(appState),
-                            const SizedBox(height: 12),
-                            _buildInterfaceStatusCards(appState),
-                            const SizedBox(height: 12),
-                          ],
-                        ),
+            // Portrait mode: scroll when the cards exceed the available height
+            return RefreshIndicator(
+              onRefresh: () => appState.fetchDashboardData(),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 16),
+                      _buildDeviceInfoCard(appState),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 240,
+                        child: _buildRealtimeThroughputCard(appState),
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      _buildSystemVitalsCard(appState),
+                      const SizedBox(height: 12),
+                      _buildWirelessNetworksCard(appState),
+                      const SizedBox(height: 12),
+                      _buildInterfaceStatusCards(appState),
+                      const SizedBox(height: 12),
+                    ],
                   ),
-                );
-              },
+                ),
+              ),
             );
           }
         },
