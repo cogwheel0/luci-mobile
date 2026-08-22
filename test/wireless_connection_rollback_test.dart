@@ -5,6 +5,9 @@ import 'package:luci_mobile/services/mock_auth_service.dart';
 import 'package:luci_mobile/state/app_state.dart';
 
 class _FailingRestartApiService extends MockApiService {
+  _FailingRestartApiService({this.failWirelessDelete = false});
+
+  final bool failWirelessDelete;
   final calls = <String>[];
 
   @override
@@ -90,6 +93,9 @@ class _FailingRestartApiService extends MockApiService {
     BuildContext? context,
   }) async {
     calls.add('delete $config.$section');
+    if (failWirelessDelete && config == 'wireless') {
+      throw Exception('forced wireless rollback failure');
+    }
     return [0, {}];
   }
 
@@ -142,5 +148,29 @@ void main() {
       hasLength(2),
     );
     expect(api.calls.last, '/sbin/wifi up radio0');
+  });
+
+  test('failed station rollback retains its committed dependencies', () async {
+    final api = _FailingRestartApiService(failWirelessDelete: true);
+    final state = AppState.forTesting(
+      apiService: api,
+      authService: MockAuthService(),
+    );
+    addTearDown(state.dispose);
+
+    final connected = await state.connectToWirelessNetwork(
+      radioDevice: 'radio0',
+      ssid: 'Test network',
+      encryption: 'psk2',
+      password: 'password123',
+    );
+
+    expect(connected, isFalse);
+    expect(api.calls, contains('delete wireless.wifinet0'));
+    expect(
+      api.calls,
+      isNot(contains('/sbin/uci del_list firewall.@zone[1].network=wwan')),
+    );
+    expect(api.calls, isNot(contains('delete network.wwan')));
   });
 }

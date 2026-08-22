@@ -2257,47 +2257,59 @@ class AppState extends ChangeNotifier {
           });
         }
 
-        if (addedToWan) {
-          await attemptRollback('WAN firewall membership', () async {
-            await _apiService!.systemExec(
-              ip,
-              auth,
-              https,
-              command: '/sbin/uci',
-              params: [
-                'del_list',
-                'firewall.@zone[$wanZoneIndex].network=$staNetworkName',
-              ],
-              context: context?.mounted == true ? context : null,
-            );
-            await _apiService!.uciCommit(
-              ip,
-              auth,
-              https,
-              config: 'firewall',
-              context: context?.mounted == true ? context : null,
-            );
-          });
-        }
+        final canRemoveDependencies =
+            (!createdStation && !updatedStation) || wirelessRolledBack;
+        if (canRemoveDependencies) {
+          if (addedToWan) {
+            await attemptRollback('WAN firewall membership', () async {
+              await _apiService!.systemExec(
+                ip,
+                auth,
+                https,
+                command: '/sbin/uci',
+                params: [
+                  'del_list',
+                  'firewall.@zone[$wanZoneIndex].network=$staNetworkName',
+                ],
+                context: context?.mounted == true ? context : null,
+              );
+              await _apiService!.uciCommit(
+                ip,
+                auth,
+                https,
+                config: 'firewall',
+                context: context?.mounted == true ? context : null,
+              );
+            });
+          }
 
-        if (createdNetwork) {
-          await attemptRollback('network interface $staNetworkName', () async {
-            await _apiService!.uciDelete(
-              ip,
-              auth,
-              https,
-              config: 'network',
-              section: staNetworkName,
-              context: context?.mounted == true ? context : null,
+          if (createdNetwork) {
+            await attemptRollback(
+              'network interface $staNetworkName',
+              () async {
+                await _apiService!.uciDelete(
+                  ip,
+                  auth,
+                  https,
+                  config: 'network',
+                  section: staNetworkName,
+                  context: context?.mounted == true ? context : null,
+                );
+                await _apiService!.uciCommit(
+                  ip,
+                  auth,
+                  https,
+                  config: 'network',
+                  context: context?.mounted == true ? context : null,
+                );
+              },
             );
-            await _apiService!.uciCommit(
-              ip,
-              auth,
-              https,
-              config: 'network',
-              context: context?.mounted == true ? context : null,
-            );
-          });
+          }
+        } else {
+          rollbackErrors.add(
+            'kept $staNetworkName dependencies because wireless section '
+            '$sectionName could not be restored',
+          );
         }
 
         if (restartAttempted && wirelessRolledBack) {
