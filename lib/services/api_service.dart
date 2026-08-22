@@ -414,6 +414,26 @@ class RealApiService implements IApiService {
     required String method,
     Map<String, dynamic>? params,
     BuildContext? context,
+  }) {
+    return _callWithTransport(
+      ipAddress,
+      sysauth,
+      useHttps,
+      object: object,
+      method: method,
+      params: params,
+      context: context,
+    );
+  }
+
+  Future<dynamic> _callWithTransport(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String object,
+    required String method,
+    Map<String, dynamic>? params,
+    BuildContext? context,
     Duration? receiveTimeout,
     CancelToken? cancelToken,
   }) async {
@@ -871,7 +891,7 @@ class RealApiService implements IApiService {
     Logger.info('WiFi scan starting on device: $device');
 
     try {
-      final result = await callWithContext(
+      final result = await _callWithTransport(
         ipAddress,
         sysauth,
         useHttps,
