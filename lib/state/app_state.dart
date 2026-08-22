@@ -36,6 +36,7 @@ class AppState extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   bool? _canReboot;
+  String? _rebootAccessError;
 
   Map<String, dynamic>? _dashboardData;
   bool _isDashboardLoading = false;
@@ -303,6 +304,7 @@ class AppState extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool? get canReboot => _reviewerModeEnabled ? true : _canReboot;
+  String? get rebootAccessError => _rebootAccessError;
 
   void setError(String error) {
     _errorMessage = error;
@@ -400,6 +402,7 @@ class AppState extends ChangeNotifier {
     _isLoading = true;
     _dashboardError = null;
     _canReboot = null;
+    _rebootAccessError = null;
 
     // Clear throughput data when switching routers to prevent mixing data from different routers
     _cancelThroughputTimer();
@@ -467,6 +470,7 @@ class AppState extends ChangeNotifier {
     _isLoading = true;
     _errorMessage = null;
     _canReboot = null;
+    _rebootAccessError = null;
 
     // Clear throughput data when logging in to prevent mixing data from different sessions
     _cancelThroughputTimer();
@@ -560,6 +564,7 @@ class AppState extends ChangeNotifier {
     _dashboardData = null;
     _dashboardError = null;
     _canReboot = null;
+    _rebootAccessError = null;
     _cancelThroughputTimer();
     // Optionally, do not clear routers or selectedRouter
     notifyListeners();
@@ -605,6 +610,7 @@ class AppState extends ChangeNotifier {
               DateTime.now().millisecondsSinceEpoch, // Force UI updates
         };
         _canReboot = true;
+        _rebootAccessError = null;
 
         // Update throughput data with mock network data for reviewer mode
         if (_throughputService != null) {
@@ -667,6 +673,8 @@ class AppState extends ChangeNotifier {
 
     _isDashboardLoading = true;
     _dashboardError = null;
+    _canReboot = null;
+    _rebootAccessError = null;
     notifyListeners();
 
     unawaited(
@@ -957,6 +965,7 @@ class AppState extends ChangeNotifier {
     required int token,
   }) async {
     bool? allowed;
+    String? error;
     try {
       final result = await _apiService!.call(
         ip,
@@ -967,11 +976,16 @@ class AppState extends ChangeNotifier {
         params: {'scope': 'ubus', 'object': 'system', 'function': 'reboot'},
       );
       allowed = rpcAccessAllowed(result);
+      if (allowed == null) {
+        error = 'Could not check administrator access. Refresh to retry.';
+      }
     } catch (e) {
       Logger.warning('Could not check reboot access: $e');
+      error = 'Could not check administrator access. Refresh to retry.';
     }
     if (token != _sessionToken) return;
     _canReboot = allowed;
+    _rebootAccessError = error;
     notifyListeners();
   }
 
@@ -1633,14 +1647,44 @@ class AppState extends ChangeNotifier {
   /// as wireless if their MAC appears in any router's associated stations list.
   Future<List<Client>> fetchAggregatedClients() async {
     try {
-      // Build a union of wireless MACs across all routers
-      final wirelessMacs = await fetchAllAssociatedWirelessMacsAggregated();
+      var wirelessMacs = <String>{};
+      Object? wirelessError;
+      StackTrace? wirelessStack;
+      try {
+        wirelessMacs = await fetchAllAssociatedWirelessMacsAggregated();
+      } catch (e, stack) {
+        wirelessError = e;
+        wirelessStack = stack;
+      }
+
+      var leases = <Map<String, dynamic>>[];
+      Object? leaseError;
+      StackTrace? leaseStack;
+      try {
+        leases = await fetchAggregatedDhcpLeases();
+      } catch (e, stack) {
+        leaseError = e;
+        leaseStack = stack;
+      }
+
+      if (wirelessError != null) {
+        if (leases.isEmpty) {
+          Error.throwWithStackTrace(wirelessError, wirelessStack!);
+        }
+        Logger.warning(
+          'Using DHCP clients without wireless data: $wirelessError',
+        );
+      }
+      if (leaseError != null) {
+        if (wirelessMacs.isEmpty) {
+          Error.throwWithStackTrace(leaseError, leaseStack!);
+        }
+        Logger.warning('Using wireless clients without DHCP data: $leaseError');
+      }
+
       final normalizedWireless = wirelessMacs
           .map((m) => m.toUpperCase().replaceAll('-', ':'))
           .toSet();
-
-      // Aggregate leases across routers
-      final leases = await fetchAggregatedDhcpLeases();
 
       // Convert to Client models with connection type
       final clients = <String, Client>{}; // key by normalized MAC
@@ -1764,34 +1808,67 @@ class AppState extends ChangeNotifier {
       }
       final router = _routerService!.selectedRouter!;
 
-      // Get wireless MACs for this router
-      final stationsMap = await _apiService!
-          .fetchAllAssociatedWirelessMacsWithContext(
-            ipAddress: router.ipAddress,
-            sysauth: _authService!.sysauth!,
-            useHttps: router.useHttps,
-          );
       final wireless = <String>{};
-      stationsMap.forEach(
-        (_, s) => wireless.addAll(s.map((m) => m.toLowerCase())),
-      );
+      Object? wirelessError;
+      StackTrace? wirelessStack;
+      try {
+        final stationsMap = await _apiService!
+            .fetchAllAssociatedWirelessMacsWithContext(
+              ipAddress: router.ipAddress,
+              sysauth: _authService!.sysauth!,
+              useHttps: router.useHttps,
+            );
+        stationsMap.forEach(
+          (_, stations) =>
+              wireless.addAll(stations.map((mac) => mac.toLowerCase())),
+        );
+      } catch (e, stack) {
+        wirelessError = e;
+        wirelessStack = stack;
+      }
 
-      // Get DHCP leases for this router
-      final callRes = await _apiService!.call(
-        router.ipAddress,
-        _authService!.sysauth!,
-        router.useHttps,
-        object: 'luci-rpc',
-        method: 'getDHCPLeases',
-        params: {},
-      );
       final leases = <Map<String, dynamic>>[];
-      if (callRes is List && callRes.length > 1 && callRes[0] == 0) {
+      Object? leaseError;
+      StackTrace? leaseStack;
+      try {
+        final callRes = await _apiService!.call(
+          router.ipAddress,
+          _authService!.sysauth!,
+          router.useHttps,
+          object: 'luci-rpc',
+          method: 'getDHCPLeases',
+          params: {},
+        );
+        if (callRes is! List || callRes.length < 2 || callRes[0] != 0) {
+          throw const RpcException(
+            object: 'luci-rpc',
+            method: 'getDHCPLeases',
+            detail: 'invalid response',
+          );
+        }
         final data = callRes[1] as Map<String, dynamic>;
         leases.addAll(
           (data['dhcp_leases'] as List<dynamic>? ?? [])
               .cast<Map<String, dynamic>>(),
         );
+      } catch (e, stack) {
+        leaseError = e;
+        leaseStack = stack;
+      }
+
+      if (wirelessError != null) {
+        if (leases.isEmpty) {
+          Error.throwWithStackTrace(wirelessError, wirelessStack!);
+        }
+        Logger.warning(
+          'Using DHCP clients without wireless data: $wirelessError',
+        );
+      }
+      if (leaseError != null) {
+        if (wireless.isEmpty) {
+          Error.throwWithStackTrace(leaseError, leaseStack!);
+        }
+        Logger.warning('Using wireless clients without DHCP data: $leaseError');
       }
 
       // Normalize wireless MACs for consistent lookup
@@ -1959,6 +2036,11 @@ class AppState extends ChangeNotifier {
               successfulRouters++;
               return leases;
             }
+            throw const RpcException(
+              object: 'luci-rpc',
+              method: 'getDHCPLeases',
+              detail: 'invalid response',
+            );
           }
         } catch (e, stack) {
           firstError ??= e;

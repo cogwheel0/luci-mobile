@@ -522,10 +522,21 @@ class RealApiService implements IApiService {
       if (wirelessResult is List &&
           wirelessResult.length > 1 &&
           wirelessResult[0] == 0) {
-        final wirelessData = wirelessResult[1] as Map<String, dynamic>?;
-        if (wirelessData == null) return {};
+        final data = wirelessResult[1];
+        if (data is! Map<String, dynamic>) {
+          throw const RpcException(
+            object: 'luci-rpc',
+            method: 'getWirelessDevices',
+            detail: 'invalid response',
+          );
+        }
+        final wirelessData = data;
 
         final result = <String, Set<String>>{};
+        Object? firstError;
+        StackTrace? firstStack;
+        var attempted = 0;
+        var succeeded = 0;
 
         // For each wireless radio, get the associated stations
         for (final entry in wirelessData.entries) {
@@ -541,24 +552,37 @@ class RealApiService implements IApiService {
               if (config is Map && config['mode'] == 'sta') continue;
               final ifname = iface['ifname'] as String?;
               if (ifname != null) {
-                // Fetch associated stations for this interface
-                final stations = await fetchAssociatedStationsWithContext(
-                  ipAddress: ipAddress,
-                  sysauth: sysauth,
-                  useHttps: useHttps,
-                  interface: ifname,
-                  context: context?.mounted == true ? context : null,
-                );
-                if (stations.isNotEmpty) {
-                  result[ifname] = stations.toSet();
+                attempted++;
+                try {
+                  final stations = await fetchAssociatedStationsWithContext(
+                    ipAddress: ipAddress,
+                    sysauth: sysauth,
+                    useHttps: useHttps,
+                    interface: ifname,
+                    context: context?.mounted == true ? context : null,
+                  );
+                  succeeded++;
+                  if (stations.isNotEmpty) {
+                    result[ifname] = stations.toSet();
+                  }
+                } catch (e, stack) {
+                  firstError ??= e;
+                  firstStack ??= stack;
                 }
               }
             }
           }
         }
+        if (attempted > 0 && succeeded == 0 && firstError != null) {
+          Error.throwWithStackTrace(firstError, firstStack!);
+        }
         return result;
       }
-      return {};
+      throw const RpcException(
+        object: 'luci-rpc',
+        method: 'getWirelessDevices',
+        detail: 'invalid response',
+      );
     } catch (e, stack) {
       Logger.exception('Failed to fetch all associated stations', e, stack);
       rethrow;
@@ -598,7 +622,11 @@ class RealApiService implements IApiService {
               .toList();
         }
       }
-      return [];
+      throw const RpcException(
+        object: 'iwinfo',
+        method: 'assoclist',
+        detail: 'invalid response',
+      );
     } catch (e, stack) {
       Logger.exception('Failed to fetch associated stations', e, stack);
       rethrow;

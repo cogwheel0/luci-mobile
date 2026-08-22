@@ -310,21 +310,29 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 final canReboot = ref.watch(
                   appStateProvider.select((state) => state.canReboot),
                 );
+                final accessError = ref.watch(
+                  appStateProvider.select((state) => state.rebootAccessError),
+                );
                 final rebootEnabled = canReboot == true && !isRebooting;
                 return _MoreScreenSection(
                   tiles: [
                     _buildMoreTile(
                       context,
-                      icon: canReboot == false
+                      icon: accessError != null
+                          ? Icons.error_outline
+                          : canReboot == false
                           ? Icons.lock_outline
                           : Icons.restart_alt,
                       iconColor: Theme.of(context).colorScheme.primary,
                       title: 'Reboot Router',
-                      subtitle: switch (canReboot) {
-                        false => 'View only — administrator access required',
-                        null => 'Checking administrator access…',
-                        true => 'Perform a system restart',
-                      },
+                      subtitle:
+                          accessError ??
+                          switch (canReboot) {
+                            false =>
+                              'View only — administrator access required',
+                            null => 'Checking administrator access…',
+                            true => 'Perform a system restart',
+                          },
                       onTap: rebootEnabled
                           ? () => _showRebootDialog(context)
                           : null,
