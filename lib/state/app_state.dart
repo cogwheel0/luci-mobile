@@ -1551,7 +1551,7 @@ class AppState extends ChangeNotifier {
     final ip = _authService!.ipAddress!;
     final auth = _authService!.sysauth!;
     final https = _authService!.useHttps;
-    // Disable — failure here is acceptable (radio was already up).
+    // Persist and apply the disabled state before re-enabling the radio.
     try {
       await _apiService!.uciSet(
         ip,
@@ -1567,6 +1567,14 @@ class AppState extends ChangeNotifier {
         auth,
         https,
         config: 'wireless',
+        context: context?.mounted == true ? context : null,
+      );
+      await _apiService!.systemExec(
+        ip,
+        auth,
+        https,
+        command: '/sbin/wifi',
+        params: ['down', radioName],
         context: context?.mounted == true ? context : null,
       );
     } catch (e) {
@@ -1588,6 +1596,14 @@ class AppState extends ChangeNotifier {
       values: {'disabled': '0'},
       context: context?.mounted == true ? context : null,
     );
+    await _apiService!.systemExec(
+      ip,
+      auth,
+      https,
+      command: '/sbin/wifi',
+      params: ['up', radioName],
+      context: context?.mounted == true ? context : null,
+    );
     await _apiService!.uciCommit(
       ip,
       auth,
@@ -1605,7 +1621,7 @@ class AppState extends ChangeNotifier {
 
   /// Helper: restarts all known radios via UCI disable/enable cycle.
   /// Used after operations that need wifi to reload (toggle, modify, delete).
-  /// Never throws.
+  /// Propagates restart failures so callers cannot report stale runtime state.
   Future<void> _wifiReload({BuildContext? context}) async {
     // Get list of radios from dashboard data
     final wirelessData =
@@ -2223,10 +2239,8 @@ class AppState extends ChangeNotifier {
   /// Deletes a wifi-iface UCI section.
   ///
   /// [uciSection] is the UCI section name to remove.
-  /// [mode] is the interface mode ('ap' or 'sta') - if 'ap', WiFi will reload.
   Future<bool> deleteWirelessInterface(
     String uciSection, {
-    String mode = 'ap',
     BuildContext? context,
   }) async {
     if (_reviewerModeEnabled) {
@@ -2257,19 +2271,7 @@ class AppState extends ChangeNotifier {
         context: context?.mounted == true ? context : null,
       );
 
-      // Only reload WiFi for AP mode - STA deletion doesn't require radio restart
-      if (mode.toLowerCase().contains('sta') ||
-          mode.toLowerCase().contains('client') ||
-          mode.toLowerCase() == 'station') {
-        // STA mode - just refresh data, no radio restart
-        await Future.delayed(const Duration(seconds: 2));
-        try {
-          await fetchDashboardData();
-        } catch (_) {}
-      } else {
-        // AP mode - restart WiFi
-        await _wifiReload(context: context?.mounted == true ? context : null);
-      }
+      await _wifiReload(context: context?.mounted == true ? context : null);
 
       return true;
     } catch (e, stack) {

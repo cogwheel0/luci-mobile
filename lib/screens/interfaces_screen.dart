@@ -2228,7 +2228,6 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
     final appState = ref.read(appStateProvider);
     final success = await appState.deleteWirelessInterface(
       widget.uciSection,
-      mode: widget.mode,
       context: context,
     );
 
