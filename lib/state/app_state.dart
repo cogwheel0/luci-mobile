@@ -37,6 +37,7 @@ class AppState extends ChangeNotifier {
   String? _errorMessage;
   bool? _canReboot;
   String? _rebootAccessError;
+  int _rebootAccessRequestId = 0;
 
   Map<String, dynamic>? _dashboardData;
   bool _isDashboardLoading = false;
@@ -675,6 +676,7 @@ class AppState extends ChangeNotifier {
     _dashboardError = null;
     _canReboot = null;
     _rebootAccessError = null;
+    final rebootAccessRequestId = ++_rebootAccessRequestId;
     notifyListeners();
 
     unawaited(
@@ -683,6 +685,7 @@ class AppState extends ChangeNotifier {
         sysauth: sysauth,
         useHttps: useHttps,
         token: token,
+        requestId: rebootAccessRequestId,
       ),
     );
 
@@ -963,6 +966,7 @@ class AppState extends ChangeNotifier {
     required String sysauth,
     required bool useHttps,
     required int token,
+    required int requestId,
   }) async {
     bool? allowed;
     String? error;
@@ -983,7 +987,7 @@ class AppState extends ChangeNotifier {
       Logger.warning('Could not check reboot access: $e');
       error = 'Could not check administrator access. Refresh to retry.';
     }
-    if (token != _sessionToken) return;
+    if (token != _sessionToken || requestId != _rebootAccessRequestId) return;
     _canReboot = allowed;
     _rebootAccessError = error;
     notifyListeners();
