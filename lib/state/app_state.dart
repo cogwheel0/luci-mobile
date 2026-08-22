@@ -1034,7 +1034,8 @@ class AppState extends ChangeNotifier {
       // A newer session started; don't surface this fetch's error.
       if (token != _sessionToken) return;
       final status = e is DioException ? e.response?.statusCode : null;
-      final retryable = e is DioException &&
+      final retryable =
+          e is DioException &&
           (status == 401 ||
               status == 403 ||
               e.type == DioExceptionType.connectionError ||
@@ -1059,11 +1060,12 @@ class AppState extends ChangeNotifier {
           ),
         );
         if (token != _sessionToken) return;
-        if (result.success &&
-            result.usedAddressIndex != router.activeAddressIndex) {
-          await updateRouter(
-            router.copyWith(activeAddressIndex: result.usedAddressIndex),
-          );
+        if (result.success) {
+          if (result.usedAddressIndex != router.activeAddressIndex) {
+            await updateRouter(
+              router.copyWith(activeAddressIndex: result.usedAddressIndex),
+            );
+          }
           _isDashboardLoading = false;
           return await fetchDashboardData(isRetryAfterFallback: true);
         }
@@ -1269,7 +1271,8 @@ class AppState extends ChangeNotifier {
     }
 
     // Use the address that actually succeeded during login
-    final ip = _authService!.ipAddress ?? _routerService!.selectedRouter!.ipAddress;
+    final ip =
+        _authService!.ipAddress ?? _routerService!.selectedRouter!.ipAddress;
     final useHttps = _authService!.useHttps;
 
     try {
@@ -2800,7 +2803,8 @@ class AppState extends ChangeNotifier {
       }
 
       // Use the address that actually succeeded during login
-      final ip = _authService!.ipAddress ?? _routerService!.selectedRouter!.ipAddress;
+      final ip =
+          _authService!.ipAddress ?? _routerService!.selectedRouter!.ipAddress;
       final useHttps = _authService!.useHttps;
 
       final stationsMap = await _apiService!
