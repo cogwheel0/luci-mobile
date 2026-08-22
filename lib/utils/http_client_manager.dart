@@ -80,6 +80,10 @@ class HttpClientManager {
   // clear can never resurrect a removed pin, and vice versa.
   Future<void> _pinMutationQueue = Future<void>.value();
 
+  /// Bumped by every clear so an acceptance dialog that was open during
+  /// the clear can detect it and refuse to persist afterwards.
+  int _pinGeneration = 0;
+
   Future<T> _serializePinMutation<T>(Future<T> Function() action) {
     final op = _pinMutationQueue.then((_) => action());
     _pinMutationQueue = op.then((_) {}, onError: (_) {});
@@ -287,6 +291,7 @@ class HttpClientManager {
   Future<void> clearAcceptedCertificates() {
     return _serializePinMutation(() async {
       _pinsMutated = true;
+      _pinGeneration++;
       _acceptedCertFingerprints.clear();
 
       // Clear all cached HTTP clients
@@ -307,6 +312,7 @@ class HttpClientManager {
   Future<void> clearCertificatesForHost(String host) {
     return _serializePinMutation(() async {
       _pinsMutated = true;
+      _pinGeneration++;
       final hostname = _normalizePinHost(_extractHostname(host));
       _acceptedCertFingerprints.removeWhere((key, value) {
         final parsed = _parsePinKey(key);
@@ -381,6 +387,10 @@ class HttpClientManager {
       }
 
       if (!context.mounted) return false;
+      // Snapshot the generation before showing the dialog: if a clear runs
+      // while the dialog is open, the user's approval must be rejected
+      // instead of restoring a pin the user just revoked.
+      final generation = _pinGeneration;
       final result = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
@@ -498,9 +508,17 @@ class HttpClientManager {
 
       if (result == true) {
         // Pin the accepted certificate's fingerprint persistently, in
-        // order with load/clear operations.
+        // order with load/clear operations - unless a clear ran while the
+        // dialog was open, in which case the approval is stale.
+        if (generation != _pinGeneration) {
+          Logger.info(
+            'Certificate acceptance discarded: pins changed while dialog was open',
+          );
+          return false;
+        }
         await _serializePinMutation(() async {
           _pinsMutated = true;
+          _pinGeneration++;
           _acceptedCertFingerprints[certKey] = fingerprint;
           await _saveAcceptedCertificates();
         });
