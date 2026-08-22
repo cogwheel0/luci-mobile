@@ -448,13 +448,7 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
                         children: [
                           Text(
                             widget.client.hostname,
-                            style: Theme.of(context).textTheme.titleSmall!
-                                .copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface,
-                                ),
+                            style: LuciTextStyles.cardTitle(context),
                             semanticsLabel:
                                 'Client hostname: ${widget.client.hostname}',
                             maxLines: 1,
@@ -546,23 +540,13 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
       fgColor = colorScheme.onSurfaceVariant;
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: fgColor),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(color: fgColor),
-          ),
-        ],
-      ),
+    return Chip(
+      label: Text(label),
+      avatar: Icon(icon, size: 16, color: fgColor),
+      backgroundColor: bgColor,
+      labelStyle: theme.textTheme.labelSmall?.copyWith(color: fgColor),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
   }
 

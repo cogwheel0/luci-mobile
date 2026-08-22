@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:flutter/services.dart';
+import 'package:luci_mobile/models/glinet_data.dart';
 import 'package:luci_mobile/models/interface.dart';
 import 'package:luci_mobile/utils/wifi_utils.dart';
 import 'dart:math';
@@ -568,9 +569,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
       }).toList();
 
       // Enrich Tailscale interface with GL.iNet API data
-      final glinetExtras =
-          appState.dashboardData?['glinetExtras'] as Map<String, dynamic>?;
-      if (glinetExtras != null) {
+      final glInetData = appState.dashboardData?['glinet'] as GlInetData?;
+      if (glInetData?.tailscaleIp != null) {
         interfacesList = interfacesList.map((iface) {
           if (iface.name.toLowerCase() == 'tailscale' &&
               iface.ipAddress == null) {
@@ -580,7 +580,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               protocol: 'tailscale',
               uptime: iface.uptime,
               device: iface.device,
-              ipAddress: glinetExtras['tailscale_ip'] as String?,
+              ipAddress: glInetData!.tailscaleIp,
               netmask: null,
               gateway: null,
               dnsServers: iface.dnsServers,
@@ -628,11 +628,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     final dashboardData = appState.dashboardData;
     final wirelessData = dashboardData?['wireless'] as Map<String, dynamic>?;
     final uciWirelessConfig = dashboardData?['uciWirelessConfig'];
-    final glinetChannels =
-        dashboardData?['glinetChannels'] as Map<String, int>?;
-    final glinetExtras =
-        dashboardData?['glinetExtras'] as Map<String, dynamic>?;
-    final glinetBands = glinetExtras?['wifiBands'] as Map<String, String>?;
+    final glInetData = dashboardData?['glinet'] as GlInetData?;
     final interfacesList = <Map<String, dynamic>>[];
 
     final uciRadios = <String, Map>{};
@@ -681,14 +677,15 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             final mode = _uciString(config['mode']).toUpperCase().isNotEmpty
                 ? _uciString(config['mode']).toUpperCase()
                 : (iwinfo['mode']?.toString().toUpperCase() ?? 'N/A');
+            final glInetRadio = glInetData?.radios[radioName];
             final uciCh = _uciString(config['channel']);
             final channel =
                 iwinfo['channel']?.toString() ??
                 (uciCh.isNotEmpty ? uciCh : null) ??
-                glinetChannels?[radioName]?.toString() ??
+                glInetRadio?.channel?.toString() ??
                 'N/A';
             final bandStr =
-                glinetBands?[radioName] ?? (config['band'] as String? ?? '');
+                glInetRadio?.band ?? config['band']?.toString() ?? '';
             final bandLabel = formatWifiBand(bandStr);
             final subtitleParts = <String>[mode];
             if (bandLabel.isNotEmpty) subtitleParts.add(bandLabel);

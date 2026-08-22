@@ -5,6 +5,7 @@ import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_animation_system.dart';
+import 'package:luci_mobile/models/glinet_data.dart';
 import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/utils/wifi_utils.dart';
 
@@ -119,9 +120,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       final percent = (loadAvg / cores * 100).clamp(0, 100).toInt();
       return '$percent%';
     }
-    // Non-GL.iNet: show raw load average (original behavior was broken,
-    // this is the standard way to display load average)
-    return loadAvg.toStringAsFixed(2);
+    final percent = (loadAvg * 100).clamp(0, 100);
+    return '${percent.toStringAsFixed(0)}%';
   }
 
   String _deriveReleaseChannel(Map<String, dynamic>? release) {
@@ -673,9 +673,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final uptimeValue = uptime != null ? _formatUptime(uptime) : 'N/A';
 
     final cpuLoad = sysInfo?['load'] as List<dynamic>?;
-    final glinetExtras =
-        appState.dashboardData?['glinetExtras'] as Map<String, dynamic>?;
-    final cpuCores = glinetExtras?['cpu_cores'] as int?;
+    final glInetData = appState.dashboardData?['glinet'] as GlInetData?;
+    final cpuCores = glInetData?.cpuCores;
     final cpuLoadValue = cpuLoad != null
         ? _formatCpuLoad(cpuLoad, cores: cpuCores)
         : 'N/A';
@@ -688,10 +687,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ? '${(usedMem / totalMem * 100).toStringAsFixed(0)}%'
         : 'N/A';
 
-    // GL.iNet extras: CPU temperature, fan (glinetExtras already declared above)
-    final cpuTemp = glinetExtras?['cpu_temperature'] as int?;
-    final fanActive = glinetExtras?['fan_active'] as bool?;
-    final fanSpeed = glinetExtras?['fan_speed'] as int?;
+    final cpuTemp = glInetData?.cpuTemperature;
+    final fanActive = glInetData?.fanActive;
+    final fanSpeed = glInetData?.fanSpeed;
 
     final vitals = <Widget>[
       Expanded(
@@ -715,7 +713,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           child: _buildVitalsColumn(
             context,
             label: 'CPU Temp',
-            value: '$cpuTemp\u00B0C',
+            value: '${cpuTemp.toStringAsFixed(1)}\u00B0C',
           ),
         ),
       );
@@ -727,7 +725,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           child: _buildVitalsColumn(
             context,
             label: 'Fan',
-            value: fanActive ? '$fanSpeed RPM' : 'Off',
+            value: fanActive
+                ? (fanSpeed == null ? 'On' : '$fanSpeed RPM')
+                : 'Off',
           ),
         ),
       );
@@ -840,6 +840,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final wirelessRadios =
         appState.dashboardData?['wireless'] as Map<String, dynamic>?;
     final uciWirelessConfig = appState.dashboardData?['uciWirelessConfig'];
+    final glInetData = appState.dashboardData?['glinet'] as GlInetData?;
 
     // Track which interfaces we've already added from runtime data
     final addedInterfaces = <String>{};
@@ -873,23 +874,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             }
 
             final isEnabled = !(config['disabled'] as bool? ?? false);
-            // Try iwinfo → config → GL.iNet API channels → N/A
-            final glinetChannels =
-                appState.dashboardData?['glinetChannels'] as Map<String, int>?;
-            final glinetExtras =
-                appState.dashboardData?['glinetExtras']
-                    as Map<String, dynamic>?;
-            final glinetBands =
-                glinetExtras?['wifiBands'] as Map<String, String>?;
+            final glInetRadio = glInetData?.radios[radioName];
             final channel =
                 (iwinfo['channel'] ??
                         config['channel'] ??
-                        glinetChannels?[radioName] ??
+                        glInetRadio?.channel ??
                         'N/A')
                     .toString();
-            // Band label from GL.iNet API (e.g., "2g" → "2.4 GHz")
             final bandStr =
-                glinetBands?[radioName] ?? config['band'] as String? ?? '';
+                glInetRadio?.band ?? config['band']?.toString() ?? '';
             final bandLabel = formatWifiBand(bandStr);
             final signal = iwinfo['signal'] as int?;
 

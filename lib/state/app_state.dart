@@ -11,9 +11,10 @@ import 'package:luci_mobile/services/throughput_service.dart';
 import 'package:luci_mobile/models/client.dart';
 import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/models/dashboard_preferences.dart';
+import 'package:luci_mobile/models/glinet_data.dart';
 import 'package:luci_mobile/services/interfaces/auth_service_interface.dart';
 import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
-import 'package:luci_mobile/services/glinet_api_service.dart';
+import 'package:luci_mobile/services/interfaces/glinet_api_service_interface.dart';
 import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/service_factory.dart';
 import 'package:luci_mobile/config/app_config.dart';
@@ -27,7 +28,7 @@ class AppState extends ChangeNotifier {
   late final SecureStorageService _secureStorageService;
   IApiService? _apiService;
   IAuthService? _authService;
-  GlInetApiService? _glInetService;
+  IGlInetApiService? _glInetService;
   RouterService? _routerService;
   ThroughputService? _throughputService;
   final HttpClientManager _httpClientManager = HttpClientManager();
@@ -125,8 +126,10 @@ class AppState extends ChangeNotifier {
   AppState.forTesting({
     required IApiService apiService,
     required IAuthService authService,
+    IGlInetApiService? glInetApiService,
   }) : _apiService = apiService,
-       _authService = authService;
+       _authService = authService,
+       _glInetService = glInetApiService;
 
   static AppState get instance {
     return _instance ??= AppState._();
@@ -210,6 +213,7 @@ class AppState extends ChangeNotifier {
     final factory = ServiceContainer.instance.factory;
     _authService = factory.createAuthService();
     _apiService = factory.createApiService();
+    _glInetService = factory.createGlInetApiService();
     _routerService = factory.createRouterService();
     _throughputService = factory.createThroughputService();
   }
@@ -925,40 +929,27 @@ class AppState extends ChangeNotifier {
         specificInterface: specificInterface,
       );
 
-      // GL.iNet supplementary data (WiFi channels, CPU temp, fan)
-      Map<String, dynamic>? glinetExtras;
-      Map<String, int>? glinetChannels;
-      final model = boardInfoData?['model']?.toString() ?? '';
-      if (model.contains('GL-') || model.contains('GL.iNet')) {
-        try {
-          _glInetService ??= GlInetApiService(_httpClientManager);
-          final password = await _secureStorageService.readValue('password');
-          if (password != null) {
-            final glSid = await _glInetService!.login(ip, password, useHttps);
-            if (glSid != null) {
-              final futures = await Future.wait([
-                _glInetService!.getWifiStatus(ip, useHttps),
-                _glInetService!.getSystemExtras(ip, useHttps),
-                _glInetService!.getClients(ip, useHttps),
-              ]);
-              final wifiStatus =
-                  futures[0] as Map<String, Map<String, dynamic>>;
-              glinetChannels = wifiStatus.map(
-                (k, v) => MapEntry(k, v['channel'] as int? ?? 0),
-              );
-              glinetExtras = futures[1];
-              glinetExtras['wifiBands'] = wifiStatus.map(
-                (k, v) => MapEntry(k, v['band'] as String? ?? ''),
-              );
-              glinetExtras['clients'] = futures[2];
-              // Determine CPU core count from model name
-              glinetExtras['cpu_cores'] = _getGlInetCoreCount(model);
-            }
+      GlInetData? glInetData;
+      final routerModel = boardInfoData?['model']?.toString() ?? '';
+      if (routerModel.contains('GL-') || routerModel.contains('GL.iNet')) {
+        final password = _routerService?.selectedRouter?.password;
+        if (password != null) {
+          try {
+            glInetData = await _glInetService?.fetchData(
+              ip,
+              password,
+              useHttps,
+            );
+            glInetData = glInetData?.withCpuCores(
+              _getGlInetCoreCount(routerModel),
+            );
+          } catch (error) {
+            Logger.warning('GL.iNet supplementary fetch failed: $error');
           }
-        } catch (e) {
-          Logger.warning('GL.iNet supplementary fetch failed: $e');
         }
       }
+
+      if (token != _sessionToken) return;
 
       _dashboardData = {
         'boardInfo': boardInfoData,
@@ -970,10 +961,7 @@ class AppState extends ChangeNotifier {
         'wan': _extractWanData(interfaceDump),
         'uciWirelessConfig': uciWirelessConfig,
         'wireguard': wireguardData,
-        if (glinetChannels != null) 'glinetChannels': glinetChannels,
-        if (glinetExtras != null) 'glinetExtras': glinetExtras,
-        if (glinetExtras?['clients'] != null)
-          'glinetClients': glinetExtras!['clients'],
+        'glinet': ?glInetData,
         '_lastUpdated':
             DateTime.now().millisecondsSinceEpoch, // Force UI updates
       };
@@ -2982,24 +2970,23 @@ class AppState extends ChangeNotifier {
 
   /// Enrich client map with GL.iNet API data (band, online, device class).
   void _enrichClientsWithGlInet(Map<String, Client> clients) {
-    final glinetClients =
-        _dashboardData?['glinetClients'] as Map<String, Map<String, dynamic>>?;
+    final glinetClients = (_dashboardData?['glinet'] as GlInetData?)?.clients;
     if (glinetClients == null) return;
 
     for (final macNorm in clients.keys.toList()) {
       final glData = glinetClients[macNorm.toLowerCase()];
       if (glData != null) {
-        final iface = glData['iface'] as String?;
-        final isOnline = glData['online'] as bool?;
-        final deviceClass = glData['class'] as String?;
+        final iface = glData.wifiBand;
+        final isOnline = glData.online;
+        final deviceClass = glData.deviceClass;
         final connType = iface != null
             ? ConnectionType.wireless
             : (isOnline == true
                   ? ConnectionType.wired
                   : clients[macNorm]!.connectionType);
         // Prefer GL.iNet alias > GL.iNet name > existing hostname
-        final alias = glData['alias'] as String?;
-        final glName = glData['name'] as String?;
+        final alias = glData.alias;
+        final glName = glData.name;
         final currentHostname = clients[macNorm]!.hostname;
         final bestName = (alias != null && alias.isNotEmpty)
             ? alias
