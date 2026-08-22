@@ -2004,6 +2004,20 @@ class AppState extends ChangeNotifier {
           if (!isDuplicate) {
             Logger.exception(
               'Failed to create network interface $staNetworkName; aborting connect', e, StackTrace.current);
+            // Roll back the wifi-iface section that was just staged so a
+            // subsequent wireless commit cannot activate an orphaned station
+            // that references the missing network interface.
+            try {
+              await _apiService!.uciDelete(
+                ip, auth, https,
+                config: 'wireless',
+                section: sectionName,
+                context: context,
+              );
+              Logger.info('Rolled back staged wifi-iface section: $sectionName');
+            } catch (rollbackErr) {
+              Logger.warning('Could not roll back wifi-iface $sectionName: $rollbackErr');
+            }
             _dashboardError = 'Failed to create network interface: $e';
             notifyListeners();
             return false;
