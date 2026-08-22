@@ -13,6 +13,102 @@ class LoginResult {
   LoginResult({required this.token, required this.actualUseHttps});
 }
 
+class RpcException implements Exception {
+  final int? status;
+  final String object;
+  final String method;
+  final String? detail;
+
+  const RpcException({
+    required this.object,
+    required this.method,
+    this.status,
+    this.detail,
+  });
+
+  @override
+  String toString() {
+    final call = '$object.$method';
+    final unavailable =
+        status == 3 ||
+        status == 4 ||
+        status == 8 ||
+        detail?.toLowerCase().contains('not found') == true ||
+        detail?.toLowerCase().contains('not supported') == true;
+    if (unavailable && object == 'luci-rpc') {
+      return 'Router RPC support is missing: $call is unavailable. Install '
+          'rpcd-mod-luci, restart rpcd, then reconnect.';
+    }
+    if (unavailable && object == 'iwinfo') {
+      return 'Wireless client support is missing: $call is unavailable. '
+          'Install rpcd-mod-iwinfo, restart rpcd, then refresh.';
+    }
+    if (status == 6 ||
+        detail?.toLowerCase().contains('access denied') == true) {
+      return 'This account does not have permission for $call. Sign in with '
+          'an administrator account or grant the required RPC access.';
+    }
+
+    final reason = switch (status) {
+      1 => 'invalid command',
+      2 => 'invalid argument',
+      3 => 'method not found',
+      4 => 'object not found',
+      5 => 'no data',
+      7 => 'timed out',
+      8 => 'not supported',
+      9 => 'unknown error',
+      10 => 'connection failed',
+      _ => detail ?? 'unknown error',
+    };
+    return 'Router RPC call $call failed: ${detail ?? reason}.';
+  }
+}
+
+/// Validates the ubus `[status, data]` envelope while preserving it for
+/// existing callers.
+dynamic validateRpcResult(
+  dynamic result, {
+  required String object,
+  required String method,
+}) {
+  if (result is! List || result.isEmpty) return [0, result];
+
+  final status = result.first;
+  if (status is num && status.toInt() != 0) {
+    throw RpcException(
+      object: object,
+      method: method,
+      status: status.toInt(),
+      detail: result.length > 1 ? result[1]?.toString() : null,
+    );
+  }
+  return result;
+}
+
+bool? rpcAccessAllowed(dynamic result) {
+  if (result is List && result.length > 1 && result[0] == 0) {
+    final data = result[1];
+    if (data is Map && data['access'] is bool) return data['access'] as bool;
+  }
+  return null;
+}
+
+String userFacingApiError(Object error) {
+  if (error is RpcException) return error.toString();
+  if (error is DioException) {
+    final status = error.response?.statusCode;
+    if (status == 401 || status == 403) {
+      return 'The router rejected this session. Reconnect and check the '
+          'account\'s RPC permissions.';
+    }
+    if (status != null) return 'The router returned HTTP $status.';
+    return 'Could not connect to the router. Check its address and your '
+        'network connection, then try again.';
+  }
+  return error.toString().replaceFirst('Exception: ', '');
+}
+
 Uri _buildUrl(String ipAddress, bool useHttps, String path) {
   final scheme = useHttps ? 'https' : 'http';
   // Handle cases where ipAddress might already include a scheme
@@ -322,18 +418,26 @@ class RealApiService implements IApiService {
         final decoded = response.data is String
             ? jsonDecode(response.data as String)
             : response.data;
+        if (decoded is! Map) {
+          throw RpcException(
+            object: object,
+            method: method,
+            detail: 'invalid response',
+          );
+        }
         if (decoded['error'] != null) {
-          throw Exception('RPC error: ${decoded['error']['message']}');
+          final error = decoded['error'];
+          throw RpcException(
+            object: object,
+            method: method,
+            detail: error is Map ? error['message']?.toString() : '$error',
+          );
         }
-        // Return in LuCI RPC format: [status, data]
-        final result = decoded['result'];
-        if (result is List && result.isNotEmpty) {
-          // Result is already in [status, data] format
-          return result;
-        } else {
-          // Wrap single result in format: [0, data]
-          return [0, result];
-        }
+        return validateRpcResult(
+          decoded['result'],
+          object: object,
+          method: method,
+        );
       } else {
         throw Exception('Failed to call RPC: HTTP ${response.statusCode}');
       }
@@ -433,6 +537,8 @@ class RealApiService implements IApiService {
 
           for (final iface in interfaces) {
             if (iface is Map<String, dynamic>) {
+              final config = iface['config'];
+              if (config is Map && config['mode'] == 'sta') continue;
               final ifname = iface['ifname'] as String?;
               if (ifname != null) {
                 // Fetch associated stations for this interface
@@ -455,7 +561,7 @@ class RealApiService implements IApiService {
       return {};
     } catch (e, stack) {
       Logger.exception('Failed to fetch all associated stations', e, stack);
-      return {};
+      rethrow;
     }
   }
 
@@ -495,7 +601,7 @@ class RealApiService implements IApiService {
       return [];
     } catch (e, stack) {
       Logger.exception('Failed to fetch associated stations', e, stack);
-      return [];
+      rethrow;
     }
   }
 

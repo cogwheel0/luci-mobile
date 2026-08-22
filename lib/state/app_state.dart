@@ -35,6 +35,7 @@ class AppState extends ChangeNotifier {
 
   bool _isLoading = false;
   String? _errorMessage;
+  bool? _canReboot;
 
   Map<String, dynamic>? _dashboardData;
   bool _isDashboardLoading = false;
@@ -301,6 +302,7 @@ class AppState extends ChangeNotifier {
   String? get sysauth => _authService?.sysauth;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  bool? get canReboot => _reviewerModeEnabled ? true : _canReboot;
 
   void setError(String error) {
     _errorMessage = error;
@@ -397,6 +399,7 @@ class AppState extends ChangeNotifier {
 
     _isLoading = true;
     _dashboardError = null;
+    _canReboot = null;
 
     // Clear throughput data when switching routers to prevent mixing data from different routers
     _cancelThroughputTimer();
@@ -463,6 +466,7 @@ class AppState extends ChangeNotifier {
     final token = _sessionToken;
     _isLoading = true;
     _errorMessage = null;
+    _canReboot = null;
 
     // Clear throughput data when logging in to prevent mixing data from different sessions
     _cancelThroughputTimer();
@@ -555,6 +559,7 @@ class AppState extends ChangeNotifier {
     if (token != _sessionToken) return;
     _dashboardData = null;
     _dashboardError = null;
+    _canReboot = null;
     _cancelThroughputTimer();
     // Optionally, do not clear routers or selectedRouter
     notifyListeners();
@@ -599,6 +604,7 @@ class AppState extends ChangeNotifier {
           '_lastUpdated':
               DateTime.now().millisecondsSinceEpoch, // Force UI updates
         };
+        _canReboot = true;
 
         // Update throughput data with mock network data for reviewer mode
         if (_throughputService != null) {
@@ -662,6 +668,15 @@ class AppState extends ChangeNotifier {
     _isDashboardLoading = true;
     _dashboardError = null;
     notifyListeners();
+
+    unawaited(
+      _refreshRebootAccess(
+        ip: ip,
+        sysauth: sysauth,
+        useHttps: useHttps,
+        token: token,
+      ),
+    );
 
     try {
       // Perform all API calls in parallel
@@ -920,12 +935,7 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       // A newer session started; don't surface this fetch's error.
       if (token != _sessionToken) return;
-      final errorMessage = e.toString();
-      if (errorMessage.contains('Access denied')) {
-        _dashboardError = 'Access Denied: Check RPC permissions for this user.';
-      } else {
-        _dashboardError = 'Failed to fetch dashboard data: $e';
-      }
+      _dashboardError = userFacingApiError(e);
       // Log error with stack trace for debugging
       // print('Dashboard fetch error: $e\n$stack');
       // Clear dashboard data when there's an error so we don't show stale data
@@ -938,6 +948,31 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  Future<void> _refreshRebootAccess({
+    required String ip,
+    required String sysauth,
+    required bool useHttps,
+    required int token,
+  }) async {
+    bool? allowed;
+    try {
+      final result = await _apiService!.call(
+        ip,
+        sysauth,
+        useHttps,
+        object: 'session',
+        method: 'access',
+        params: {'scope': 'ubus', 'object': 'system', 'function': 'reboot'},
+      );
+      allowed = rpcAccessAllowed(result);
+    } catch (e) {
+      Logger.warning('Could not check reboot access: $e');
+    }
+    if (token != _sessionToken) return;
+    _canReboot = allowed;
+    notifyListeners();
   }
 
   Map<String, dynamic> _processDhcpLeases(Map<String, dynamic> rawDhcpData) {
@@ -1174,6 +1209,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<bool> reboot({BuildContext? context}) async {
+    if (!_reviewerModeEnabled && _canReboot != true) return false;
     if (_authService?.sysauth == null || _authService?.ipAddress == null) {
       return false;
     }
@@ -1655,7 +1691,7 @@ class AppState extends ChangeNotifier {
       return list;
     } catch (e, stack) {
       Logger.exception('Failed to aggregate clients', e, stack);
-      return [];
+      Error.throwWithStackTrace(e, stack);
     }
   }
 
@@ -1804,7 +1840,7 @@ class AppState extends ChangeNotifier {
       return clients;
     } catch (e, stack) {
       Logger.exception('Failed to fetch clients for selected router', e, stack);
-      return [];
+      Error.throwWithStackTrace(e, stack);
     }
   }
 
@@ -1823,6 +1859,9 @@ class AppState extends ChangeNotifier {
       final routers = _routerService?.routers ?? const <model.Router>[];
       if (routers.isEmpty) return {};
 
+      Object? firstError;
+      StackTrace? firstStack;
+      var successfulRouters = 0;
       final tasks = routers.map((r) async {
         try {
           if (_apiService is RealApiService) {
@@ -1833,30 +1872,37 @@ class AppState extends ChangeNotifier {
               r.password,
               r.useHttps,
             );
-            if (res.token == null) return <String>{};
+            if (res.token == null) {
+              throw Exception('Login failed for ${r.ipAddress}');
+            }
             final map = await _apiService!
                 .fetchAllAssociatedWirelessMacsWithContext(
                   ipAddress: r.ipAddress,
                   sysauth: res.token!,
                   useHttps: res.actualUseHttps,
                 );
+            successfulRouters++;
             final set = <String>{};
             map.forEach((_, stations) {
               set.addAll(stations.map((m) => m.toLowerCase()));
             });
             return set;
           }
-        } catch (e) {
-          // Skip router on failure
+        } catch (e, stack) {
+          firstError ??= e;
+          firstStack ??= stack;
         }
         return <String>{};
       }).toList();
 
       final results = await Future.wait(tasks);
+      if (successfulRouters == 0 && firstError != null) {
+        Error.throwWithStackTrace(firstError!, firstStack!);
+      }
       return results.fold<Set<String>>(<String>{}, (acc, s) => acc..addAll(s));
     } catch (e, stack) {
       Logger.exception('Failed to aggregate wireless MACs', e, stack);
-      return {};
+      Error.throwWithStackTrace(e, stack);
     }
   }
 
@@ -1882,6 +1928,9 @@ class AppState extends ChangeNotifier {
       final routers = _routerService?.routers ?? const <model.Router>[];
       if (routers.isEmpty) return [];
 
+      Object? firstError;
+      StackTrace? firstStack;
+      var successfulRouters = 0;
       final tasks = routers.map((r) async {
         try {
           if (_apiService is RealApiService) {
@@ -1892,7 +1941,9 @@ class AppState extends ChangeNotifier {
               r.password,
               r.useHttps,
             );
-            if (res.token == null) return <Map<String, dynamic>>[];
+            if (res.token == null) {
+              throw Exception('Login failed for ${r.ipAddress}');
+            }
             final callRes = await _apiService!.call(
               r.ipAddress,
               res.token!,
@@ -1905,16 +1956,21 @@ class AppState extends ChangeNotifier {
               final data = callRes[1] as Map<String, dynamic>;
               final leases = (data['dhcp_leases'] as List<dynamic>? ?? [])
                   .cast<Map<String, dynamic>>();
+              successfulRouters++;
               return leases;
             }
           }
-        } catch (e) {
-          // Skip router on failure
+        } catch (e, stack) {
+          firstError ??= e;
+          firstStack ??= stack;
         }
         return <Map<String, dynamic>>[];
       }).toList();
 
       final results = await Future.wait(tasks);
+      if (successfulRouters == 0 && firstError != null) {
+        Error.throwWithStackTrace(firstError!, firstStack!);
+      }
       // Deduplicate by MAC + IP
       final seen = <String, Map<String, dynamic>>{};
       for (final list in results) {
@@ -1930,7 +1986,7 @@ class AppState extends ChangeNotifier {
       return seen.values.toList();
     } catch (e, stack) {
       Logger.exception('Failed to aggregate DHCP leases', e, stack);
-      return [];
+      Error.throwWithStackTrace(e, stack);
     }
   }
 }

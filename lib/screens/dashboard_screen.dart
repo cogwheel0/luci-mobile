@@ -1567,9 +1567,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget _buildBody(AppState appState) {
     if (appState.dashboardError != null) {
       return LuciErrorDisplay(
-        title: 'Connection Failed',
-        message:
-            'Unable to connect to the router. Please check your network connection and router settings.',
+        title: 'Unable to Load Dashboard',
+        message: appState.dashboardError!,
         actionLabel: 'Retry Connection',
         onAction: () => appState.fetchDashboardData(),
         icon: Icons.wifi_off_rounded,
