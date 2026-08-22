@@ -9,11 +9,13 @@ class _FailingRestartApiService extends MockApiService {
   _FailingRestartApiService({
     this.failWirelessDelete = false,
     this.failFirewallRead = false,
+    this.failWanDelete = false,
     this.radioDisabled = false,
   });
 
   final bool failWirelessDelete;
   final bool failFirewallRead;
+  final bool failWanDelete;
   final bool radioDisabled;
   final calls = <String>[];
 
@@ -120,6 +122,9 @@ class _FailingRestartApiService extends MockApiService {
   }) async {
     final call = '$command ${params.join(' ')}';
     calls.add(call);
+    if (failWanDelete && call.startsWith('/sbin/uci del_list firewall.')) {
+      throw Exception('forced WAN membership rollback failure');
+    }
     if (call == '/sbin/wifi down radio0') {
       throw Exception('forced restart failure');
     }
@@ -204,6 +209,50 @@ void main() {
     expect(api.calls, contains('delete network.wwan'));
     expect(api.calls, isNot(contains('add wireless.wifinet0')));
     expect(state.dashboardError, contains('timed out'));
+  });
+
+  test('disabled radio rejects connection before mutation', () async {
+    final api = _FailingRestartApiService(radioDisabled: true);
+    final state = AppState.forTesting(
+      apiService: api,
+      authService: MockAuthService(),
+    );
+    addTearDown(state.dispose);
+
+    final connected = await state.connectToWirelessNetwork(
+      radioDevice: 'radio0',
+      ssid: 'Test network',
+      encryption: 'psk2',
+      password: 'password123',
+    );
+
+    expect(connected, isFalse);
+    expect(api.calls, isEmpty);
+    expect(state.dashboardError, contains('Enable radio0'));
+  });
+
+  test('failed WAN cleanup retains the new network interface', () async {
+    final api = _FailingRestartApiService(failWanDelete: true);
+    final state = AppState.forTesting(
+      apiService: api,
+      authService: MockAuthService(),
+    );
+    addTearDown(state.dispose);
+
+    final connected = await state.connectToWirelessNetwork(
+      radioDevice: 'radio0',
+      ssid: 'Test network',
+      encryption: 'psk2',
+      password: 'password123',
+    );
+
+    expect(connected, isFalse);
+    expect(
+      api.calls,
+      contains('/sbin/uci del_list firewall.@zone[1].network=wwan'),
+    );
+    expect(api.calls, isNot(contains('delete network.wwan')));
+    expect(state.dashboardError, contains('kept network interface wwan'));
   });
 
   test('interface reload leaves disabled radios disabled', () async {

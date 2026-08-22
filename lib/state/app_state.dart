@@ -2006,6 +2006,15 @@ class AppState extends ChangeNotifier {
       if (wirelessSections == null) {
         throw const FormatException('Invalid wireless configuration response');
       }
+      final radio = wirelessSections[radioDevice];
+      if (radio is! Map) {
+        throw FormatException('Radio $radioDevice not found');
+      }
+      if (_isUciDisabled(radio['disabled'])) {
+        _dashboardError = 'Enable $radioDevice before connecting';
+        notifyListeners();
+        return false;
+      }
 
       String? existingStaSection;
       Map? existingStaConfig;
@@ -2307,6 +2316,7 @@ class AppState extends ChangeNotifier {
         final canRemoveDependencies =
             (!createdStation && !updatedStation) || wirelessRolledBack;
         if (canRemoveDependencies) {
+          var wanMembershipRolledBack = !addedToWan;
           if (addedToWan) {
             await attemptRollback('WAN firewall membership', () async {
               await _apiService!.systemExec(
@@ -2327,10 +2337,11 @@ class AppState extends ChangeNotifier {
                 config: 'firewall',
                 context: context?.mounted == true ? context : null,
               );
+              wanMembershipRolledBack = true;
             });
           }
 
-          if (createdNetwork) {
+          if (createdNetwork && wanMembershipRolledBack) {
             await attemptRollback(
               'network interface $staNetworkName',
               () async {
@@ -2350,6 +2361,11 @@ class AppState extends ChangeNotifier {
                   context: context?.mounted == true ? context : null,
                 );
               },
+            );
+          } else if (createdNetwork) {
+            rollbackErrors.add(
+              'kept network interface $staNetworkName because WAN firewall '
+              'membership could not be removed',
             );
           }
         } else {
