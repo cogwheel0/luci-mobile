@@ -44,6 +44,29 @@ void main() {
     );
   });
 
+  test('RPC validation rejects malformed envelopes', () {
+    expect(
+      () => validateRpcResult(
+        {'access': true},
+        object: 'session',
+        method: 'access',
+      ),
+      throwsA(isA<RpcException>()),
+    );
+    expect(
+      () => validateRpcResult(
+        [
+          0.0,
+          {'access': true},
+        ],
+        object: 'session',
+        method: 'access',
+      ),
+      throwsA(isA<RpcException>()),
+    );
+    expect(validateRpcResult([0], object: 'system', method: 'reboot'), [0]);
+  });
+
   test('access response distinguishes admin and view-only sessions', () {
     expect(
       rpcAccessAllowed([

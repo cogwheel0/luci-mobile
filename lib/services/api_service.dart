@@ -72,14 +72,23 @@ dynamic validateRpcResult(
   required String object,
   required String method,
 }) {
-  if (result is! List || result.isEmpty) return [0, result];
-
-  final status = result.first;
-  if (status is num && status.toInt() != 0) {
+  if (result is! List ||
+      result.isEmpty ||
+      result.length > 2 ||
+      result.first is! int) {
     throw RpcException(
       object: object,
       method: method,
-      status: status.toInt(),
+      detail: 'invalid response',
+    );
+  }
+
+  final status = result.first as int;
+  if (status != 0) {
+    throw RpcException(
+      object: object,
+      method: method,
+      status: status,
       detail: result.length > 1 ? result[1]?.toString() : null,
     );
   }
@@ -87,7 +96,10 @@ dynamic validateRpcResult(
 }
 
 bool? rpcAccessAllowed(dynamic result) {
-  if (result is List && result.length > 1 && result[0] == 0) {
+  if (result is List &&
+      result.length == 2 &&
+      result[0] is int &&
+      result[0] == 0) {
     final data = result[1];
     if (data is Map && data['access'] is bool) return data['access'] as bool;
   }
