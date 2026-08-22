@@ -2007,6 +2007,7 @@ class AppState extends ChangeNotifier {
             // Roll back the wifi-iface section that was just staged so a
             // subsequent wireless commit cannot activate an orphaned station
             // that references the missing network interface.
+            bool rolledBack = false;
             try {
               await _apiService!.uciDelete(
                 ip, auth, https,
@@ -2014,11 +2015,20 @@ class AppState extends ChangeNotifier {
                 section: sectionName,
                 context: context,
               );
+              rolledBack = true;
               Logger.info('Rolled back staged wifi-iface section: $sectionName');
             } catch (rollbackErr) {
-              Logger.warning('Could not roll back wifi-iface $sectionName: $rollbackErr');
+              Logger.exception(
+                'Could not roll back wifi-iface $sectionName — orphaned section may be committed by a later wireless commit',
+                rollbackErr,
+                StackTrace.current,
+              );
             }
-            _dashboardError = 'Failed to create network interface: $e';
+            _dashboardError = rolledBack
+                ? 'Failed to create network interface: $e'
+                : 'Failed to create network interface and rollback failed. '
+                  'Please manually delete wireless section "$sectionName" '
+                  'before the next wireless commit.';
             notifyListeners();
             return false;
           }
@@ -2178,8 +2188,17 @@ class AppState extends ChangeNotifier {
       return false;
     }
 
-    // UCI changes are committed — reload wireless to apply at runtime
-    await _wifiReload(context: context);
+    // UCI changes are committed — reload wireless to apply at runtime.
+    // Reload failure is handled here so the UI can show the snackbar
+    // and the toggle row does not remain stuck in its transitioning state.
+    try {
+      await _wifiReload(context: context);
+    } catch (e, stack) {
+      Logger.exception('Wireless reload failed after toggle (interface may still be disabled)', e, stack);
+      _dashboardError = 'Interface toggled but wireless reload failed: $e';
+      notifyListeners();
+      return false;
+    }
     Logger.info('Toggle interface $uciSection complete');
     return true;
   }
