@@ -60,28 +60,47 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     String? radioName,
     String? deviceName,
     String? name,
+    String? sectionName,
+    String? ifname,
   }) {
     final radio = (radioName ?? '').trim();
     final ssidTrimmed = (ssid ?? '').trim();
 
-    // If SSID is empty, we need to ensure uniqueness even with same radio
-    if (ssidTrimmed.isEmpty) {
-      // Use device name as fallback for uniqueness
-      final device = (deviceName ?? '').trim();
-      if (device.isNotEmpty && device != radio) {
-        return '${ssidTrimmed.toLowerCase()}__${device.toLowerCase()}';
-      }
-      // Use interface name as fallback
-      final interfaceName = (name ?? '').trim();
-      if (interfaceName.isNotEmpty && interfaceName != radio) {
-        return '${ssidTrimmed.toLowerCase()}__${interfaceName.toLowerCase()}';
-      }
-      // If all names are the same, add a unique suffix
-      return '${ssidTrimmed.toLowerCase()}__${radio.toLowerCase()}_${DateTime.now().millisecondsSinceEpoch}';
+    // The UCI section name is the primary identity: it is unique per
+    // wireless interface config and computable by both the scroll-targeting
+    // and rendering paths. Keying on the section alone keeps state stable
+    // across SSID edits and runtime/configuration-only transitions. Section
+    // names are case-sensitive on the router, so preserve case here - two
+    // sections may differ only by case and must not share a GlobalKey.
+    //
+    // Section- and ifname-derived keys use distinct namespaces so a missing
+    // section on one row cannot collide with another row whose section
+    // happens to equal an ifname (e.g. section 'wlan0' vs ifname 'wlan0').
+    final section = (sectionName ?? '').trim();
+    if (section.isNotEmpty) {
+      return 'uci-section__$section';
     }
 
-    // If SSID is not empty, use SSID + radio
-    return '${ssidTrimmed.toLowerCase()}__${radio.toLowerCase()}';
+    // Runtime interfaces expose their OS interface name as a secondary
+    // unique identity, in its own namespace (see above).
+    final ifnameTrimmed = (ifname ?? '').trim();
+    if (ifnameTrimmed.isNotEmpty) {
+      return 'ifname__$ifnameTrimmed';
+    }
+
+    // Compose whatever distinct fields remain so records cannot collide on
+    // a shared prefix; two records agreeing on every field are data-wise
+    // indistinguishable.
+    final parts = <String>[
+      if (ssidTrimmed.isNotEmpty) ssidTrimmed.toLowerCase(),
+      if (deviceName != null && deviceName.trim().isNotEmpty)
+        deviceName.trim().toLowerCase(),
+      if (name != null && name.trim().isNotEmpty) name.trim().toLowerCase(),
+    ];
+    if (parts.isNotEmpty) {
+      return ['wireless', ...parts].join('__');
+    }
+    return 'wireless__$radio';
   }
 
   @override
@@ -156,9 +175,49 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               dashboardData['wireless'] as Map<String, dynamic>?;
           if (wirelessData != null) {
             final normalizedTarget = _normalizeInterfaceKey(interfaceName);
-            wirelessData.forEach((radioName, radioData) {
-              final interfaces = radioData['interfaces'] as List<dynamic>?;
-              if (interfaces != null) {
+            final rawTarget = interfaceName.trim();
+
+            // Returns the card key for a wireless interface whose UCI
+            // section matches the target exactly (case-sensitive), so an
+            // exact variant always wins over a merely normalized one.
+            String? findExactSectionMatch() {
+              String? match;
+              wirelessData.forEach((radioName, radioData) {
+                if (match != null) return;
+                final interfaces = radioData['interfaces'] as List<dynamic>?;
+                if (interfaces == null) return;
+                for (final interface in interfaces) {
+                  final sectionName = interface['section'] as String?;
+                  if (sectionName != null &&
+                      sectionName.trim().isNotEmpty &&
+                      sectionName.trim() == rawTarget) {
+                    final config = interface['config'] ?? {};
+                    final iwinfo = interface['iwinfo'] ?? {};
+                    match = _interfaceKeyForWireless(
+                      ssid: _uciString(iwinfo['ssid']).isNotEmpty
+                          ? _uciString(iwinfo['ssid'])
+                          : _uciString(config['ssid']),
+                      radioName: radioName,
+                      deviceName: _uciString(config['device'], radioName),
+                      name: interface['name'] ?? '',
+                      sectionName: sectionName,
+                      ifname: interface['ifname'] as String?,
+                    );
+                    return;
+                  }
+                }
+              });
+              return match;
+            }
+
+            // Returns the card key using the broader alias matching
+            // (normalized SSID/device/name/section).
+            String? findAliasMatch() {
+              String? match;
+              wirelessData.forEach((radioName, radioData) {
+                if (match != null) return;
+                final interfaces = radioData['interfaces'] as List<dynamic>?;
+                if (interfaces == null) return;
                 for (var i = 0; i < interfaces.length; i++) {
                   final interface = interfaces[i];
                   final config = interface['config'] ?? {};
@@ -168,26 +227,38 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                       ? _uciString(iwinfo['ssid'])
                       : _uciString(config['ssid']);
                   final name = interface['name'] ?? '';
+                  final sectionName = interface['section'] as String?;
                   final keyStr = _interfaceKeyForWireless(
                     ssid: ssid,
                     radioName: radioName,
                     deviceName: deviceName,
                     name: name,
+                    sectionName: sectionName,
+                    ifname: interface['ifname'] as String?,
                   );
-                  // Generate all possible normalized keys for matching
-                  final ssidKey = _normalizeInterfaceKey(ssid);
-                  final deviceKey = _normalizeInterfaceKey(deviceName);
-                  final nameKey = _normalizeInterfaceKey(name);
-                  // Match against all possible keys
-                  if (normalizedTarget == ssidKey ||
-                      normalizedTarget == deviceKey ||
-                      normalizedTarget == nameKey) {
-                    _scrollToExpandedCard(keyStr);
+                  // Keys preserve section case (distinct sections must not
+                  // share a GlobalKey), but target matching normalizes case
+                  // so e.g. "GUEST" finds "Guest".
+                  if (normalizedTarget == _normalizeInterfaceKey(ssid) ||
+                      normalizedTarget == _normalizeInterfaceKey(deviceName) ||
+                      normalizedTarget == _normalizeInterfaceKey(name) ||
+                      normalizedTarget == _normalizeInterfaceKey(sectionName)) {
+                    match = keyStr;
                     return;
                   }
                 }
-              }
-            });
+              });
+              return match;
+            }
+
+            final matchedKey = findExactSectionMatch() ?? findAliasMatch();
+            if (matchedKey != null) {
+              // Returning from the outer callback is essential: falling
+              // through would start the fallback section scroll on top of
+              // this one and could invoke onScrollComplete twice.
+              _scrollToExpandedCard(matchedKey);
+              return;
+            }
           }
         }
 
@@ -549,6 +620,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               'radioName': radioName,
               'ssid': ssid,
               'interfaceName': name,
+              'section': uciName,
+              'ifname': iface['ifname'] as String?,
               'details': {
                 'Device': _uciString(config['device'], radioName),
                 'Mode': _uciString(config['mode']).isNotEmpty
@@ -585,6 +658,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
           'radioName': radioName,
           'ssid': name,
           'interfaceName': name,
+          'section': uciName,
           'details': {
             'Device': radioName,
             'Mode': _uciString(config['mode'], 'N/A'),
@@ -601,6 +675,49 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     if (interfaces.isEmpty) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
+    final target = _targetInterface;
+
+    // Resolve the target to exactly ONE wireless card key, using the same
+    // exact-section-first then normalized-alias order as the scroll
+    // targeting path. Resolving up front guarantees a case-insensitive
+    // target (e.g. "GUEST") cannot expand several case-variant cards at
+    // once - only the card the screen would scroll to expands.
+    String? resolvedTargetKey;
+    if (target != null) {
+      String? keyOf(Map<String, dynamic> iface) => _interfaceKeyForWireless(
+        ssid: iface['ssid'] ?? '',
+        radioName: iface['radioName'] ?? '',
+        deviceName: iface['deviceName'] ?? '',
+        name: iface['interfaceName'] ?? '',
+        sectionName: iface['section'] as String?,
+        ifname: iface['ifname'] as String?,
+      );
+      // Pass 1: exact (case-sensitive) section match.
+      for (final iface in interfaces) {
+        final section = (iface['section'] as String?)?.trim() ?? '';
+        if (section.isNotEmpty && section == target.trim()) {
+          resolvedTargetKey = keyOf(iface);
+          break;
+        }
+      }
+      // Pass 2: normalized alias fallback (SSID/device/name/section).
+      final normalizedTarget = _normalizeInterfaceKey(target);
+      if (resolvedTargetKey == null) {
+        for (final iface in interfaces) {
+          if (normalizedTarget == _normalizeInterfaceKey(iface['ssid'] ?? '') ||
+              normalizedTarget ==
+                  _normalizeInterfaceKey(iface['deviceName'] ?? '') ||
+              normalizedTarget ==
+                  _normalizeInterfaceKey(iface['interfaceName'] ?? '') ||
+              normalizedTarget ==
+                  _normalizeInterfaceKey(iface['section'] as String?)) {
+            resolvedTargetKey = keyOf(iface);
+            break;
+          }
+        }
+      }
+    }
+
     return SliverList(
       delegate: SliverChildBuilderDelegate((context, index) {
         final iface = interfaces[index];
@@ -614,21 +731,17 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
           radioName: radioName,
           deviceName: deviceName,
           name: name,
+          sectionName: iface['section'] as String?,
+          ifname: iface['ifname'] as String?,
         );
         final key = _interfaceKeys.putIfAbsent(keyStr, () => GlobalKey());
         final displayName = ssid.toString().isNotEmpty
             ? ssid.toString()
             : deviceName.toString();
 
-        // Check if this is the target interface for expansion
+        // Only the single resolved card expands; see resolution above.
         final isTargetInterface =
-            _targetInterface != null &&
-            (_normalizeInterfaceKey(ssid) ==
-                    _normalizeInterfaceKey(_targetInterface!) ||
-                _normalizeInterfaceKey(deviceName) ==
-                    _normalizeInterfaceKey(_targetInterface!) ||
-                _normalizeInterfaceKey(name) ==
-                    _normalizeInterfaceKey(_targetInterface!));
+            resolvedTargetKey != null && keyStr == resolvedTargetKey;
 
         final shouldExpand = isTargetInterface || _expandedInterface == keyStr;
         return Padding(

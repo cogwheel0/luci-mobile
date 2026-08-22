@@ -203,420 +203,444 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                 bool obscureText = true;
                                 bool isConnecting = false;
                                 String? errorMessage;
-                                await showDialog<Map<String, dynamic>>(
-                                  context: context,
-                                  builder: (context) {
-                                    return StatefulBuilder(
-                                      builder: (context, setState) {
-                                        return AlertDialog(
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              20,
+                                try {
+                                  await showDialog<void>(
+                                    context: context,
+                                    builder: (context) {
+                                      return StatefulBuilder(
+                                        builder: (context, setState) {
+                                          return AlertDialog(
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
                                             ),
-                                          ),
-                                          backgroundColor: Theme.of(context)
-                                              .colorScheme
-                                              .surface
-                                              .withValues(alpha: 0.95),
-                                          shadowColor: Theme.of(context)
-                                              .colorScheme
-                                              .primary
-                                              .withValues(alpha: 0.10),
-                                          insetPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 16,
-                                                vertical: 60,
-                                              ), // Make dialog larger
-                                          content: ConstrainedBox(
-                                            constraints: const BoxConstraints(
-                                              maxWidth: 400,
-                                              minWidth: 320,
-                                              minHeight: 380,
-                                            ),
-                                            child: Form(
-                                              key: formKey,
-                                              child: SingleChildScrollView(
-                                                child: Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                        top: 32,
-                                                      ),
-                                                  child: Column(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      TextFormField(
-                                                        controller:
-                                                            ipController,
-                                                        decoration: const InputDecoration(
-                                                          labelText:
-                                                              'Router Address',
-                                                          border:
-                                                              OutlineInputBorder(),
-                                                          prefixIcon: Icon(
-                                                            Icons
-                                                                .router_outlined,
-                                                          ),
-                                                          helperText:
-                                                              'e.g. 192.168.1.1, router.local:8080, https://192.168.1.1',
+                                            backgroundColor: Theme.of(context)
+                                                .colorScheme
+                                                .surface
+                                                .withValues(alpha: 0.95),
+                                            shadowColor: Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                                .withValues(alpha: 0.10),
+                                            insetPadding:
+                                                const EdgeInsets.symmetric(
+                                                  horizontal: 16,
+                                                  vertical: 60,
+                                                ), // Make dialog larger
+                                            content: ConstrainedBox(
+                                              constraints: const BoxConstraints(
+                                                maxWidth: 400,
+                                                minWidth: 320,
+                                                minHeight: 380,
+                                              ),
+                                              child: Form(
+                                                key: formKey,
+                                                child: SingleChildScrollView(
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          top: 32,
                                                         ),
-                                                        validator: (value) {
-                                                          if (value == null ||
-                                                              value.isEmpty) {
-                                                            return 'Please enter the router address';
-                                                          }
-                                                          final parsed =
-                                                              UrlParser.parse(
-                                                                value,
-                                                              );
-                                                          if (!parsed.isValid) {
-                                                            return parsed
-                                                                    .error ??
-                                                                'Invalid address format';
-                                                          }
-                                                          return null;
-                                                        },
-                                                        autofillHints: const [
-                                                          AutofillHints.url,
-                                                          AutofillHints
-                                                              .username,
-                                                        ],
-                                                      ),
-                                                      const SizedBox(
-                                                        height: 20,
-                                                      ),
-                                                      TextFormField(
-                                                        controller:
-                                                            userController,
-                                                        decoration: const InputDecoration(
-                                                          labelText: 'Username',
-                                                          border:
-                                                              OutlineInputBorder(),
-                                                          prefixIcon: Icon(
-                                                            Icons
-                                                                .person_outline,
-                                                          ),
-                                                          helperText:
-                                                              'Default is usually root',
-                                                        ),
-                                                        validator: (v) =>
-                                                            v == null ||
-                                                                v.isEmpty
-                                                            ? 'Required'
-                                                            : null,
-                                                        autofillHints: const [
-                                                          AutofillHints
-                                                              .username,
-                                                        ],
-                                                      ),
-                                                      const SizedBox(
-                                                        height: 20,
-                                                      ),
-                                                      TextFormField(
-                                                        controller:
-                                                            passController,
-                                                        decoration: InputDecoration(
-                                                          labelText: 'Password',
-                                                          border:
-                                                              const OutlineInputBorder(),
-                                                          prefixIcon: const Icon(
-                                                            Icons.lock_outline,
-                                                          ),
-                                                          helperText:
-                                                              'Your router password',
-                                                          suffixIcon: IconButton(
-                                                            icon: Icon(
-                                                              obscureText
-                                                                  ? Icons
-                                                                        .visibility_outlined
-                                                                  : Icons
-                                                                        .visibility_off_outlined,
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        TextFormField(
+                                                          controller:
+                                                              ipController,
+                                                          decoration: const InputDecoration(
+                                                            labelText:
+                                                                'Router Address',
+                                                            border:
+                                                                OutlineInputBorder(),
+                                                            prefixIcon: Icon(
+                                                              Icons
+                                                                  .router_outlined,
                                                             ),
-                                                            onPressed: () => setState(
-                                                              () => obscureText =
-                                                                  !obscureText,
-                                                            ),
-                                                            tooltip: obscureText
-                                                                ? 'Hide password'
-                                                                : 'Show password',
+                                                            helperText:
+                                                                'e.g. 192.168.1.1, router.local:8080, https://192.168.1.1',
                                                           ),
+                                                          validator: (value) {
+                                                            if (value == null ||
+                                                                value.isEmpty) {
+                                                              return 'Please enter the router address';
+                                                            }
+                                                            final parsed =
+                                                                UrlParser.parse(
+                                                                  value,
+                                                                );
+                                                            if (!parsed
+                                                                .isValid) {
+                                                              return parsed
+                                                                      .error ??
+                                                                  'Invalid address format';
+                                                            }
+                                                            return null;
+                                                          },
+                                                          autofillHints: const [
+                                                            AutofillHints.url,
+                                                            AutofillHints
+                                                                .username,
+                                                          ],
                                                         ),
-                                                        obscureText:
-                                                            obscureText,
-                                                        autofillHints: const [
-                                                          AutofillHints
-                                                              .password,
-                                                        ],
-                                                      ),
-                                                      if (errorMessage !=
-                                                          null) ...[
                                                         const SizedBox(
-                                                          height: 16,
+                                                          height: 20,
                                                         ),
-                                                        Container(
-                                                          padding:
-                                                              const EdgeInsets.all(
-                                                                10,
-                                                              ),
-                                                          decoration: BoxDecoration(
-                                                            color:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .errorContainer
-                                                                    .withValues(
-                                                                      alpha: 1,
-                                                                    ),
-                                                            borderRadius:
-                                                                BorderRadius.circular(
-                                                                  8,
-                                                                ),
+                                                        TextFormField(
+                                                          controller:
+                                                              userController,
+                                                          decoration: const InputDecoration(
+                                                            labelText:
+                                                                'Username',
+                                                            border:
+                                                                OutlineInputBorder(),
+                                                            prefixIcon: Icon(
+                                                              Icons
+                                                                  .person_outline,
+                                                            ),
+                                                            helperText:
+                                                                'Default is usually root',
                                                           ),
-                                                          child: Row(
-                                                            children: [
-                                                              Icon(
-                                                                Icons
-                                                                    .error_outline,
-                                                                color: Theme.of(context)
-                                                                    .colorScheme
-                                                                    .onErrorContainer,
+                                                          validator: (v) =>
+                                                              v == null ||
+                                                                  v.isEmpty
+                                                              ? 'Required'
+                                                              : null,
+                                                          autofillHints: const [
+                                                            AutofillHints
+                                                                .username,
+                                                          ],
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 20,
+                                                        ),
+                                                        TextFormField(
+                                                          controller:
+                                                              passController,
+                                                          decoration: InputDecoration(
+                                                            labelText:
+                                                                'Password',
+                                                            border:
+                                                                const OutlineInputBorder(),
+                                                            prefixIcon: const Icon(
+                                                              Icons
+                                                                  .lock_outline,
+                                                            ),
+                                                            helperText:
+                                                                'Your router password',
+                                                            suffixIcon: IconButton(
+                                                              icon: Icon(
+                                                                obscureText
+                                                                    ? Icons
+                                                                          .visibility_outlined
+                                                                    : Icons
+                                                                          .visibility_off_outlined,
                                                               ),
-                                                              const SizedBox(
-                                                                width: 12,
+                                                              onPressed: () => setState(
+                                                                () => obscureText =
+                                                                    !obscureText,
                                                               ),
-                                                              Expanded(
-                                                                child: Text(
-                                                                  errorMessage!,
-                                                                  style: Theme.of(context)
-                                                                      .textTheme
-                                                                      .bodyMedium
-                                                                      ?.copyWith(
-                                                                        color: Theme.of(
-                                                                          context,
-                                                                        ).colorScheme.onErrorContainer,
+                                                              tooltip:
+                                                                  obscureText
+                                                                  ? 'Hide password'
+                                                                  : 'Show password',
+                                                            ),
+                                                          ),
+                                                          obscureText:
+                                                              obscureText,
+                                                          autofillHints: const [
+                                                            AutofillHints
+                                                                .password,
+                                                          ],
+                                                        ),
+                                                        if (errorMessage !=
+                                                            null) ...[
+                                                          const SizedBox(
+                                                            height: 16,
+                                                          ),
+                                                          Container(
+                                                            padding:
+                                                                const EdgeInsets.all(
+                                                                  10,
+                                                                ),
+                                                            decoration: BoxDecoration(
+                                                              color:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .errorContainer
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            1,
                                                                       ),
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    8,
+                                                                  ),
+                                                            ),
+                                                            child: Row(
+                                                              children: [
+                                                                Icon(
+                                                                  Icons
+                                                                      .error_outline,
+                                                                  color: Theme.of(
+                                                                    context,
+                                                                  ).colorScheme.onErrorContainer,
                                                                 ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ],
-                                                      const SizedBox(
-                                                        height: 28,
-                                                      ),
-                                                      SizedBox(
-                                                        width: double.infinity,
-                                                        child: ElevatedButton(
-                                                          onPressed:
-                                                              isConnecting
-                                                              ? null
-                                                              : () async {
-                                                                  if (formKey
-                                                                      .currentState!
-                                                                      .validate()) {
-                                                                    final input =
-                                                                        ipController
-                                                                            .text
-                                                                            .trim();
-                                                                    final user =
-                                                                        userController
-                                                                            .text
-                                                                            .trim();
-                                                                    final pass =
-                                                                        passController
-                                                                            .text;
-
-                                                                    // Parse the input to extract host, port, and protocol
-                                                                    final parsedUrl =
-                                                                        UrlParser.parse(
-                                                                          input,
-                                                                        );
-
-                                                                    if (!parsedUrl
-                                                                        .isValid) {
-                                                                      setState(() {
-                                                                        errorMessage =
-                                                                            parsedUrl.error ??
-                                                                            'Invalid address format';
-                                                                      });
-                                                                      return;
-                                                                    }
-
-                                                                    final hostWithPort =
-                                                                        parsedUrl
-                                                                            .hostWithPort;
-                                                                    final useHttps =
-                                                                        parsedUrl
-                                                                            .useHttps;
-                                                                    final id =
-                                                                        '$hostWithPort-$user';
-
-                                                                    if (routers.any(
-                                                                      (r) =>
-                                                                          r.id ==
-                                                                          id,
-                                                                    )) {
-                                                                      setState(() {
-                                                                        errorMessage =
-                                                                            'Router already exists.';
-                                                                      });
-                                                                      return;
-                                                                    }
-
-                                                                    // Show connecting state
-                                                                    setState(() {
-                                                                      errorMessage =
-                                                                          null;
-                                                                      isConnecting =
-                                                                          true;
-                                                                    });
-
-                                                                    // Always fetch hostname from router after login
-                                                                    try {
-                                                                      // Attempt login with the new router's credentials
-                                                                      final loginSuccess = await appState.login(
-                                                                        hostWithPort,
-                                                                        user,
-                                                                        pass,
-                                                                        useHttps,
-                                                                        fromRouter:
-                                                                            false,
-                                                                        context:
+                                                                const SizedBox(
+                                                                  width: 12,
+                                                                ),
+                                                                Expanded(
+                                                                  child: Text(
+                                                                    errorMessage!,
+                                                                    style: Theme.of(context)
+                                                                        .textTheme
+                                                                        .bodyMedium
+                                                                        ?.copyWith(
+                                                                          color: Theme.of(
                                                                             context,
-                                                                      );
-                                                                      if (!loginSuccess) {
+                                                                          ).colorScheme.onErrorContainer,
+                                                                        ),
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ],
+                                                        const SizedBox(
+                                                          height: 28,
+                                                        ),
+                                                        SizedBox(
+                                                          width:
+                                                              double.infinity,
+                                                          child: ElevatedButton(
+                                                            onPressed:
+                                                                isConnecting
+                                                                ? null
+                                                                : () async {
+                                                                    if (formKey
+                                                                        .currentState!
+                                                                        .validate()) {
+                                                                      final input = ipController
+                                                                          .text
+                                                                          .trim();
+                                                                      final user = userController
+                                                                          .text
+                                                                          .trim();
+                                                                      final pass =
+                                                                          passController
+                                                                              .text;
+
+                                                                      // Parse the input to extract host, port, and protocol
+                                                                      final parsedUrl =
+                                                                          UrlParser.parse(
+                                                                            input,
+                                                                          );
+
+                                                                      if (!parsedUrl
+                                                                          .isValid) {
                                                                         setState(() {
                                                                           errorMessage =
-                                                                              appState.errorMessage ??
-                                                                              'Failed to connect: Invalid credentials or host unreachable.';
+                                                                              parsedUrl.error ??
+                                                                              'Invalid address format';
+                                                                        });
+                                                                        return;
+                                                                      }
+
+                                                                      final hostWithPort =
+                                                                          parsedUrl
+                                                                              .hostWithPort;
+                                                                      final useHttps =
+                                                                          parsedUrl
+                                                                              .useHttps;
+                                                                      final id =
+                                                                          '$hostWithPort-$user';
+
+                                                                      if (routers.any(
+                                                                        (r) =>
+                                                                            r.id ==
+                                                                            id,
+                                                                      )) {
+                                                                        setState(() {
+                                                                          errorMessage =
+                                                                              'Router already exists.';
+                                                                        });
+                                                                        return;
+                                                                      }
+
+                                                                      // Show connecting state
+                                                                      setState(() {
+                                                                        errorMessage =
+                                                                            null;
+                                                                        isConnecting =
+                                                                            true;
+                                                                      });
+
+                                                                      // Always fetch hostname from router after login
+                                                                      try {
+                                                                        // Attempt login with the new router's credentials
+                                                                        final loginSuccess = await appState.login(
+                                                                          hostWithPort,
+                                                                          user,
+                                                                          pass,
+                                                                          useHttps,
+                                                                          fromRouter:
+                                                                              false,
+                                                                          context:
+                                                                              context,
+                                                                        );
+                                                                        // The dialog is barrier-dismissible; bail out
+                                                                        // instead of calling its setState after it
+                                                                        // has been dismissed.
+                                                                        if (!context
+                                                                            .mounted) {
+                                                                          return;
+                                                                        }
+                                                                        if (!loginSuccess) {
+                                                                          setState(() {
+                                                                            errorMessage =
+                                                                                appState.errorMessage ??
+                                                                                'Failed to connect: Invalid credentials or host unreachable.';
+                                                                            isConnecting =
+                                                                                false;
+                                                                          });
+                                                                          return;
+                                                                        }
+                                                                        Navigator.pop(
+                                                                          context,
+                                                                        );
+                                                                      } catch (
+                                                                        e
+                                                                      ) {
+                                                                        if (!context
+                                                                            .mounted) {
+                                                                          return;
+                                                                        }
+                                                                        setState(() {
+                                                                          errorMessage =
+                                                                              'Failed to connect: ${e.toString()}';
                                                                           isConnecting =
                                                                               false;
                                                                         });
-                                                                        return;
-                                                                      }
-                                                                      // Do NOT addRouter here; login already adds it if needed
-                                                                      if (!context
-                                                                          .mounted) {
-                                                                        return;
-                                                                      }
-                                                                      Navigator.pop(
-                                                                        context,
-                                                                      );
-                                                                    } catch (
-                                                                      e
-                                                                    ) {
-                                                                      setState(() {
-                                                                        errorMessage =
-                                                                            'Failed to connect: ${e.toString()}';
-                                                                        isConnecting =
-                                                                            false;
-                                                                      });
-                                                                    } finally {
-                                                                      if (mounted) {
-                                                                        setState(() {
-                                                                          _switchingRouterId =
-                                                                              null;
-                                                                        });
                                                                       }
                                                                     }
-                                                                  }
-                                                                },
-                                                          style: ElevatedButton.styleFrom(
-                                                            padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  vertical: 18,
-                                                                ),
-                                                            textStyle:
-                                                                const TextStyle(
-                                                                  fontSize: 18,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                ),
-                                                            shape: RoundedRectangleBorder(
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    14,
+                                                                  },
+                                                            style: ElevatedButton.styleFrom(
+                                                              padding:
+                                                                  const EdgeInsets.symmetric(
+                                                                    vertical:
+                                                                        18,
                                                                   ),
+                                                              textStyle:
+                                                                  const TextStyle(
+                                                                    fontSize:
+                                                                        18,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold,
+                                                                  ),
+                                                              shape: RoundedRectangleBorder(
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      14,
+                                                                    ),
+                                                              ),
+                                                              elevation: 4,
+                                                              backgroundColor:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .primary,
+                                                              foregroundColor:
+                                                                  Theme.of(
+                                                                        context,
+                                                                      )
+                                                                      .colorScheme
+                                                                      .onPrimary,
                                                             ),
-                                                            elevation: 4,
-                                                            backgroundColor:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .primary,
-                                                            foregroundColor:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .colorScheme
-                                                                    .onPrimary,
-                                                          ),
-                                                          child: isConnecting
-                                                              ? Row(
-                                                                  mainAxisAlignment:
-                                                                      MainAxisAlignment
-                                                                          .center,
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .min,
-                                                                  children: [
-                                                                    SizedBox(
-                                                                      width: 22,
-                                                                      height:
-                                                                          22,
-                                                                      child: CircularProgressIndicator(
-                                                                        strokeWidth:
-                                                                            3,
-                                                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                                                          Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.onPrimary,
+                                                            child: isConnecting
+                                                                ? Row(
+                                                                    mainAxisAlignment:
+                                                                        MainAxisAlignment
+                                                                            .center,
+                                                                    mainAxisSize:
+                                                                        MainAxisSize
+                                                                            .min,
+                                                                    children: [
+                                                                      SizedBox(
+                                                                        width:
+                                                                            22,
+                                                                        height:
+                                                                            22,
+                                                                        child: CircularProgressIndicator(
+                                                                          strokeWidth:
+                                                                              3,
+                                                                          valueColor:
+                                                                              AlwaysStoppedAnimation<
+                                                                                Color
+                                                                              >(
+                                                                                Theme.of(
+                                                                                  context,
+                                                                                ).colorScheme.onPrimary,
+                                                                              ),
                                                                         ),
                                                                       ),
-                                                                    ),
-                                                                    const SizedBox(
-                                                                      width: 12,
-                                                                    ),
-                                                                    const Text(
-                                                                      'Connecting...',
-                                                                    ),
-                                                                  ],
-                                                                )
-                                                              : Row(
-                                                                  mainAxisAlignment:
-                                                                      MainAxisAlignment
-                                                                          .center,
-                                                                  mainAxisSize:
-                                                                      MainAxisSize
-                                                                          .min,
-                                                                  children: const [
-                                                                    Icon(
-                                                                      Icons.add,
-                                                                    ),
-                                                                    SizedBox(
-                                                                      width: 12,
-                                                                    ),
-                                                                    Text('Add'),
-                                                                  ],
-                                                                ),
+                                                                      const SizedBox(
+                                                                        width:
+                                                                            12,
+                                                                      ),
+                                                                      const Text(
+                                                                        'Connecting...',
+                                                                      ),
+                                                                    ],
+                                                                  )
+                                                                : Row(
+                                                                    mainAxisAlignment:
+                                                                        MainAxisAlignment
+                                                                            .center,
+                                                                    mainAxisSize:
+                                                                        MainAxisSize
+                                                                            .min,
+                                                                    children: const [
+                                                                      Icon(
+                                                                        Icons
+                                                                            .add,
+                                                                      ),
+                                                                      SizedBox(
+                                                                        width:
+                                                                            12,
+                                                                      ),
+                                                                      Text(
+                                                                        'Add',
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                          ),
                                                         ),
-                                                      ),
-                                                      const SizedBox(height: 8),
-                                                    ],
+                                                        const SizedBox(
+                                                          height: 8,
+                                                        ),
+                                                      ],
+                                                    ),
                                                   ),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                        );
-                                      },
-                                    );
-                                  },
-                                );
-                                if (!context.mounted) return;
+                                          );
+                                        },
+                                      );
+                                    },
+                                  );
+                                  if (!context.mounted) return;
+                                } finally {
+                                  // The controllers are only used by the
+                                  // dialog above; dispose them once it closes.
+                                  ipController.dispose();
+                                  userController.dispose();
+                                  passController.dispose();
+                                }
                               },
                             ),
                           ),

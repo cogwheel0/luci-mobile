@@ -57,24 +57,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   void _updateWirelessArrows() {
-    if (!_wirelessScrollController.hasClients) return;
+    if (!mounted || !_wirelessScrollController.hasClients) return;
     final max = _wirelessScrollController.position.maxScrollExtent;
     final min = _wirelessScrollController.position.minScrollExtent;
     final offset = _wirelessScrollController.offset;
+    final showLeft = offset > min + 2;
+    final showRight = offset < max - 2;
+    // Skip redundant rebuilds - scroll listeners fire on every pixel.
+    if (showLeft == _showWirelessLeftArrow &&
+        showRight == _showWirelessRightArrow) {
+      return;
+    }
     setState(() {
-      _showWirelessLeftArrow = offset > min + 2;
-      _showWirelessRightArrow = offset < max - 2;
+      _showWirelessLeftArrow = showLeft;
+      _showWirelessRightArrow = showRight;
     });
   }
 
   void _updateWanArrows() {
-    if (!_wanScrollController.hasClients) return;
+    if (!mounted || !_wanScrollController.hasClients) return;
     final max = _wanScrollController.position.maxScrollExtent;
     final min = _wanScrollController.position.minScrollExtent;
     final offset = _wanScrollController.offset;
+    final showLeft = offset > min + 2;
+    final showRight = offset < max - 2;
+    if (showLeft == _showWanLeftArrow && showRight == _showWanRightArrow) {
+      return;
+    }
     setState(() {
-      _showWanLeftArrow = offset > min + 2;
-      _showWanRightArrow = offset < max - 2;
+      _showWanLeftArrow = showLeft;
+      _showWanRightArrow = showRight;
     });
   }
 
@@ -193,7 +205,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
+        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
         child: Row(
           children: [
             Expanded(
@@ -668,9 +680,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 0),
+      margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
+        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
         child: Row(
           children: [
             Expanded(
@@ -736,7 +748,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 6),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.max,
@@ -835,7 +847,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
             networkCardWidgets.add(
               Card(
-                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
                 elevation: 2,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),
@@ -846,10 +858,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   onLongPress: () {
                     // Navigate to interfaces tab with the specific interface name
                     final appState = ref.read(appStateProvider);
-                    appState.requestTab(2, interfaceToScroll: deviceName);
+                    appState.requestTab(2, interfaceToScroll: uciName);
                   },
                   child: Padding(
-                    padding: const EdgeInsets.all(8.0),
+                    padding: const EdgeInsets.all(6.0),
                     child: _buildWirelessInfoCardContent(
                       context,
                       ssid: ssid,
@@ -902,7 +914,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
             networkCardWidgets.add(
               Card(
-                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
                 elevation: 2,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),
@@ -913,10 +925,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   onLongPress: () {
                     // Navigate to interfaces tab with the specific interface name
                     final appState = ref.read(appStateProvider);
-                    appState.requestTab(2, interfaceToScroll: device);
+                    appState.requestTab(2, interfaceToScroll: uciName);
                   },
                   child: Padding(
-                    padding: const EdgeInsets.all(8.0),
+                    padding: const EdgeInsets.all(6.0),
                     child: _buildWirelessInfoCardContent(
                       context,
                       ssid: ssid,
@@ -954,7 +966,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       return Stack(
         children: [
           SizedBox(
-            height: 110, // or whatever height fits the card
+            height: 90,
             child: ListView(
               controller: _wirelessScrollController,
               scrollDirection: Axis.horizontal,
@@ -1117,7 +1129,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
       interfaceCardWidgets.add(
         Card(
-          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
           elevation: 2,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
@@ -1132,8 +1144,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(
-                vertical: 12.0,
-                horizontal: 12.0,
+                vertical: 6.0,
+                horizontal: 8.0,
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1142,9 +1154,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   Icon(
                     _getInterfaceIcon(name, proto),
                     color: Theme.of(context).colorScheme.primary,
-                    size: 20,
+                    size: 18,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     name.toUpperCase(),
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -1152,11 +1164,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
-                      vertical: 4,
+                      vertical: 2,
                     ),
                     decoration: BoxDecoration(
                       color: isUp
@@ -1233,7 +1245,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           return Stack(
             children: [
               SizedBox(
-                height: 110,
+                height: 90,
                 child: ListView(
                   controller: _wanScrollController,
                   scrollDirection: Axis.horizontal,
@@ -1618,40 +1630,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             );
           } else {
-            // Portrait mode: Fill available height exactly without scrolling
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                return RefreshIndicator(
-                  onRefresh: () => appState.fetchDashboardData(),
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    child: SizedBox(
-                      height: constraints.maxHeight,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 16),
-                            _buildDeviceInfoCard(appState),
-                            const SizedBox(height: 12),
-                            Expanded(
-                              child: _buildRealtimeThroughputCard(appState),
-                            ),
-                            const SizedBox(height: 12),
-                            _buildSystemVitalsCard(appState),
-                            const SizedBox(height: 12),
-                            _buildWirelessNetworksCard(appState),
-                            const SizedBox(height: 12),
-                            _buildInterfaceStatusCards(appState),
-                            const SizedBox(height: 12),
-                          ],
-                        ),
-                      ),
+            // Portrait mode: keep the complete dashboard on one screen.
+            return RefreshIndicator(
+              onRefresh: () => appState.fetchDashboardData(),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: constraints.maxHeight,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        _buildDeviceInfoCard(appState),
+                        const SizedBox(height: 4),
+                        Expanded(child: _buildRealtimeThroughputCard(appState)),
+                        const SizedBox(height: 4),
+                        _buildSystemVitalsCard(appState),
+                        const SizedBox(height: 4),
+                        _buildWirelessNetworksCard(appState),
+                        const SizedBox(height: 4),
+                        _buildInterfaceStatusCards(appState),
+                        const SizedBox(height: 4),
+                      ],
                     ),
                   ),
-                );
-              },
+                ),
+              ),
             );
           }
         },

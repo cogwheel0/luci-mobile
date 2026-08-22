@@ -887,6 +887,7 @@ class MockApiService implements IApiService {
     String sysauth,
     bool useHttps, {
     required String command,
+    List<String> params = const [],
     BuildContext? context,
   }) async {
     await Future.delayed(const Duration(milliseconds: 500));

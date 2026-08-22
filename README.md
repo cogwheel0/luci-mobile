@@ -67,7 +67,7 @@ flutter pub get
 flutter run
 ```
 
-- Requires Flutter 3.32.5+ and Dart 3.8+
+- Requires Flutter 3.35+ and Dart 3.9+
 - Android: `flutter build apk`  
 - iOS: `flutter build ios`
 
@@ -109,7 +109,7 @@ lib/
 
 - **Connection Failed:** Check router IP, LuCI web interface, firewall, and try both HTTP/HTTPS.
 - **Authentication Failed:** Verify credentials and admin privileges.
-- **No Data Displayed:** Ensure the router has LuCI RPC support: `opkg update && opkg install luci-mod-rpc rpcd-mod-luci rpcd-mod-iwinfo luci-mod-status`, restart `rpcd` (or reboot), then verify with `ubus list luci-rpc` and `ubus call luci-rpc getNetworkDevices '{}'`.
+- **No Data Displayed:** Ensure the router has LuCI RPC support: install `rpcd-mod-luci` and `rpcd-mod-iwinfo` (`opkg update && opkg install rpcd-mod-luci rpcd-mod-iwinfo` on OpenWrt ≤ 24.10, or `apk add rpcd-mod-luci rpcd-mod-iwinfo` on OpenWrt ≥ 25.12), restart `rpcd` (or reboot), then verify with `ubus list luci-rpc` and `ubus call luci-rpc getNetworkDevices '{}'`.
 
 ---
 

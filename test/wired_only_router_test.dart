@@ -21,7 +21,7 @@ void main() {
         'uptime': 12345,
         'device': 'br-lan',
         'ipv4-address': [
-          {'address': '192.168.1.1', 'mask': 24}
+          {'address': '192.168.1.1', 'mask': 24},
         ],
         'dns-server': ['8.8.8.8'],
         // No 'stats' key at all
@@ -61,8 +61,9 @@ void main() {
         if (result[0] == 0) {
           return result[1];
         } else {
-          final errorMessage =
-              result[1] is String ? result[1] : 'Unknown API Error';
+          final errorMessage = result[1] is String
+              ? result[1]
+              : 'Unknown API Error';
           throw Exception(errorMessage);
         }
       }
@@ -77,15 +78,15 @@ void main() {
       }
     }
 
-    test('getData throws on non-zero status (simulates uci.get wireless failure)', () {
-      // On a wired-only router, uci.get for wireless config returns an error
-      final wirelessResult = [5, 'Entry not found'];
+    test(
+      'getData throws on non-zero status (simulates uci.get wireless failure)',
+      () {
+        // On a wired-only router, uci.get for wireless config returns an error
+        final wirelessResult = [5, 'Entry not found'];
 
-      expect(
-        () => getData(wirelessResult),
-        throwsException,
-      );
-    });
+        expect(() => getData(wirelessResult), throwsException);
+      },
+    );
 
     test('getOptionalData returns null on failure instead of throwing', () {
       final wirelessResult = [5, 'Entry not found'];
@@ -98,7 +99,7 @@ void main() {
     test('getOptionalData returns data on success', () {
       final wirelessResult = [
         0,
-        {'values': {}}
+        {'values': {}},
       ];
 
       final data = getOptionalData(wirelessResult, 'uci.get wireless');
@@ -126,7 +127,7 @@ void main() {
             'uptime': 200,
             'device': 'eth0',
           },
-        ]
+        ],
       };
       // networkDevices could be null or empty on some setups
       final Map<String, dynamic>? networkDevices = null;
@@ -139,27 +140,29 @@ void main() {
       if (detailedData.containsKey('interface') &&
           detailedData['interface'] is List) {
         final List<dynamic> interfaceDataList = detailedData['interface'];
-        final Map<String, dynamic> networkStatsMap =
-            networkDevices != null ? Map<String, dynamic>.from(networkDevices) : {};
+        final Map<String, dynamic> networkStatsMap = networkDevices != null
+            ? Map<String, dynamic>.from(networkDevices)
+            : {};
 
-        interfacesList =
-            interfaceDataList.whereType<Map<String, dynamic>>().map((
-          detailedInterfaceMap,
-        ) {
-          // Enrich with stats if available (but don't require it)
-          final stats = detailedInterfaceMap['stats'];
-          if (stats == null || (stats is Map && stats.isEmpty)) {
-            final String? deviceName =
-                detailedInterfaceMap['l3_device'] ?? detailedInterfaceMap['device'];
-            if (deviceName != null) {
-              final statsContainer = networkStatsMap[deviceName];
-              if (statsContainer is Map && statsContainer['stats'] is Map) {
-                detailedInterfaceMap['stats'] = statsContainer['stats'];
+        interfacesList = interfaceDataList
+            .whereType<Map<String, dynamic>>()
+            .map((detailedInterfaceMap) {
+              // Enrich with stats if available (but don't require it)
+              final stats = detailedInterfaceMap['stats'];
+              if (stats == null || (stats is Map && stats.isEmpty)) {
+                final String? deviceName =
+                    detailedInterfaceMap['l3_device'] ??
+                    detailedInterfaceMap['device'];
+                if (deviceName != null) {
+                  final statsContainer = networkStatsMap[deviceName];
+                  if (statsContainer is Map && statsContainer['stats'] is Map) {
+                    detailedInterfaceMap['stats'] = statsContainer['stats'];
+                  }
+                }
               }
-            }
-          }
-          return NetworkInterface.fromJson(detailedInterfaceMap);
-        }).toList();
+              return NetworkInterface.fromJson(detailedInterfaceMap);
+            })
+            .toList();
       }
 
       // With the fix, we should still get interfaces even without stats

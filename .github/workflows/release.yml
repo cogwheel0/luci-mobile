@@ -5,29 +5,64 @@ on:
     tags:
       - 'v*'
 
-jobs:  
-  build-android:      
-    name: Build Android 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate-release-notes:
+    name: Generate Release Notes
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Create Release with Notes
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
+        with:
+          tag: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          generateReleaseNotes: true
+          makeLatest: true
+
+  build-android:
+    name: Build Android
+    runs-on: ubuntu-latest
+    needs: generate-release-notes
+    permissions:
+      contents: write
 
     steps:
         #1 Checkout Repository
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
 
         #2 Setup Java
       - name: Set Up Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '21'
+
+      - name: Setup Gradle and caching
+        uses: gradle/actions/setup-gradle@6cfc8b8e8bb586cc164bef1c478c1eea3a4d6a19 # v3
+        with:
+          cache-read-only: false
 
         #3 Setup Flutter
       - name: Set Up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
-          flutter-version: '3.35.2'
+          flutter-version: '3.47.1'
           channel: 'stable'
+          cache: true
 
         #4 Install Dependencies
       - name: Install Dependencies
@@ -42,45 +77,114 @@ jobs:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEY_PROPERTIES_BASE64: ${{ secrets.ANDROID_KEY_PROPERTIES_BASE64 }}
         working-directory: android
-      
-      - name: Build APK
-        run: flutter build apk --release
+
+      - name: Build APKs (split per ABI)
+        run: flutter build apk --split-per-abi --release
 
       - name: Build appBundle
         run: flutter build appbundle --release
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Releases
+          name: Android-Release
           path: |
-            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-x86_64-release.apk
             build/app/outputs/bundle/release/app-release.aab
 
-      - name: Generate Release Notes
-        id: release_notes
-        run: |
-          # Get the previous tag
-          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -2 | tail -1)
-          
-          # If no previous tag exists, use the first commit
-          if [ -z "$PREVIOUS_TAG" ]; then
-            PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
-          fi
-          
-          # Generate commit messages since the previous tag
-          echo "## What's Changed" > release_notes.md
-          echo "" >> release_notes.md
-          git log --pretty=format:"- %s (%h)" $PREVIOUS_TAG..${{ github.ref_name }} >> release_notes.md
-          
-          # Set the release notes as output
-          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
-          cat release_notes.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        uses: ncipollo/release-action@v1
+      - name: Update Release with Artifacts
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
         with:
-          artifacts: "build/app/outputs/flutter-apk/app-release.apk,build/app/outputs/bundle/release/app-release.aab"
+          artifacts: "build/app/outputs/flutter-apk/app-arm64-v8a-release.apk,build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk,build/app/outputs/flutter-apk/app-x86_64-release.apk,build/app/outputs/bundle/release/app-release.aab"
           tag: ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: true
+          makeLatest: true
+          omitBody: true
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+
+  build-ios:
+    name: Build iOS
+    runs-on: macos-26
+    needs: generate-release-notes
+    permissions:
+      contents: write
+
+    steps:
+        #1 Checkout Repository
+      - name: Checkout Repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+        #2 Setup Flutter
+      - name: Set Up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.1'
+          channel: 'stable'
+          cache: true
+
+        #3 Install Dependencies
+      - name: Install Dependencies
+        run: flutter pub get
+
+        #4 Setup Xcode
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: '26.5'
+
+        #5 Cache CocoaPods
+      - name: Cache CocoaPods
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install --verbose
+
+        #6 Build iOS App
+      - name: Build iOS App
+        run: |
+          flutter build ios --release --no-codesign
+
+        #7 Create IPA from App Bundle
+      - name: Create IPA
+        run: |
+          mkdir -p build/ios/ipa
+          cd build/ios/Release-iphoneos
+          mkdir Payload
+          cp -r Runner.app Payload/
+          zip -r ../ipa/luci-mobile.ipa Payload
+          cd ../ipa
+
+        #8 Upload Artifacts
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: iOS-Release
+          path: |
+            build/ios/ipa/*.ipa
+
+        #9 Update Release
+      - name: Update Release with IPA
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
+        with:
+          artifacts: "build/ios/ipa/luci-mobile.ipa"
+          tag: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: true
+          makeLatest: true
+          omitBody: true
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true

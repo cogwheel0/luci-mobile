@@ -11,9 +11,13 @@ class SettingsScreen extends ConsumerWidget {
 
   void _showReviewerModeResetDialog(BuildContext context, WidgetRef ref) {
     final appState = ref.read(appStateProvider);
+    // Capture the root navigator before any awaits: the dialog's context is
+    // dead once popped, so a later context.mounted check would skip the
+    // navigation and leave the user on a stale screen.
+    final navigator = Navigator.of(context);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Exit Reviewer Mode?'),
         content: const Text(
           'This will disable reviewer mode and return to normal authentication. '
@@ -21,21 +25,17 @@ class SettingsScreen extends ConsumerWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           FilledButton(
             onPressed: () async {
-              Navigator.of(context).pop();
+              Navigator.of(dialogContext).pop();
               await appState.setReviewerMode(false);
-              appState.logout();
-              if (context.mounted) {
-                unawaited(
-                  Navigator.of(
-                    context,
-                  ).pushNamedAndRemoveUntil('/login', (route) => false),
-                );
-              }
+              await appState.logout();
+              unawaited(
+                navigator.pushNamedAndRemoveUntil('/login', (route) => false),
+              );
             },
             child: const Text('Exit'),
           ),
@@ -99,7 +99,10 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ),
                   Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     elevation: 2,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -113,7 +116,9 @@ class SettingsScreen extends ConsumerWidget {
                         ),
                         child: Icon(
                           Icons.dashboard_customize,
-                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onPrimaryContainer,
                           size: 24,
                         ),
                       ),
@@ -121,7 +126,9 @@ class SettingsScreen extends ConsumerWidget {
                         'Customize Dashboard',
                         style: TextStyle(fontWeight: FontWeight.w600),
                       ),
-                      subtitle: const Text('Configure interface visibility and throughput monitoring'),
+                      subtitle: const Text(
+                        'Configure interface visibility and throughput monitoring',
+                      ),
                       trailing: Icon(
                         Icons.arrow_forward_ios,
                         size: 16,
