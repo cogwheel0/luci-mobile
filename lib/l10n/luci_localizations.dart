@@ -23,14 +23,16 @@ Locale? resolveLuciLocale(
 
   for (final device in locales) {
     final language = device.languageCode.toLowerCase();
+    final script = device.scriptCode?.toLowerCase();
     final prefersTraditional =
         language == 'zh' &&
-        (device.scriptCode?.toLowerCase() == 'hant' ||
-            const {
-              'TW',
-              'HK',
-              'MO',
-            }.contains(device.countryCode?.toUpperCase()));
+        (script == 'hant' ||
+            (script == null &&
+                const {
+                  'TW',
+                  'HK',
+                  'MO',
+                }.contains(device.countryCode?.toUpperCase())));
 
     if (prefersTraditional) {
       for (final locale in supported) {
@@ -42,8 +44,7 @@ Locale? resolveLuciLocale(
 
     for (final locale in supported) {
       if (locale.languageCode.toLowerCase() == language &&
-          locale.scriptCode?.toLowerCase() ==
-              device.scriptCode?.toLowerCase()) {
+          locale.scriptCode?.toLowerCase() == script) {
         return locale;
       }
     }

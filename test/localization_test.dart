@@ -61,5 +61,15 @@ void main() {
       ], AppLocalizations.supportedLocales),
       const Locale('en'),
     );
+    expect(
+      resolveLuciLocale(const <Locale>[
+        Locale.fromSubtags(
+          languageCode: 'zh',
+          scriptCode: 'Hans',
+          countryCode: 'TW',
+        ),
+      ], AppLocalizations.supportedLocales),
+      const Locale('zh'),
+    );
   });
 }
