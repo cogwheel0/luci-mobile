@@ -1805,6 +1805,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
 
   static const _encryptionOptions = [
     'none',
+    'owe',
     'psk2',
     'psk',
     'psk-mixed',
@@ -1852,6 +1853,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
 
   String _encryptionLabel(String value) => switch (value) {
     'none' => context.l10n.encryptionNone,
+    'owe' => 'OWE',
     'psk2' => 'WPA2-PSK',
     'psk' => 'WPA-PSK',
     'psk-mixed' => 'WPA/WPA2 Mixed PSK',

@@ -24,8 +24,13 @@ Locale? resolveLuciLocale(
   for (final device in locales) {
     final language = device.languageCode.toLowerCase();
     final prefersTraditional =
-        device.scriptCode?.toLowerCase() == 'hant' ||
-        const {'TW', 'HK', 'MO'}.contains(device.countryCode?.toUpperCase());
+        language == 'zh' &&
+        (device.scriptCode?.toLowerCase() == 'hant' ||
+            const {
+              'TW',
+              'HK',
+              'MO',
+            }.contains(device.countryCode?.toUpperCase()));
 
     if (prefersTraditional) {
       for (final locale in supported) {

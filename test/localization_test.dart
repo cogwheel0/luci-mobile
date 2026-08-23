@@ -30,11 +30,34 @@ void main() {
     final german = await AppLocalizations.delegate.load(const Locale('de'));
     expect(german.clients, 'Clients');
     expect(german.settings, 'Einstellungen');
+
+    for (final locale in AppLocalizations.supportedLocales) {
+      final localizations = await AppLocalizations.delegate.load(locale);
+      expect(localizations.reviewerModeConfirmation, contains('REVIEWER'));
+      expect(localizations.typeReviewer, contains('REVIEWER'));
+    }
+
+    const traditionalChinese = Locale.fromSubtags(
+      languageCode: 'zh',
+      scriptCode: 'Hant',
+    );
+    for (final locale in const <Locale>[
+      Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'),
+      Locale('zh', 'TW'),
+      Locale('zh', 'HK'),
+      Locale('zh', 'MO'),
+    ]) {
+      expect(
+        resolveLuciLocale(<Locale>[locale], AppLocalizations.supportedLocales),
+        traditionalChinese,
+      );
+    }
+
     expect(
       resolveLuciLocale(const <Locale>[
-        Locale('zh', 'TW'),
+        Locale('en', 'TW'),
       ], AppLocalizations.supportedLocales),
-      const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'),
+      const Locale('en'),
     );
   });
 }
