@@ -11,6 +11,7 @@ import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
 import 'package:luci_mobile/widgets/luci_refresh_components.dart';
 import 'package:luci_mobile/screens/wifi_scan_screen.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class InterfacesScreen extends ConsumerStatefulWidget {
   final String? scrollToInterface;
@@ -412,7 +413,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     final appState = ref.read(appStateProvider);
 
     return Scaffold(
-      appBar: const LuciAppBar(title: 'Interfaces'),
+      appBar: LuciAppBar(title: context.l10n.interfaces),
       body: SafeArea(
         top: true,
         bottom: false,
@@ -453,9 +454,9 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
 
                   if (dashboardError != null && dashboardData == null) {
                     return LuciErrorDisplay(
-                      title: 'Failed to Load Interfaces',
+                      title: context.l10n.failedToLoadInterfaces,
                       message: dashboardError,
-                      actionLabel: 'Retry',
+                      actionLabel: context.l10n.retry,
                       onAction: () => appState.fetchDashboardData(),
                       icon: Icons.wifi_off_rounded,
                     );
@@ -463,11 +464,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
 
                   if (dashboardData == null) {
                     return LuciEmptyState(
-                      title: 'No Interface Data',
-                      message:
-                          'Unable to fetch interface information. Pull down to refresh or tap the button below.',
+                      title: context.l10n.noInterfaceData,
+                      message: context.l10n.noInterfaceDataDescription,
                       icon: Icons.device_hub_outlined,
-                      actionLabel: 'Fetch Data',
+                      actionLabel: context.l10n.fetchData,
                       onAction: () => appState.fetchDashboardData(),
                     );
                   }
@@ -475,7 +475,9 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                   return CustomScrollView(
                     controller: _scrollController,
                     slivers: [
-                      SliverToBoxAdapter(child: LuciSectionHeader('Wired')),
+                      SliverToBoxAdapter(
+                        child: LuciSectionHeader(context.l10n.wired),
+                      ),
                       _buildWiredInterfacesList(),
                       SliverToBoxAdapter(
                         child: Padding(
@@ -487,7 +489,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'Wireless',
+                                context.l10n.wireless,
                                 style: LuciTextStyles.sectionHeader(context),
                               ),
                               TextButton.icon(
@@ -500,7 +502,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                                   );
                                 },
                                 icon: Icon(Icons.cell_tower, size: 16),
-                                label: Text('Radio'),
+                                label: Text(context.l10n.radio),
                                 style: TextButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 12,
@@ -683,7 +685,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             final bandLabel = formatWifiBand(bandStr);
             final subtitleParts = <String>[mode];
             if (bandLabel.isNotEmpty) subtitleParts.add(bandLabel);
-            subtitleParts.add('Ch. $channel');
+            subtitleParts.add(context.l10n.channelShort(channel));
 
             // Build encryption description
             final rawEncIwinfo = iwinfo['encryption'];
@@ -695,7 +697,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             interfacesList.add({
               'name': _uciString(config['ssid']).isNotEmpty
                   ? _uciString(config['ssid'])
-                  : (iwinfo['ssid']?.toString() ?? 'Unnamed'),
+                  : (iwinfo['ssid']?.toString() ?? context.l10n.unnamed),
               'subtitle': subtitleParts.join(' • '),
               'isEnabled': isEnabled,
               'isIfaceEnabled': isIfaceEnabled,
@@ -716,14 +718,15 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               'channel': channel,
               'signal': iwinfo['signal']?.toString() ?? '--',
               'details': {
-                'Device': _uciString(config['device'], radioName),
-                'Mode': _uciString(config['mode']).isNotEmpty
+                context.l10n.device: _uciString(config['device'], radioName),
+                context.l10n.mode: _uciString(config['mode']).isNotEmpty
                     ? _uciString(config['mode'])
                     : (iwinfo['mode']?.toString() ?? 'N/A'),
-                'Band': bandLabel.isNotEmpty ? bandLabel : 'N/A',
-                'Channel': channel,
-                'Signal': '${iwinfo['signal']?.toString() ?? '--'} dBm',
-                'Network': (config['network'] is List)
+                context.l10n.band: bandLabel.isNotEmpty ? bandLabel : 'N/A',
+                context.l10n.channel: channel,
+                context.l10n.signal:
+                    '${iwinfo['signal']?.toString() ?? '--'} dBm',
+                context.l10n.network: (config['network'] is List)
                     ? (config['network'] as List).join(', ')
                     : _uciString(config['network'], 'N/A'),
               },
@@ -745,11 +748,11 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
           configured: uciRadios[radioName]?['channel'],
         );
 
-        final name = _uciString(config['ssid'], 'Unnamed');
+        final name = _uciString(config['ssid'], context.l10n.unnamed);
         interfacesList.add({
           'name': name,
           'subtitle':
-              '${_uciString(config['mode'], 'N/A').toUpperCase()} • Not Running',
+              '${_uciString(config['mode'], 'N/A').toUpperCase()} • ${context.l10n.notRunning}',
           'isEnabled': false,
           'isIfaceEnabled': isIfaceEnabled,
           'isRadioEnabled': isRadioEnabled,
@@ -768,11 +771,11 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
           'channel': channel,
           'signal': '--',
           'details': {
-            'Device': radioName,
-            'Mode': _uciString(config['mode'], 'N/A'),
-            'SSID': _uciString(config['ssid'], 'N/A'),
-            'Channel': channel,
-            'Network': (config['network'] is List)
+            context.l10n.device: radioName,
+            context.l10n.mode: _uciString(config['mode'], 'N/A'),
+            context.l10n.ssid: _uciString(config['ssid'], 'N/A'),
+            context.l10n.channel: channel,
+            context.l10n.network: (config['network'] is List)
                 ? (config['network'] as List).join(', ')
                 : _uciString(config['network'], 'N/A'),
           },
@@ -890,7 +893,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
         }),
         // Encryption row
         if (encDescription.isNotEmpty && encDescription != 'N/A')
-          _buildDetailRow(context, 'Encryption', encDescription),
+          _buildDetailRow(context, context.l10n.encryption, encDescription),
 
         const Divider(height: 1, indent: 16, endIndent: 16),
         const SizedBox(height: 8),
@@ -919,7 +922,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                       child: OutlinedButton.icon(
                         onPressed: () => _showEditWifiSheet(context, iface),
                         icon: Icon(Icons.edit_outlined, size: 18),
-                        label: const Text('Edit'),
+                        label: Text(context.l10n.edit),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: colorScheme.primary,
                           side: BorderSide(
@@ -937,7 +940,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                       child: OutlinedButton.icon(
                         onPressed: () => _showDeleteWifiDialog(context, iface),
                         icon: Icon(Icons.delete_outline, size: 18),
-                        label: const Text('Remove'),
+                        label: Text(context.l10n.remove),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: colorScheme.error,
                           side: BorderSide(
@@ -961,10 +964,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
                       mode.toLowerCase() == 'sta'
-                          ? 'Client (Station) mode'
+                          ? context.l10n.clientStationMode
                           : mode.toLowerCase() == 'ap'
-                          ? 'Access Point mode'
-                          : '${mode.toUpperCase()} mode',
+                          ? context.l10n.accessPointMode
+                          : context.l10n.modeValue(mode.toUpperCase()),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         fontStyle: FontStyle.italic,
@@ -979,7 +982,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
-              'UCI section unavailable — limited management',
+              context.l10n.limitedInterfaceManagement,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
                 fontStyle: FontStyle.italic,
@@ -1005,7 +1008,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
   }
 
   void _showDeleteWifiDialog(BuildContext context, Map<String, dynamic> iface) {
-    final ssid = iface['ssid']?.toString() ?? 'this interface';
+    final ssid = iface['ssid']?.toString() ?? context.l10n.thisInterface;
     final uciSection = iface['uciSection'] as String? ?? '';
     final mode = iface['mode']?.toString() ?? 'ap';
     if (uciSection.isEmpty) return;
@@ -1020,43 +1023,54 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
   Widget _buildWiredDetails(BuildContext context, NetworkInterface interface) {
     return Column(
       children: [
-        _buildDetailRow(context, 'Device', interface.device),
-        _buildDetailRow(context, 'Uptime', interface.formattedUptime),
+        _buildDetailRow(context, context.l10n.device, interface.device),
+        _buildDetailRow(
+          context,
+          context.l10n.uptime,
+          interface.formattedUptime,
+        ),
         if (interface.ipAddress != null)
           _buildDetailRow(
             context,
-            'IP Address',
+            context.l10n.ipAddress,
             interface.ipAddress!,
-            onTap: () =>
-                _copyToClipboard(context, interface.ipAddress!, 'IP Address'),
+            onTap: () => _copyToClipboard(
+              context,
+              interface.ipAddress!,
+              context.l10n.ipAddress,
+            ),
           ),
         if (interface.ipv6Addresses != null &&
             interface.ipv6Addresses!.isNotEmpty)
           ...interface.ipv6Addresses!.map(
             (ipv6) => _buildDetailRow(
               context,
-              'IPv6 Address',
+              context.l10n.ipv6Address,
               ipv6,
-              onTap: () => _copyToClipboard(context, ipv6, 'IPv6 Address'),
+              onTap: () =>
+                  _copyToClipboard(context, ipv6, context.l10n.ipv6Address),
             ),
           ),
         if (interface.gateway != null)
           _buildDetailRow(
             context,
-            'Gateway',
+            context.l10n.gateway,
             interface.gateway!,
-            onTap: () =>
-                _copyToClipboard(context, interface.gateway!, 'Gateway IP'),
+            onTap: () => _copyToClipboard(
+              context,
+              interface.gateway!,
+              context.l10n.gatewayIp,
+            ),
           ),
         if (interface.dnsServers.isNotEmpty)
           _buildDetailRow(
             context,
-            'DNS',
+            context.l10n.dns,
             interface.dnsServers.join(', '),
             onTap: () => _copyToClipboard(
               context,
               interface.dnsServers.join(', '),
-              'DNS Servers',
+              context.l10n.dnsServers,
             ),
           ),
         // Add WireGuard peer information if this is a WireGuard interface
@@ -1134,21 +1148,21 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
         ? '${publicKey.substring(0, 8)}...${publicKey.substring(publicKey.length - 8)}'
         : publicKey;
     String formatHandshakeTime(int timestamp) {
-      if (timestamp == 0) return 'Never';
+      if (timestamp == 0) return context.l10n.never;
       final now = DateTime.now();
       final handshakeTime = DateTime.fromMillisecondsSinceEpoch(
         timestamp * 1000,
       );
       final difference = now.difference(handshakeTime);
-      if (difference.inSeconds < 0) return 'Never';
+      if (difference.inSeconds < 0) return context.l10n.never;
       if (difference.inDays > 0) {
-        return '${difference.inDays}d ago';
+        return context.l10n.daysAgo(difference.inDays);
       } else if (difference.inHours > 0) {
-        return '${difference.inHours}h ago';
+        return context.l10n.hoursAgo(difference.inHours);
       } else if (difference.inMinutes > 0) {
-        return '${difference.inMinutes}m ago';
+        return context.l10n.minutesAgo(difference.inMinutes);
       } else {
-        return '${difference.inSeconds}s ago';
+        return context.l10n.secondsAgo(difference.inSeconds);
       }
     }
 
@@ -1199,7 +1213,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
-                      'Last Handshake',
+                      context.l10n.lastHandshake,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         fontSize: 12,
@@ -1224,7 +1238,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
-                      'Endpoint',
+                      context.l10n.endpoint,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         fontSize: 12,
@@ -1287,12 +1301,12 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                 if (onTap != null)
                   GestureDetector(
                     onTap: onTap,
-                    child: const Padding(
-                      padding: EdgeInsets.only(left: 8.0),
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8.0),
                       child: Icon(
                         Icons.copy_all_outlined,
                         size: 16,
-                        semanticLabel: 'Copy',
+                        semanticLabel: context.l10n.copy,
                       ),
                     ),
                   ),
@@ -1308,7 +1322,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$label copied to clipboard'),
+        content: Text(context.l10n.copiedToClipboard(label)),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -1327,14 +1341,14 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
       children: [
         _buildStatColumn(
           context,
-          'Received',
+          context.l10n.received,
           formatBytes(stats['rx_bytes'] ?? 0),
           Icons.arrow_downward,
           Colors.green,
         ),
         _buildStatColumn(
           context,
-          'Transmitted',
+          context.l10n.transmitted,
           formatBytes(stats['tx_bytes'] ?? 0),
           Icons.arrow_upward,
           Colors.blue,
@@ -1563,7 +1577,7 @@ class _UnifiedNetworkCardState extends State<_UnifiedNetworkCard>
                                   ? colorScheme.primary
                                   : colorScheme.onSurface,
                               size: 22,
-                              semanticLabel: 'Interface icon',
+                              semanticLabel: context.l10n.interfaceIcon,
                             ),
                           ),
                         ),
@@ -1572,8 +1586,8 @@ class _UnifiedNetworkCardState extends State<_UnifiedNetworkCard>
                           top: 0,
                           child: Tooltip(
                             message: widget.isUp
-                                ? 'Interface is up'
-                                : 'Interface is down',
+                                ? context.l10n.interfaceIsUp
+                                : context.l10n.interfaceIsDown,
                             child: LuciStatusIndicators.statusDot(
                               context,
                               widget.isUp,
@@ -1590,7 +1604,9 @@ class _UnifiedNetworkCardState extends State<_UnifiedNetworkCard>
                           Text(
                             widget.name,
                             style: LuciTextStyles.cardTitle(context),
-                            semanticsLabel: 'Interface name: ${widget.name}',
+                            semanticsLabel: context.l10n.interfaceNameSemantics(
+                              widget.name,
+                            ),
                           ),
                           const SizedBox(height: LuciSpacing.xs),
                           Container(
@@ -1605,8 +1621,8 @@ class _UnifiedNetworkCardState extends State<_UnifiedNetworkCard>
                           Text(
                             widget.subtitle,
                             style: LuciTextStyles.cardSubtitle(context),
-                            semanticsLabel:
-                                'Interface details: ${widget.subtitle}',
+                            semanticsLabel: context.l10n
+                                .interfaceDetailsSemantics(widget.subtitle),
                           ),
                         ],
                       ),
@@ -1616,7 +1632,7 @@ class _UnifiedNetworkCardState extends State<_UnifiedNetworkCard>
                         padding: const EdgeInsets.only(right: LuciSpacing.xs),
                         child: LuciStatusIndicators.statusChip(
                           context,
-                          'OFF',
+                          context.l10n.off.toUpperCase(),
                           false,
                         ),
                       ),
@@ -1626,8 +1642,8 @@ class _UnifiedNetworkCardState extends State<_UnifiedNetworkCard>
                       color: colorScheme.onSurfaceVariant,
                       size: 26,
                       semanticLabel: _isExpanded
-                          ? 'Collapse details'
-                          : 'Expand details',
+                          ? context.l10n.collapseDetails
+                          : context.l10n.expandDetails,
                     ),
                   ],
                 ),
@@ -1709,7 +1725,7 @@ class _WifiToggleRowState extends ConsumerState<_WifiToggleRow> {
       if (!success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Failed to toggle interface'),
+            content: Text(context.l10n.failedToToggleInterface),
             backgroundColor: Theme.of(context).colorScheme.error,
             behavior: SnackBarBehavior.floating,
           ),
@@ -1741,7 +1757,9 @@ class _WifiToggleRowState extends ConsumerState<_WifiToggleRow> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              widget.isEnabled ? 'Interface Enabled' : 'Interface Disabled',
+              widget.isEnabled
+                  ? context.l10n.interfaceEnabled
+                  : context.l10n.interfaceDisabled,
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w500,
               ),
@@ -1786,12 +1804,13 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
   String? _error;
 
   static const _encryptionOptions = [
-    {'value': 'none', 'label': 'None (Open)'},
-    {'value': 'psk2', 'label': 'WPA2-PSK'},
-    {'value': 'psk', 'label': 'WPA-PSK'},
-    {'value': 'psk-mixed', 'label': 'WPA/WPA2 Mixed PSK'},
-    {'value': 'sae', 'label': 'WPA3-SAE'},
-    {'value': 'sae-mixed', 'label': 'WPA2/WPA3 Mixed'},
+    'none',
+    'owe',
+    'psk2',
+    'psk',
+    'psk-mixed',
+    'sae',
+    'sae-mixed',
   ];
 
   @override
@@ -1810,8 +1829,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
         .split('+')
         .first;
     _originalEncryption = currentEnc;
-    _selectedEncryption =
-        _encryptionOptions.any((option) => option['value'] == currentEnc)
+    _selectedEncryption = _encryptionOptions.contains(currentEnc)
         ? currentEnc
         : null;
   }
@@ -1831,7 +1849,18 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
 
   bool get _isEncryptionSupported =>
       _selectedEncryption != null &&
-      _encryptionOptions.any((o) => o['value'] == _selectedEncryption);
+      _encryptionOptions.contains(_selectedEncryption);
+
+  String _encryptionLabel(String value) => switch (value) {
+    'none' => context.l10n.encryptionNone,
+    'owe' => 'OWE',
+    'psk2' => 'WPA2-PSK',
+    'psk' => 'WPA-PSK',
+    'psk-mixed' => 'WPA/WPA2 Mixed PSK',
+    'sae' => 'WPA3-SAE',
+    'sae-mixed' => 'WPA2/WPA3 Mixed',
+    _ => value,
+  };
 
   /// True when switching from an open interface to a password-protected one.
   bool get _changingToEncrypted =>
@@ -1841,30 +1870,26 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
   Future<void> _save() async {
     final ssid = _ssidController.text.trim();
     if (ssid.isEmpty) {
-      setState(() => _error = 'SSID cannot be empty.');
+      setState(() => _error = context.l10n.ssidEmptyError);
       return;
     }
 
     // Block unsupported encryption modes (e.g. enterprise WPA-EAP)
     if (!_isEncryptionSupported) {
-      setState(
-        () => _error = 'Select a supported encryption mode before saving.',
-      );
+      setState(() => _error = context.l10n.unsupportedEncryptionError);
       return;
     }
 
     // Require a password when changing an open interface to an encrypted one
     if (_changingToEncrypted && _passwordController.text.isEmpty) {
-      setState(
-        () => _error = 'A password is required when enabling encryption.',
-      );
+      setState(() => _error = context.l10n.encryptionPasswordRequiredError);
       return;
     }
 
     if (_requiresPassword &&
         _passwordController.text.isNotEmpty &&
         _passwordController.text.length < 8) {
-      setState(() => _error = 'Password must be at least 8 characters.');
+      setState(() => _error = context.l10n.passwordLengthError);
       return;
     }
 
@@ -1877,7 +1902,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
     if (uciSection.isEmpty) {
       setState(() {
         _isSaving = false;
-        _error = 'Cannot identify UCI section for this interface.';
+        _error = context.l10n.uciSectionMissingError;
       });
       return;
     }
@@ -1918,7 +1943,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
             children: [
               const Icon(Icons.check_circle, color: Colors.white, size: 20),
               const SizedBox(width: 8),
-              Text('Updated "$ssid" — reloading WiFi...'),
+              Text(context.l10n.wifiUpdated(ssid)),
             ],
           ),
           backgroundColor: Colors.green.shade700,
@@ -1932,7 +1957,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
     } else {
       setState(() {
         _isSaving = false;
-        _error = 'Failed to save changes. Please try again.';
+        _error = context.l10n.saveChangesFailed;
       });
     }
   }
@@ -1990,13 +2015,13 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Edit Wireless Interface',
+                          context.l10n.editWirelessInterface,
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
-                          '${widget.iface['radioName']} • ${mode.toUpperCase()} mode',
+                          '${widget.iface['radioName']} • ${context.l10n.modeValue(mode.toUpperCase())}',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),
@@ -2010,14 +2035,14 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
               const SizedBox(height: 24),
 
               // SSID field
-              _buildLabel(context, 'SSID (Network Name)'),
+              _buildLabel(context, context.l10n.ssidNetworkName),
               const SizedBox(height: 6),
               TextField(
                 controller: _ssidController,
                 enabled: !_isSaving,
                 decoration: _inputDecoration(
                   context,
-                  hintText: 'Enter SSID',
+                  hintText: context.l10n.enterSsid,
                   prefixIcon: Icons.wifi,
                 ),
               ),
@@ -2025,7 +2050,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
               const SizedBox(height: 16),
 
               // Encryption selector
-              _buildLabel(context, 'Encryption'),
+              _buildLabel(context, context.l10n.encryption),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -2046,9 +2071,9 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
                     ),
                     items: _encryptionOptions.map((opt) {
                       return DropdownMenuItem<String>(
-                        value: opt['value'],
+                        value: opt,
                         child: Text(
-                          opt['label']!,
+                          _encryptionLabel(opt),
                           style: theme.textTheme.bodyMedium,
                         ),
                       );
@@ -2070,8 +2095,8 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
                 _buildLabel(
                   context,
                   _changingToEncrypted
-                      ? 'Password (required)'
-                      : 'Password (leave empty to keep current)',
+                      ? context.l10n.passwordRequired
+                      : context.l10n.passwordKeepCurrent,
                 ),
                 const SizedBox(height: 6),
                 TextField(
@@ -2080,7 +2105,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
                   enabled: !_isSaving,
                   decoration: _inputDecoration(
                     context,
-                    hintText: 'Enter new password',
+                    hintText: context.l10n.enterNewPassword,
                     prefixIcon: Icons.key,
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -2099,14 +2124,14 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
               const SizedBox(height: 16),
 
               // Network binding
-              _buildLabel(context, 'Network'),
+              _buildLabel(context, context.l10n.network),
               const SizedBox(height: 6),
               TextField(
                 controller: _networkController,
                 enabled: !_isSaving,
                 decoration: _inputDecoration(
                   context,
-                  hintText: 'e.g., lan, wwan',
+                  hintText: context.l10n.networkExample,
                   prefixIcon: Icons.lan_outlined,
                 ),
               ),
@@ -2161,7 +2186,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Changes will be applied immediately. WiFi will briefly restart.',
+                        context.l10n.wifiChangesWarning,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurface.withValues(alpha: 0.7),
                         ),
@@ -2189,7 +2214,9 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
                         )
                       : const Icon(Icons.save),
                   label: Text(
-                    _isSaving ? 'Applying...' : 'Save Changes',
+                    _isSaving
+                        ? context.l10n.applying
+                        : context.l10n.saveChanges,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -2293,7 +2320,7 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
             children: [
               const Icon(Icons.check_circle, color: Colors.white, size: 20),
               const SizedBox(width: 8),
-              Text('"${widget.ssid}" removed'),
+              Text(context.l10n.interfaceRemoved(widget.ssid)),
             ],
           ),
           backgroundColor: Colors.green.shade700,
@@ -2307,7 +2334,7 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
     } else {
       messenger.showSnackBar(
         SnackBar(
-          content: const Text('Failed to remove interface'),
+          content: Text(context.l10n.removeInterfaceFailed),
           backgroundColor: errorColor,
           behavior: SnackBarBehavior.floating,
         ),
@@ -2328,8 +2355,8 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
         modeLower.contains('client') ||
         modeLower == 'station';
     final warningMessage = isStaMode
-        ? 'This will remove the STA connection from this radio.'
-        : 'WiFi will restart. Clients on this network will be disconnected.';
+        ? context.l10n.removeStaWarning
+        : context.l10n.removeApWarning;
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -2341,12 +2368,12 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
         ),
         child: Icon(Icons.delete_forever, color: colorScheme.error, size: 32),
       ),
-      title: const Text('Remove Wireless Interface?'),
+      title: Text(context.l10n.removeWirelessInterfaceQuestion),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'This will permanently remove "$displayName" from your wireless configuration.',
+            context.l10n.removeWirelessInterfaceDescription(displayName),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
@@ -2376,7 +2403,7 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
       actions: [
         TextButton(
           onPressed: _isDeleting ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(context.l10n.cancel),
         ),
         FilledButton(
           onPressed: _isDeleting ? null : _delete,
@@ -2393,7 +2420,7 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
                     color: Colors.white,
                   ),
                 )
-              : const Text('Remove'),
+              : Text(context.l10n.remove),
         ),
       ],
     );

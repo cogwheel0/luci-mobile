@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class LuciAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String? title;
@@ -38,7 +39,7 @@ class LuciAppBar extends StatelessWidget implements PreferredSizeWidget {
                 color: theme.colorScheme.onSurface,
               ),
               onPressed: () => Navigator.of(context).maybePop(),
-              tooltip: 'Back',
+              tooltip: context.l10n.back,
             )
           : null,
       title:
@@ -154,7 +155,7 @@ class LuciErrorDisplay extends StatelessWidget {
                 ElevatedButton.icon(
                   onPressed: onAction,
                   icon: const Icon(Icons.refresh_rounded),
-                  label: Text(actionLabel ?? 'Retry'),
+                  label: Text(actionLabel ?? context.l10n.retry),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colorScheme.primary,
                     foregroundColor: colorScheme.onPrimary,
@@ -227,7 +228,7 @@ class LuciEmptyState extends StatelessWidget {
               ElevatedButton.icon(
                 onPressed: onAction,
                 icon: const Icon(Icons.add_rounded),
-                label: Text(actionLabel ?? 'Add'),
+                label: Text(actionLabel ?? context.l10n.add),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorScheme.primary,
                   foregroundColor: colorScheme.onPrimary,

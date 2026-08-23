@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/config/app_config.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -87,7 +88,7 @@ class _SplashScreenState extends State<SplashScreen>
               ),
               const SizedBox(height: 32),
               Text(
-                'LuCI Mobile',
+                context.l10n.appTitle,
                 style: theme.textTheme.headlineLarge?.copyWith(
                   color: colorScheme.onPrimaryContainer,
                   fontWeight: FontWeight.bold,
@@ -96,7 +97,7 @@ class _SplashScreenState extends State<SplashScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                'OpenWrt Router Control',
+                context.l10n.appTagline,
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
                   fontWeight: FontWeight.w500,

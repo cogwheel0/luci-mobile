@@ -4,6 +4,7 @@ import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/screens/router_dashboard_settings_screen.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class DashboardSettingsListScreen extends ConsumerWidget {
   const DashboardSettingsListScreen({super.key});
@@ -14,7 +15,7 @@ class DashboardSettingsListScreen extends ConsumerWidget {
     final routers = appState.routers;
 
     return Scaffold(
-      appBar: const LuciAppBar(title: 'Dashboard Settings', showBack: true),
+      appBar: LuciAppBar(title: context.l10n.dashboardSettings, showBack: true),
       body: routers.isEmpty
           ? Center(
               child: Padding(
@@ -29,12 +30,12 @@ class DashboardSettingsListScreen extends ConsumerWidget {
                     ),
                     SizedBox(height: LuciSpacing.md),
                     Text(
-                      'No Routers Added',
+                      context.l10n.noRoutersAdded,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     SizedBox(height: LuciSpacing.xs),
                     Text(
-                      'Add a router to customize its dashboard settings.',
+                      context.l10n.addRouterForDashboardSettings,
                       style: Theme.of(context).textTheme.bodySmall,
                       textAlign: TextAlign.center,
                     ),

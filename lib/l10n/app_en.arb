@@ -1,0 +1,520 @@
+{
+  "@@locale": "en",
+  "appTitle": "LuCI Mobile",
+  "appTagline": "OpenWrt Router Control",
+  "dashboard": "Dashboard",
+  "clients": "Clients",
+  "interfaces": "Interfaces",
+  "more": "More",
+  "settings": "Settings",
+  "cancel": "Cancel",
+  "close": "Close",
+  "exit": "Exit",
+  "retry": "Retry",
+  "back": "Back",
+  "add": "Add",
+  "remove": "Remove",
+  "loading": "Loading...",
+  "theme": "Theme",
+  "systemDefault": "System Default",
+  "light": "Light",
+  "dark": "Dark",
+  "customizeDashboard": "Customize Dashboard",
+  "customizeDashboardDescription": "Configure interface visibility and throughput monitoring",
+  "reviewerMode": "Reviewer Mode",
+  "reviewerModeActive": "Reviewer Mode Active",
+  "reviewerModeActiveDescription": "Mock data is being used for demonstration",
+  "exitReviewerMode": "Exit Reviewer Mode",
+  "exitReviewerModeQuestion": "Exit Reviewer Mode?",
+  "exitReviewerModeDescription": "This will disable reviewer mode and return to normal authentication. You will need to log in with real router credentials.",
+  "dashboardSettings": "Dashboard Settings",
+  "noRoutersAdded": "No Routers Added",
+  "addRouterForDashboardSettings": "Add a router to customize its dashboard settings.",
+  "throughputMonitoring": "Throughput Monitoring",
+  "throughputMonitoringDescription": "Configure which interfaces to monitor",
+  "showAllInterfaces": "Show All Interfaces",
+  "wirelessNetworks": "Wireless Networks",
+  "wirelessNetworksDescription": "Choose which wireless networks to display",
+  "showAllNetworks": "Show All Networks",
+  "networkInterfaces": "Network Interfaces",
+  "networkInterfacesDescription": "Choose which wired/VPN interfaces to display",
+  "wideAreaNetwork": "Wide Area Network",
+  "localAreaNetwork": "Local Area Network",
+  "wireGuardVpn": "WireGuard VPN",
+  "openVpn": "OpenVPN",
+  "pppoeConnection": "PPPoE Connection",
+  "unableToLoadDashboardData": "Unable to load dashboard data. Please check your connection.",
+  "failedToLoadSettings": "Failed to load settings: {error}",
+  "@failedToLoadSettings": {
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
+  "logout": "Logout",
+  "logoutQuestion": "Logout?",
+  "logoutConfirmation": "Are you sure you want to logout?",
+  "reboot": "Reboot",
+  "rebootRouter": "Reboot Router",
+  "rebootRouterQuestion": "Reboot Router?",
+  "rebootRouterConfirmation": "Are you sure you want to reboot the router?",
+  "routerBackOnline": "Router is back online, reconnecting...",
+  "rebootingConnectionInterrupted": "Rebooting... Connection will be interrupted.",
+  "rebootCommandSent": "Reboot command sent successfully.",
+  "rebootCommandFailed": "Failed to send reboot command.",
+  "version": "Version {version}",
+  "@version": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "versionLabel": "Version",
+  "aboutDescription": "A mobile client for OpenWrt routers.",
+  "openSourceDescription": "Open source and free to use.",
+  "couldNotOpenRepository": "Could not open repository",
+  "githubRepository": "GitHub Repository",
+  "deviceManagement": "Device Management",
+  "wifiScanner": "WiFi Scanner",
+  "wifiScannerDescription": "Scan and connect to wireless networks",
+  "administratorAccessRequired": "View only, administrator access required",
+  "checkingAdministratorAccess": "Checking administrator access...",
+  "rebootRouterDescription": "Perform a system restart",
+  "application": "Application",
+  "manageRouters": "Manage Routers",
+  "manageRoutersDescription": "Edit or remove saved routers",
+  "settingsDescription": "Configure app preferences",
+  "about": "About",
+  "aboutAppDescription": "App version and information",
+  "logoutDescription": "End your session and sign out",
+  "activateReviewerModeQuestion": "Activate Reviewer Mode?",
+  "activateReviewerModeDescription": "This will enable reviewer mode, bypass authentication, and provide mock data for app demonstrations.",
+  "reviewerModeConfirmation": "To confirm, type \"REVIEWER\" below:",
+  "typeReviewer": "Type REVIEWER",
+  "activate": "Activate",
+  "invalidAddressFormat": "Invalid address format",
+  "fallbackMustDiffer": "Fallback address must differ from primary",
+  "couldNotOpenGithubIssues": "Could not open GitHub issues",
+  "connectToRouter": "Connect to your OpenWrt router",
+  "fastSecureOpenSource": "Fast. Secure. Open Source.",
+  "holdForReviewerMode": "Hold to activate reviewer mode...",
+  "routerAddressHelp": "Enter the IP address, hostname, or full URL of your router",
+  "routerAddress": "Router Address",
+  "routerAddressExample": "e.g. 192.168.1.1, router.local:8080, https://192.168.1.1",
+  "routerAddressRequired": "Please enter the router address",
+  "addFallbackAddress": "Add fallback address",
+  "fallbackAddress": "Fallback Address",
+  "fallbackCredentialsHelp": "Same credentials will be used for both addresses",
+  "mustDifferFromPrimaryAddress": "Must differ from primary address",
+  "usernameHelp": "Enter your router username",
+  "username": "Username",
+  "usernameDefaultHelp": "Default is usually root",
+  "usernameRequired": "Please enter the username",
+  "passwordHelp": "Enter your router password",
+  "password": "Password",
+  "routerPasswordHelp": "Your router password",
+  "hidePassword": "Hide password",
+  "showPassword": "Show password",
+  "connect": "Connect",
+  "githubIssuesHelp": "Open GitHub issues for support",
+  "needHelp": "Need help?",
+  "failedToLoadClients": "Failed to Load Clients",
+  "clientSearchHint": "Search by name, IP, MAC, vendor...",
+  "clearSearch": "Clear search",
+  "all": "All",
+  "selected": "Selected",
+  "noActiveClients": "No Active Clients Found",
+  "noMatchingClients": "No Matching Clients",
+  "noActiveClientsDescription": "No clients are currently connected to the router. Pull down to refresh the list.",
+  "noMatchingClientsDescription": "No clients match your search criteria. Try a different search term.",
+  "clientIcon": "Client icon",
+  "clientOffline": "Client is offline",
+  "clientHostnameSemantics": "Client hostname: {hostname}",
+  "@clientHostnameSemantics": {
+    "placeholders": {
+      "hostname": {
+        "type": "String"
+      }
+    }
+  },
+  "clientDetailsSemantics": "Client details: {details}",
+  "@clientDetailsSemantics": {
+    "placeholders": {
+      "details": {
+        "type": "String"
+      }
+    }
+  },
+  "vendorSemantics": "Vendor: {vendor}",
+  "@vendorSemantics": {
+    "placeholders": {
+      "vendor": {
+        "type": "String"
+      }
+    }
+  },
+  "collapseDetails": "Collapse details",
+  "expandDetails": "Expand details",
+  "copy": "Copy",
+  "ipAddress": "IP Address",
+  "ipv6Address": "IPv6 Address",
+  "macAddress": "MAC Address",
+  "vendor": "Vendor",
+  "dnsName": "DNS Name",
+  "leaseTimeRemaining": "Lease Time Remaining",
+  "detailSemantics": "{label}: {value}",
+  "@detailSemantics": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "copiedToClipboard": "{label} copied to clipboard",
+  "@copiedToClipboard": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "offline": "Offline",
+  "wifi": "Wi-Fi",
+  "ethernet": "Ethernet",
+  "unknown": "Unknown",
+  "unlimited": "Unlimited",
+  "expired": "Expired",
+  "refreshFailed": "Refresh failed: {error}",
+  "@refreshFailed": {
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
+  "noItemsToDisplay": "No items to display",
+  "pullDownToRefresh": "Pull down to refresh",
+  "routers": "Routers",
+  "noRoutersYet": "No routers added yet.",
+  "removeRouter": "Remove Router",
+  "removeRouterConfirmation": "Are you sure you want to remove {router}?",
+  "@removeRouterConfirmation": {
+    "placeholders": {
+      "router": {
+        "type": "String"
+      }
+    }
+  },
+  "addRouter": "Add Router",
+  "required": "Required",
+  "routerAlreadyExists": "Router already exists.",
+  "failedToConnectCredentials": "Failed to connect: Invalid credentials or host unreachable.",
+  "failedToConnect": "Failed to connect: {error}",
+  "@failedToConnect": {
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
+  "connecting": "Connecting...",
+  "routerIcon": "Router icon",
+  "active": "Active",
+  "removeFallbackAddress": "Remove fallback address",
+  "removeFallbackAddressTitle": "Remove Fallback Address",
+  "removeFallbackAddressConfirmation": "Are you sure you want to remove the fallback address?",
+  "model": "Model",
+  "throughputForInterface": "Throughput - {interface}",
+  "@throughputForInterface": {
+    "placeholders": {
+      "interface": {
+        "type": "String"
+      }
+    }
+  },
+  "switchingRouter": "Switching router...",
+  "collectingThroughput": "Collecting throughput data...",
+  "cpuLoad": "CPU Load",
+  "load": "Load",
+  "cpu": "CPU",
+  "memory": "Memory",
+  "uptime": "Uptime",
+  "cpuTemperature": "CPU Temp",
+  "fan": "Fan",
+  "on": "On",
+  "off": "Off",
+  "channelValue": "Ch: {channel}",
+  "@channelValue": {
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "up": "UP",
+  "down": "DOWN",
+  "selectRouter": "Select Router",
+  "lastKnownHostnameWarning": "Last known hostname (may be out of date)",
+  "unableToLoadDashboard": "Unable to Load Dashboard",
+  "retryConnection": "Retry Connection",
+  "noDataAvailable": "No Data Available",
+  "noDashboardDataDescription": "Unable to fetch dashboard data. Pull down to refresh or tap the button below.",
+  "fetchData": "Fetch Data",
+  "releaseStable": "STABLE",
+  "releaseSnapshot": "SNAPSHOT",
+  "releaseBeta": "BETA",
+  "releaseCandidate": "RC",
+  "releaseTesting": "TESTING",
+  "failedToLoadInterfaces": "Failed to Load Interfaces",
+  "noInterfaceData": "No Interface Data",
+  "noInterfaceDataDescription": "Unable to fetch interface information. Pull down to refresh or tap the button below.",
+  "wired": "Wired",
+  "wireless": "Wireless",
+  "radio": "Radio",
+  "channelShort": "Ch. {channel}",
+  "@channelShort": {
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "unnamed": "Unnamed",
+  "notRunning": "Not Running",
+  "device": "Device",
+  "mode": "Mode",
+  "band": "Band",
+  "channel": "Channel",
+  "signal": "Signal",
+  "network": "Network",
+  "ssid": "SSID",
+  "encryption": "Encryption",
+  "edit": "Edit",
+  "clientStationMode": "Client (Station) mode",
+  "accessPointMode": "Access Point mode",
+  "modeValue": "{mode} mode",
+  "@modeValue": {
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "limitedInterfaceManagement": "UCI section unavailable, limited management",
+  "gateway": "Gateway",
+  "gatewayIp": "Gateway IP",
+  "dns": "DNS",
+  "dnsServers": "DNS Servers",
+  "never": "Never",
+  "daysAgo": "{count}d ago",
+  "@daysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "{count}h ago",
+  "@hoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "minutesAgo": "{count}m ago",
+  "@minutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "secondsAgo": "{count}s ago",
+  "@secondsAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lastHandshake": "Last Handshake",
+  "endpoint": "Endpoint",
+  "received": "Received",
+  "transmitted": "Transmitted",
+  "interfaceIcon": "Interface icon",
+  "interfaceIsUp": "Interface is up",
+  "interfaceIsDown": "Interface is down",
+  "interfaceNameSemantics": "Interface name: {name}",
+  "@interfaceNameSemantics": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "interfaceDetailsSemantics": "Interface details: {details}",
+  "@interfaceDetailsSemantics": {
+    "placeholders": {
+      "details": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToToggleInterface": "Failed to toggle interface",
+  "interfaceEnabled": "Interface Enabled",
+  "interfaceDisabled": "Interface Disabled",
+  "encryptionNone": "None (Open)",
+  "ssidEmptyError": "SSID cannot be empty.",
+  "unsupportedEncryptionError": "Select a supported encryption mode before saving.",
+  "encryptionPasswordRequiredError": "A password is required when enabling encryption.",
+  "passwordLengthError": "Password must be at least 8 characters.",
+  "uciSectionMissingError": "Cannot identify UCI section for this interface.",
+  "wifiUpdated": "Updated \"{ssid}\", reloading WiFi...",
+  "@wifiUpdated": {
+    "placeholders": {
+      "ssid": {
+        "type": "String"
+      }
+    }
+  },
+  "saveChangesFailed": "Failed to save changes. Please try again.",
+  "editWirelessInterface": "Edit Wireless Interface",
+  "ssidNetworkName": "SSID (Network Name)",
+  "enterSsid": "Enter SSID",
+  "passwordRequired": "Password (required)",
+  "passwordKeepCurrent": "Password (leave empty to keep current)",
+  "enterNewPassword": "Enter new password",
+  "networkExample": "e.g., lan, wwan",
+  "wifiChangesWarning": "Changes will be applied immediately. WiFi will briefly restart.",
+  "applying": "Applying...",
+  "saveChanges": "Save Changes",
+  "interfaceRemoved": "\"{ssid}\" removed",
+  "@interfaceRemoved": {
+    "placeholders": {
+      "ssid": {
+        "type": "String"
+      }
+    }
+  },
+  "removeInterfaceFailed": "Failed to remove interface",
+  "removeStaWarning": "This will remove the STA connection from this radio.",
+  "removeApWarning": "WiFi will restart. Clients on this network will be disconnected.",
+  "removeWirelessInterfaceQuestion": "Remove Wireless Interface?",
+  "removeWirelessInterfaceDescription": "This will permanently remove \"{name}\" from your wireless configuration.",
+  "@removeWirelessInterfaceDescription": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "thisInterface": "this interface",
+  "noNetworksFound": "No networks found. Try scanning again.",
+  "scanFailed": "Scan failed: {error}",
+  "@scanFailed": {
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
+  "radioRestarted": "{radio} restarted",
+  "@radioRestarted": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "radioRestartFailed": "Failed to restart radio",
+  "restartFailed": "Restart failed: {error}",
+  "@restartFailed": {
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
+  "selectRadio": "Select radio",
+  "stopScan": "Stop Scan",
+  "scanNetworks": "Scan Networks",
+  "restarting": "Restarting...",
+  "restartRadio": "Restart Radio",
+  "scanningNetworks": "Scanning for networks...",
+  "scanWaitMessage": "This may take a few seconds",
+  "scanEmptyMessage": "Select a radio and tap Scan\nto find nearby WiFi networks",
+  "noWirelessRadios": "No wireless radios detected.\nMake sure your router has wireless interfaces.",
+  "availableNetworks": "AVAILABLE NETWORKS",
+  "networksFound": "{count} found",
+  "@networksFound": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "hiddenNetworks": "HIDDEN NETWORKS",
+  "hiddenNetwork": "(Hidden Network)",
+  "networkSummary": "{band} • Ch. {channel} • {signal} dBm",
+  "@networkSummary": {
+    "placeholders": {
+      "band": {
+        "type": "String"
+      },
+      "channel": {
+        "type": "int"
+      },
+      "signal": {
+        "type": "int"
+      }
+    }
+  },
+  "radioRequired": "Please select a radio device.",
+  "ssidRequired": "Please enter the network name (SSID).",
+  "enterpriseNetworkUnsupported": "Enterprise (EAP) networks are not supported for connecting here.",
+  "networkPasswordRequired": "Password is required for this network.",
+  "connectingToNetwork": "Connecting to \"{ssid}\"...",
+  "@connectingToNetwork": {
+    "placeholders": {
+      "ssid": {
+        "type": "String"
+      }
+    }
+  },
+  "networkConnectFailed": "Failed to connect. Check your password and try again.",
+  "bssid": "BSSID",
+  "connectUsingRadio": "Connect using radio:",
+  "networkNameSsid": "Network Name (SSID):",
+  "enterHiddenNetworkName": "Enter hidden network name",
+  "passwordLabel": "Password:",
+  "enterNetworkPassword": "Enter network password",
+  "stationModeWarning": "This will create a new station-mode (client) interface on the selected radio. The radio will connect to this network as a client.",
+  "excellent": "Excellent",
+  "good": "Good",
+  "fair": "Fair",
+  "weak": "Weak",
+  "veryWeak": "Very Weak",
+  "open": "Open",
+  "certificateWarning": "Certificate Warning",
+  "untrustedCertificateDescription": "The certificate for {host} is not trusted by your device. This could indicate a security risk.",
+  "@untrustedCertificateDescription": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "certificateDetails": "Certificate Details:",
+  "certificateSubject": "Subject",
+  "certificateIssuer": "Issuer",
+  "certificateValidFrom": "Valid From",
+  "certificateValidUntil": "Valid Until",
+  "certificateSafetyWarning": "Only proceed if you trust this router and understand the security implications.",
+  "acceptRisk": "Accept Risk"
+}

@@ -6,6 +6,7 @@ import 'package:luci_mobile/models/dashboard_preferences.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/widgets/luci_animation_system.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class RouterDashboardSettingsScreen extends ConsumerStatefulWidget {
   final String routerId;
@@ -65,8 +66,7 @@ class _RouterDashboardSettingsScreenState
       if (!mounted) return;
       if (appState.dashboardData == null) {
         setState(() {
-          _errorMessage =
-              'Unable to load dashboard data. Please check your connection.';
+          _errorMessage = context.l10n.unableToLoadDashboardData;
           _isLoading = false;
         });
         return;
@@ -77,7 +77,7 @@ class _RouterDashboardSettingsScreenState
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Failed to load settings: $e';
+        _errorMessage = context.l10n.failedToLoadSettings(e);
         _isLoading = false;
       });
     }
@@ -167,8 +167,8 @@ class _RouterDashboardSettingsScreenState
   Widget _buildThroughputSection() {
     final interfaces = _availableWiredInterfaces.toList()..sort();
     return _buildSection(
-      title: 'Throughput Monitoring',
-      subtitle: 'Configure which interfaces to monitor',
+      title: context.l10n.throughputMonitoring,
+      subtitle: context.l10n.throughputMonitoringDescription,
       icon: Icons.speed,
       initiallyExpanded: true,
       children: [
@@ -183,7 +183,7 @@ class _RouterDashboardSettingsScreenState
             children: [
               SwitchListTile.adaptive(
                 title: Text(
-                  'Show All Interfaces',
+                  context.l10n.showAllInterfaces,
                   style: LuciTextStyles.detailValue(
                     context,
                   ).copyWith(fontWeight: FontWeight.w600),
@@ -258,8 +258,8 @@ class _RouterDashboardSettingsScreenState
     if (_availableWirelessInterfaces.isEmpty) return const SizedBox.shrink();
     final sortedInterfaces = _availableWirelessInterfaces.toList()..sort();
     return _buildSection(
-      title: 'Wireless Networks',
-      subtitle: 'Choose which wireless networks to display',
+      title: context.l10n.wirelessNetworks,
+      subtitle: context.l10n.wirelessNetworksDescription,
       icon: Icons.wifi,
       children: [
         Container(
@@ -273,7 +273,7 @@ class _RouterDashboardSettingsScreenState
             children: [
               SwitchListTile.adaptive(
                 title: Text(
-                  'Show All Networks',
+                  context.l10n.showAllNetworks,
                   style: LuciTextStyles.detailValue(
                     context,
                   ).copyWith(fontWeight: FontWeight.w600),
@@ -355,8 +355,8 @@ class _RouterDashboardSettingsScreenState
     if (_availableWiredInterfaces.isEmpty) return const SizedBox.shrink();
     final sortedInterfaces = _availableWiredInterfaces.toList()..sort();
     return _buildSection(
-      title: 'Network Interfaces',
-      subtitle: 'Choose which wired/VPN interfaces to display',
+      title: context.l10n.networkInterfaces,
+      subtitle: context.l10n.networkInterfacesDescription,
       icon: Icons.cable,
       children: [
         Container(
@@ -370,7 +370,7 @@ class _RouterDashboardSettingsScreenState
             children: [
               SwitchListTile.adaptive(
                 title: Text(
-                  'Show All Interfaces',
+                  context.l10n.showAllInterfaces,
                   style: LuciTextStyles.detailValue(
                     context,
                   ).copyWith(fontWeight: FontWeight.w600),
@@ -454,21 +454,27 @@ class _RouterDashboardSettingsScreenState
     final lower = interface.toLowerCase();
     if (lower.startsWith('wan')) {
       return Text(
-        'Wide Area Network',
+        context.l10n.wideAreaNetwork,
         style: LuciTextStyles.cardSubtitle(context),
       );
     } else if (lower.startsWith('lan')) {
       return Text(
-        'Local Area Network',
+        context.l10n.localAreaNetwork,
         style: LuciTextStyles.cardSubtitle(context),
       );
     } else if (lower.contains('wireguard') || lower.startsWith('wg')) {
-      return Text('WireGuard VPN', style: LuciTextStyles.cardSubtitle(context));
+      return Text(
+        context.l10n.wireGuardVpn,
+        style: LuciTextStyles.cardSubtitle(context),
+      );
     } else if (lower.contains('openvpn')) {
-      return Text('OpenVPN', style: LuciTextStyles.cardSubtitle(context));
+      return Text(
+        context.l10n.openVpn,
+        style: LuciTextStyles.cardSubtitle(context),
+      );
     } else if (lower.contains('pppoe')) {
       return Text(
-        'PPPoE Connection',
+        context.l10n.pppoeConnection,
         style: LuciTextStyles.cardSubtitle(context),
       );
     }
@@ -478,20 +484,26 @@ class _RouterDashboardSettingsScreenState
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        appBar: LuciAppBar(title: 'Dashboard Settings', showBack: true),
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        appBar: LuciAppBar(
+          title: context.l10n.dashboardSettings,
+          showBack: true,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
     if (_errorMessage != null) {
       return Scaffold(
-        appBar: const LuciAppBar(title: 'Dashboard Settings', showBack: true),
+        appBar: LuciAppBar(
+          title: context.l10n.dashboardSettings,
+          showBack: true,
+        ),
         body: Center(child: Text(_errorMessage!)),
       );
     }
 
     return Scaffold(
-      appBar: const LuciAppBar(title: 'Dashboard Settings', showBack: true),
+      appBar: LuciAppBar(title: context.l10n.dashboardSettings, showBack: true),
       body: ListView(
         padding: EdgeInsets.symmetric(vertical: LuciSpacing.sm),
         children: [

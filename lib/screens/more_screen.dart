@@ -14,6 +14,7 @@ import 'package:luci_mobile/screens/manage_routers_screen.dart';
 import 'package:luci_mobile/screens/wifi_scan_screen.dart';
 import 'package:luci_mobile/utils/http_client_manager.dart';
 import 'package:luci_mobile/state/app_state.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class _MoreScreenSection extends StatelessWidget {
   final List<Widget> tiles;
@@ -82,7 +83,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Router is back online, reconnecting…',
+                  context.l10n.routerBackOnline,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onPrimary,
                   ),
@@ -111,17 +112,17 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Logout?'),
-          content: const Text('Are you sure you want to logout?'),
+          title: Text(context.l10n.logoutQuestion),
+          content: Text(context.l10n.logoutConfirmation),
           actions: <Widget>[
             TextButton(
-              child: const Text('Cancel'),
+              child: Text(context.l10n.cancel),
               onPressed: () {
                 Navigator.of(context).pop();
               },
             ),
             TextButton(
-              child: const Text('Logout'),
+              child: Text(context.l10n.logout),
               onPressed: () async {
                 await appState.logout();
                 // Clear all accepted certificates on logout
@@ -150,17 +151,17 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Reboot Router?'),
-          content: const Text('Are you sure you want to reboot the router?'),
+          title: Text(context.l10n.rebootRouterQuestion),
+          content: Text(context.l10n.rebootRouterConfirmation),
           actions: <Widget>[
             TextButton(
-              child: const Text('Cancel'),
+              child: Text(context.l10n.cancel),
               onPressed: () {
                 Navigator.of(context).pop();
               },
             ),
             TextButton(
-              child: const Text('Reboot'),
+              child: Text(context.l10n.reboot),
               onPressed: () async {
                 Navigator.of(context).pop();
                 // Show persistent warning snackbar
@@ -178,7 +179,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Rebooting… Connection will be interrupted.',
+                            context.l10n.rebootingConnectionInterrupted,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: colorScheme.onPrimary,
                             ),
@@ -204,8 +205,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                   SnackBar(
                     content: Text(
                       success
-                          ? 'Reboot command sent successfully.'
-                          : 'Failed to send reboot command.',
+                          ? context.l10n.rebootCommandSent
+                          : context.l10n.rebootCommandFailed,
                     ),
                   ),
                 );
@@ -230,18 +231,18 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
               children: [
                 const Icon(Icons.router, size: 32),
                 const SizedBox(width: 12),
-                const Text('LuCI Mobile'),
+                Text(context.l10n.appTitle),
               ],
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Version ${info.version}'),
+                Text(context.l10n.version(info.version)),
                 const SizedBox(height: 16),
-                const Text('A mobile client for OpenWrt routers.'),
+                Text(context.l10n.aboutDescription),
                 const SizedBox(height: 16),
-                const Text('Open source and free to use.'),
+                Text(context.l10n.openSourceDescription),
                 const SizedBox(height: 16),
                 InkWell(
                   onTap: () async {
@@ -253,7 +254,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                     if (!success && context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: const Text('Could not open repository'),
+                          content: Text(context.l10n.couldNotOpenRepository),
                           backgroundColor: Theme.of(context).colorScheme.error,
                         ),
                       );
@@ -269,7 +270,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'GitHub Repository',
+                          context.l10n.githubRepository,
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.primary,
                             decoration: TextDecoration.underline,
@@ -284,7 +285,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Close'),
+                child: Text(context.l10n.close),
               ),
             ],
           );
@@ -296,13 +297,13 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const LuciAppBar(title: 'More'),
+      appBar: LuciAppBar(title: context.l10n.more),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(vertical: LuciSpacing.sm),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const LuciSectionHeader('Device Management'),
+            LuciSectionHeader(context.l10n.deviceManagement),
             Builder(
               builder: (context) {
                 final isRebooting = ref.watch(
@@ -321,8 +322,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                       context,
                       icon: Icons.wifi_find,
                       iconColor: Theme.of(context).colorScheme.primary,
-                      title: 'WiFi Scanner',
-                      subtitle: 'Scan and connect to wireless networks',
+                      title: context.l10n.wifiScanner,
+                      subtitle: context.l10n.wifiScannerDescription,
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -339,14 +340,13 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                           ? Icons.lock_outline
                           : Icons.restart_alt,
                       iconColor: Theme.of(context).colorScheme.primary,
-                      title: 'Reboot Router',
+                      title: context.l10n.rebootRouter,
                       subtitle:
                           accessError ??
                           switch (canReboot) {
-                            false =>
-                              'View only — administrator access required',
-                            null => 'Checking administrator access…',
-                            true => 'Perform a system restart',
+                            false => context.l10n.administratorAccessRequired,
+                            null => context.l10n.checkingAdministratorAccess,
+                            true => context.l10n.rebootRouterDescription,
                           },
                       onTap: rebootEnabled
                           ? () => _showRebootDialog(context)
@@ -358,15 +358,15 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 );
               },
             ),
-            const LuciSectionHeader('Application'),
+            LuciSectionHeader(context.l10n.application),
             _MoreScreenSection(
               tiles: [
                 _buildMoreTile(
                   context,
                   icon: Icons.router,
                   iconColor: Theme.of(context).colorScheme.primary,
-                  title: 'Manage Routers',
-                  subtitle: 'Edit or remove saved routers',
+                  title: context.l10n.manageRouters,
+                  subtitle: context.l10n.manageRoutersDescription,
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -379,8 +379,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                   context,
                   icon: Icons.settings_outlined,
                   iconColor: Theme.of(context).colorScheme.primary,
-                  title: 'Settings',
-                  subtitle: 'Configure app preferences',
+                  title: context.l10n.settings,
+                  subtitle: context.l10n.settingsDescription,
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -393,16 +393,16 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                   context,
                   icon: Icons.info_outline,
                   iconColor: Theme.of(context).colorScheme.secondary,
-                  title: 'About',
-                  subtitle: 'App version and information',
+                  title: context.l10n.about,
+                  subtitle: context.l10n.aboutAppDescription,
                   onTap: () => _showAboutDialog(context),
                 ),
                 _buildMoreTile(
                   context,
                   icon: Icons.logout,
                   iconColor: Theme.of(context).colorScheme.error,
-                  title: 'Logout',
-                  subtitle: 'End your session and sign out',
+                  title: context.l10n.logout,
+                  subtitle: context.l10n.logoutDescription,
                   titleColor: Theme.of(context).colorScheme.error,
                   subtitleColor: Theme.of(
                     context,

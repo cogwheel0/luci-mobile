@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../design/luci_design_system.dart';
+import '../l10n/luci_localizations.dart';
 
 /// A standardized pull-to-refresh widget that provides consistent
 /// visual feedback and behavior across all screens in the app.
@@ -101,7 +102,7 @@ class _LuciPullToRefreshState extends State<LuciPullToRefresh>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Refresh failed: ${e.toString()}'),
+            content: Text(context.l10n.refreshFailed(e)),
             backgroundColor: Theme.of(context).colorScheme.error,
             behavior: SnackBarBehavior.floating,
             margin: EdgeInsets.all(LuciSpacing.md),
@@ -148,7 +149,7 @@ class LuciListPullToRefresh extends StatelessWidget {
     this.physics,
     this.shrinkWrap = false,
     this.padding,
-    this.emptyMessage = 'No items to display',
+    this.emptyMessage,
     this.emptyIcon = Icons.inbox_outlined,
     this.showEmptyState = true,
   });
@@ -178,7 +179,7 @@ class LuciListPullToRefresh extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
 
   /// Message to show when the list is empty.
-  final String emptyMessage;
+  final String? emptyMessage;
 
   /// Icon to show when the list is empty.
   final IconData emptyIcon;
@@ -206,7 +207,7 @@ class LuciListPullToRefresh extends StatelessWidget {
                   ),
                   SizedBox(height: LuciSpacing.md),
                   Text(
-                    emptyMessage,
+                    emptyMessage ?? context.l10n.noItemsToDisplay,
                     style: LuciTextStyles.cardTitle(
                       context,
                     ).copyWith(color: Theme.of(context).colorScheme.outline),
@@ -214,7 +215,7 @@ class LuciListPullToRefresh extends StatelessWidget {
                   ),
                   SizedBox(height: LuciSpacing.sm),
                   Text(
-                    'Pull down to refresh',
+                    context.l10n.pullDownToRefresh,
                     style: LuciTextStyles.cardSubtitle(
                       context,
                     ).copyWith(color: Theme.of(context).colorScheme.outline),

@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
 import 'package:luci_mobile/state/app_state.dart';
+import 'package:luci_mobile/l10n/app_localizations.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/screens/login_screen.dart';
 import 'package:luci_mobile/screens/main_screen.dart';
 import 'package:luci_mobile/screens/settings_screen.dart';
@@ -24,7 +26,11 @@ class LuCIApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final appState = ref.watch(appStateProvider);
     return MaterialApp(
-      title: 'LuCI Mobile',
+      onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
+      localizationsDelegates: luciLocalizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localeListResolutionCallback: (locales, supported) =>
+          resolveLuciLocale(locales, supported) ?? supported.first,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,

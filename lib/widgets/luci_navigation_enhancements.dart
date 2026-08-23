@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../design/luci_design_system.dart';
 import 'luci_animation_system.dart';
+import '../l10n/luci_localizations.dart';
 
 /// Enhanced tab transition system for smooth navigation
 /// Provides consistent, engaging transitions between screens
@@ -188,14 +189,14 @@ class LuciLoadingOverlay extends StatefulWidget {
     super.key,
     required this.isLoading,
     required this.child,
-    this.loadingText = 'Loading...',
+    this.loadingText,
     this.backgroundColor,
     this.useBlur = true,
   });
 
   final bool isLoading;
   final Widget child;
-  final String loadingText;
+  final String? loadingText;
   final Color? backgroundColor;
   final bool useBlur;
 
@@ -292,7 +293,7 @@ class _LuciLoadingOverlayState extends State<LuciLoadingOverlay>
                               ),
                               SizedBox(height: LuciSpacing.md),
                               Text(
-                                widget.loadingText,
+                                widget.loadingText ?? context.l10n.loading,
                                 style: LuciTextStyles.cardSubtitle(context),
                               ),
                             ],

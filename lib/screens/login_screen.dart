@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 import 'package:luci_mobile/config/app_config.dart';
 import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/utils/url_parser.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -94,26 +95,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Activate Reviewer Mode?'),
+          title: Text(context.l10n.activateReviewerModeQuestion),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'This will enable reviewer mode which bypasses authentication '
-                'and provides mock data for app demonstration purposes.',
-              ),
+              Text(context.l10n.activateReviewerModeDescription),
               const SizedBox(height: 16),
-              const Text(
-                'To confirm, type "REVIEWER" below:',
+              Text(
+                context.l10n.reviewerModeConfirmation,
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _confirmationController,
-                decoration: const InputDecoration(
-                  hintText: 'Type REVIEWER',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  hintText: context.l10n.typeReviewer,
+                  border: const OutlineInputBorder(),
                 ),
                 onChanged: (_) => setDialogState(() {}),
               ),
@@ -122,7 +120,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+              child: Text(context.l10n.cancel),
             ),
             FilledButton(
               onPressed: _confirmationController.text == 'REVIEWER'
@@ -131,7 +129,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       _activateReviewerMode();
                     }
                   : null,
-              child: const Text('Activate'),
+              child: Text(context.l10n.activate),
             ),
           ],
         ),
@@ -186,7 +184,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
       if (!parsedUrl.isValid) {
         // Show error message
-        appState.setError(parsedUrl.error ?? 'Invalid address format');
+        appState.setError(context.l10n.invalidAddressFormat);
         return;
       }
 
@@ -198,7 +196,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         final parsedAlt = UrlParser.parse(altInput);
         if (parsedAlt.isValid) {
           if (parsedAlt.hostWithPort == parsedUrl.hostWithPort) {
-            appState.setError('Fallback address must differ from primary');
+            appState.setError(context.l10n.fallbackMustDiffer);
             return;
           }
           alternateHost = parsedAlt.hostWithPort;
@@ -232,7 +230,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Could not open GitHub issues'),
+          content: Text(context.l10n.couldNotOpenGithubIssues),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -293,14 +291,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               Column(
                                 children: [
                                   Text(
-                                    'LuCI Mobile',
+                                    context.l10n.appTitle,
                                     style: textTheme.headlineLarge?.copyWith(
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Connect to your OpenWrt router',
+                                    context.l10n.connectToRouter,
                                     style: textTheme.titleMedium?.copyWith(
                                       color: colorScheme.onSurface.withValues(
                                         alpha: 0.8,
@@ -309,7 +307,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Fast. Secure. Open Source.',
+                                    context.l10n.fastSecureOpenSource,
                                     style: textTheme.bodySmall?.copyWith(
                                       color: colorScheme.primary,
                                     ),
@@ -328,7 +326,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                             return Column(
                                               children: [
                                                 Text(
-                                                  'Hold to activate reviewer mode...',
+                                                  context
+                                                      .l10n
+                                                      .holdForReviewerMode,
                                                   style: textTheme.bodySmall
                                                       ?.copyWith(
                                                         color:
@@ -436,7 +436,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                         children: <Widget>[
                                           Tooltip(
                                             message:
-                                                'Enter the IP address, hostname, or full URL of your router',
+                                                context.l10n.routerAddressHelp,
                                             child: TextFormField(
                                               controller: _ipController,
                                               autofocus: true,
@@ -444,28 +444,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                                 AutofillHints.url,
                                                 AutofillHints.username,
                                               ],
-                                              decoration: const InputDecoration(
-                                                labelText: 'Router Address',
-                                                border: OutlineInputBorder(),
-                                                prefixIcon: Icon(
+                                              decoration: InputDecoration(
+                                                labelText:
+                                                    context.l10n.routerAddress,
+                                                border:
+                                                    const OutlineInputBorder(),
+                                                prefixIcon: const Icon(
                                                   Icons.router_outlined,
                                                 ),
-                                                helperText:
-                                                    'e.g. 192.168.1.1, router.local:8080, https://192.168.1.1',
+                                                helperText: context
+                                                    .l10n
+                                                    .routerAddressExample,
                                               ),
                                               textInputAction:
                                                   TextInputAction.next,
                                               validator: (value) {
                                                 if (value == null ||
                                                     value.isEmpty) {
-                                                  return 'Please enter the router address';
+                                                  return context
+                                                      .l10n
+                                                      .routerAddressRequired;
                                                 }
                                                 final parsed = UrlParser.parse(
                                                   value,
                                                 );
                                                 if (!parsed.isValid) {
-                                                  return parsed.error ??
-                                                      'Invalid address format';
+                                                  return context
+                                                      .l10n
+                                                      .invalidAddressFormat;
                                                 }
                                                 return null;
                                               },
@@ -484,8 +490,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                                   Icons.add,
                                                   size: 18,
                                                 ),
-                                                label: const Text(
-                                                  'Add fallback address',
+                                                label: Text(
+                                                  context
+                                                      .l10n
+                                                      .addFallbackAddress,
                                                 ),
                                                 style: TextButton.styleFrom(
                                                   padding:
@@ -498,14 +506,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                           else ...[
                                             TextFormField(
                                               controller: _alternateController,
-                                              decoration: const InputDecoration(
-                                                labelText: 'Fallback Address',
-                                                border: OutlineInputBorder(),
-                                                prefixIcon: Icon(
+                                              decoration: InputDecoration(
+                                                labelText: context
+                                                    .l10n
+                                                    .fallbackAddress,
+                                                border:
+                                                    const OutlineInputBorder(),
+                                                prefixIcon: const Icon(
                                                   Icons.swap_horiz,
                                                 ),
-                                                helperText:
-                                                    'Same credentials will be used for both addresses',
+                                                helperText: context
+                                                    .l10n
+                                                    .fallbackCredentialsHelp,
                                                 helperMaxLines: 2,
                                               ),
                                               textInputAction:
@@ -519,8 +531,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                                   value,
                                                 );
                                                 if (!parsed.isValid) {
-                                                  return parsed.error ??
-                                                      'Invalid address format';
+                                                  return context
+                                                      .l10n
+                                                      .invalidAddressFormat;
                                                 }
                                                 final primary = UrlParser.parse(
                                                   _ipController.text,
@@ -528,7 +541,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                                 if (primary.isValid &&
                                                     parsed.hostWithPort ==
                                                         primary.hostWithPort) {
-                                                  return 'Must differ from primary address';
+                                                  return context
+                                                      .l10n
+                                                      .mustDifferFromPrimaryAddress;
                                                 }
                                                 return null;
                                               },
@@ -536,28 +551,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                           ],
                                           const SizedBox(height: 10),
                                           Tooltip(
-                                            message:
-                                                'Enter your router username',
+                                            message: context.l10n.usernameHelp,
                                             child: TextFormField(
                                               controller: _usernameController,
                                               autofillHints: const [
                                                 AutofillHints.username,
                                               ],
-                                              decoration: const InputDecoration(
-                                                labelText: 'Username',
-                                                border: OutlineInputBorder(),
-                                                prefixIcon: Icon(
+                                              decoration: InputDecoration(
+                                                labelText:
+                                                    context.l10n.username,
+                                                border:
+                                                    const OutlineInputBorder(),
+                                                prefixIcon: const Icon(
                                                   Icons.person_outline,
                                                 ),
-                                                helperText:
-                                                    'Default is usually root',
+                                                helperText: context
+                                                    .l10n
+                                                    .usernameDefaultHelp,
                                               ),
                                               textInputAction:
                                                   TextInputAction.next,
                                               validator: (value) {
                                                 if (value == null ||
                                                     value.isEmpty) {
-                                                  return 'Please enter the username';
+                                                  return context
+                                                      .l10n
+                                                      .usernameRequired;
                                                 }
                                                 return null;
                                               },
@@ -565,8 +584,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                           ),
                                           const SizedBox(height: 10),
                                           Tooltip(
-                                            message:
-                                                'Enter your router password',
+                                            message: context.l10n.passwordHelp,
                                             child: TextFormField(
                                               controller: _passwordController,
                                               obscureText: !_passwordVisible,
@@ -574,14 +592,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                                 AutofillHints.password,
                                               ],
                                               decoration: InputDecoration(
-                                                labelText: 'Password',
+                                                labelText:
+                                                    context.l10n.password,
                                                 border:
                                                     const OutlineInputBorder(),
                                                 prefixIcon: const Icon(
                                                   Icons.lock_outline,
                                                 ),
-                                                helperText:
-                                                    'Your router password',
+                                                helperText: context
+                                                    .l10n
+                                                    .routerPasswordHelp,
                                                 suffixIcon: IconButton(
                                                   icon: Icon(
                                                     _passwordVisible
@@ -595,8 +615,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                                         !_passwordVisible,
                                                   ),
                                                   tooltip: _passwordVisible
-                                                      ? 'Hide password'
-                                                      : 'Show password',
+                                                      ? context
+                                                            .l10n
+                                                            .hidePassword
+                                                      : context
+                                                            .l10n
+                                                            .showPassword,
                                                 ),
                                               ),
                                               textInputAction:
@@ -719,10 +743,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                                         mainAxisAlignment:
                                                             MainAxisAlignment
                                                                 .center,
-                                                        children: const [
-                                                          Icon(Icons.login),
-                                                          SizedBox(width: 12),
-                                                          Text('Connect'),
+                                                        children: [
+                                                          const Icon(
+                                                            Icons.login,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 12,
+                                                          ),
+                                                          Text(
+                                                            context
+                                                                .l10n
+                                                                .connect,
+                                                          ),
                                                         ],
                                                       ),
                                               ),
@@ -739,13 +771,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         ),
                         const SizedBox(height: 16),
                         Tooltip(
-                          message: 'Open GitHub issues for support',
+                          message: context.l10n.githubIssuesHelp,
                           child: TextButton(
                             onPressed: _openGitHubIssues,
                             style: TextButton.styleFrom(
                               foregroundColor: colorScheme.primary,
                             ),
-                            child: const Text('Need help?'),
+                            child: Text(context.l10n.needHelp),
                           ),
                         ),
                         FutureBuilder<PackageInfo>(
@@ -758,7 +790,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 8.0),
                               child: Text(
-                                'Version ${info.version}',
+                                context.l10n.version(info.version),
                                 style: textTheme.bodySmall?.copyWith(
                                   color: colorScheme.onSurfaceVariant
                                       .withValues(alpha: 0.7),

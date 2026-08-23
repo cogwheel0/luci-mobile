@@ -5,6 +5,7 @@ import 'package:luci_mobile/screens/interfaces_screen.dart';
 import 'package:luci_mobile/screens/more_screen.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/widgets/luci_navigation_enhancements.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
@@ -129,7 +130,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                   opacity: getTabOpacity(0),
                   child: Icon(Icons.dashboard_outlined, color: getTabColor(0)),
                 ),
-                label: 'Dashboard',
+                label: context.l10n.dashboard,
               ),
               NavigationDestination(
                 selectedIcon: Opacity(
@@ -140,7 +141,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                   opacity: getTabOpacity(1),
                   child: Icon(Icons.people_outline, color: getTabColor(1)),
                 ),
-                label: 'Clients',
+                label: context.l10n.clients,
               ),
               NavigationDestination(
                 selectedIcon: Opacity(
@@ -151,7 +152,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                   opacity: getTabOpacity(2),
                   child: Icon(Icons.lan_outlined, color: getTabColor(2)),
                 ),
-                label: 'Interfaces',
+                label: context.l10n.interfaces,
               ),
               NavigationDestination(
                 selectedIcon: Opacity(
@@ -162,7 +163,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                   opacity: getTabOpacity(3),
                   child: Icon(Icons.more_horiz_outlined),
                 ),
-                label: 'More',
+                label: context.l10n.more,
               ),
             ],
           );

@@ -8,6 +8,7 @@ import 'package:luci_mobile/widgets/luci_animation_system.dart';
 import 'package:luci_mobile/models/glinet_data.dart';
 import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/utils/wifi_utils.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -194,6 +195,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
   }
 
+  String _channelLabel(String channel) => switch (channel) {
+    'snapshot' => context.l10n.releaseSnapshot,
+    'beta' => context.l10n.releaseBeta,
+    'rc' => context.l10n.releaseCandidate,
+    'testing' => context.l10n.releaseTesting,
+    _ => context.l10n.releaseStable,
+  };
+
   Widget _buildDeviceInfoCard(AppState appState) {
     final boardInfo =
         appState.dashboardData?['boardInfo'] as Map<String, dynamic>?;
@@ -201,7 +210,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final release = boardInfo?['release'] as Map<String, dynamic>?;
     final version = release?['version'] ?? 'N/A';
     final channel = _deriveReleaseChannel(release);
-    final channelLabel = channel.toUpperCase();
+    final channelLabel = _channelLabel(channel);
     final channelColors = _channelColors(channel);
 
     final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -223,7 +232,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Model', style: labelStyle),
+                  Text(context.l10n.model, style: labelStyle),
                   const SizedBox(height: 4),
                   Text(
                     model,
@@ -238,7 +247,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Version', style: labelStyle),
+                  Text(context.l10n.versionLabel, style: labelStyle),
                   const SizedBox(height: 4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -347,7 +356,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               padding: const EdgeInsets.only(top: 8.0),
               child: Center(
                 child: Text(
-                  'Throughput$throughputLabel',
+                  context.l10n.throughputForInterface(
+                    prefs.primaryThroughputInterface!,
+                  ),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(
                       context,
@@ -476,8 +487,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             const SizedBox(height: 8),
                             Text(
                               isSwitchingRouter
-                                  ? 'Switching router...'
-                                  : 'Collecting throughput data...',
+                                  ? context.l10n.switchingRouter
+                                  : context.l10n.collectingThroughput,
                               style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(
                                     color: Theme.of(context)
@@ -711,16 +722,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         child: _buildVitalsColumn(
           context,
           label: glInetData == null
-              ? 'CPU Load'
-              : (cpuCores == null ? 'Load' : 'CPU'),
+              ? context.l10n.cpuLoad
+              : (cpuCores == null ? context.l10n.load : context.l10n.cpu),
           value: cpuLoadValue,
         ),
       ),
       Expanded(
-        child: _buildVitalsColumn(context, label: 'Memory', value: memoryValue),
+        child: _buildVitalsColumn(
+          context,
+          label: context.l10n.memory,
+          value: memoryValue,
+        ),
       ),
       Expanded(
-        child: _buildVitalsColumn(context, label: 'Uptime', value: uptimeValue),
+        child: _buildVitalsColumn(
+          context,
+          label: context.l10n.uptime,
+          value: uptimeValue,
+        ),
       ),
     ];
 
@@ -729,7 +748,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         Expanded(
           child: _buildVitalsColumn(
             context,
-            label: 'CPU Temp',
+            label: context.l10n.cpuTemperature,
             value: '${cpuTemp.toStringAsFixed(1)}\u00B0C',
           ),
         ),
@@ -741,10 +760,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         Expanded(
           child: _buildVitalsColumn(
             context,
-            label: 'Fan',
+            label: context.l10n.fan,
             value: fanActive
-                ? (fanSpeed == null ? 'On' : '$fanSpeed RPM')
-                : 'Off',
+                ? (fanSpeed == null ? context.l10n.on : '$fanSpeed RPM')
+                : context.l10n.off,
           ),
         ),
       );
@@ -838,7 +857,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   const SizedBox(width: 4),
                   Flexible(
                     child: Text(
-                      'Ch: $channel',
+                      context.l10n.channelValue(channel),
                       style: textTheme.bodySmall,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1258,7 +1277,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             ),
                             const SizedBox(width: 1),
                             Text(
-                              isUp ? 'UP' : 'DOWN',
+                              isUp ? context.l10n.up : context.l10n.down,
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: isUp
@@ -1402,7 +1421,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final hostname = boardInfo?['hostname']?.toString();
     final headerText = (hostname != null && hostname.isNotEmpty)
         ? hostname
-        : (selected?.ipAddress ?? 'Loading...');
+        : (selected?.ipAddress ?? context.l10n.loading);
     return Scaffold(
       appBar: LuciAppBar(
         centerTitle: true,
@@ -1473,7 +1492,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                       ),
                                       child: Center(
                                         child: Text(
-                                          'Select Router',
+                                          context.l10n.selectRouter,
                                           style: Theme.of(context)
                                               .textTheme
                                               .titleMedium
@@ -1518,7 +1537,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                         ),
                                         title: Tooltip(
                                           message: isStale
-                                              ? 'Last known hostname (may be out of date)'
+                                              ? context
+                                                    .l10n
+                                                    .lastKnownHostnameWarning
                                               : '',
                                           child: Text(
                                             routerTitle,
@@ -1637,9 +1658,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget _buildBody(AppState appState) {
     if (appState.dashboardError != null) {
       return LuciErrorDisplay(
-        title: 'Unable to Load Dashboard',
+        title: context.l10n.unableToLoadDashboard,
         message: appState.dashboardError!,
-        actionLabel: 'Retry Connection',
+        actionLabel: context.l10n.retryConnection,
         onAction: () => appState.fetchDashboardData(),
         icon: Icons.wifi_off_rounded,
       );
@@ -1651,11 +1672,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     if (appState.dashboardData == null) {
       return LuciEmptyState(
-        title: 'No Data Available',
-        message:
-            'Unable to fetch dashboard data. Pull down to refresh or tap the button below.',
+        title: context.l10n.noDataAvailable,
+        message: context.l10n.noDashboardDataDescription,
         icon: Icons.dashboard_outlined,
-        actionLabel: 'Fetch Data',
+        actionLabel: context.l10n.fetchData,
         onAction: () => appState.fetchDashboardData(),
       );
     }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -397,30 +398,30 @@ class HttpClientManager {
         builder: (BuildContext dialogContext) => AlertDialog(
           icon: Icon(
             Icons.warning_amber_rounded,
-            color: Theme.of(context).colorScheme.error,
+            color: Theme.of(dialogContext).colorScheme.error,
             size: 32,
           ),
-          title: const Text('Certificate Warning'),
+          title: Text(dialogContext.l10n.certificateWarning),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'The certificate for $host is not trusted by your device. This could indicate a security risk.',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  dialogContext.l10n.untrustedCertificateDescription(host),
+                  style: Theme.of(dialogContext).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Theme.of(
-                      context,
+                      dialogContext,
                     ).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: Theme.of(
-                        context,
+                        dialogContext,
                       ).colorScheme.outline.withValues(alpha: 0.2),
                     ),
                   ),
@@ -428,22 +429,27 @@ class HttpClientManager {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Certificate Details:',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        dialogContext.l10n.certificateDetails,
+                        style: Theme.of(dialogContext).textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      _buildCertDetail('Subject', presentedCert!.subject),
-                      _buildCertDetail('Issuer', presentedCert!.issuer),
                       _buildCertDetail(
-                        'Valid From',
+                        dialogContext.l10n.certificateSubject,
+                        presentedCert!.subject,
+                      ),
+                      _buildCertDetail(
+                        dialogContext.l10n.certificateIssuer,
+                        presentedCert!.issuer,
+                      ),
+                      _buildCertDetail(
+                        dialogContext.l10n.certificateValidFrom,
                         presentedCert!.startValidity.toLocal().toString().split(
                           '.',
                         )[0],
                       ),
                       _buildCertDetail(
-                        'Valid Until',
+                        dialogContext.l10n.certificateValidUntil,
                         presentedCert!.endValidity.toLocal().toString().split(
                           '.',
                         )[0],
@@ -457,12 +463,12 @@ class HttpClientManager {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Theme.of(
-                      context,
+                      dialogContext,
                     ).colorScheme.errorContainer.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: Theme.of(
-                        context,
+                        dialogContext,
                       ).colorScheme.error.withValues(alpha: 0.3),
                     ),
                   ),
@@ -470,16 +476,18 @@ class HttpClientManager {
                     children: [
                       Icon(
                         Icons.info_outline,
-                        color: Theme.of(context).colorScheme.error,
+                        color: Theme.of(dialogContext).colorScheme.error,
                         size: 20,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Only proceed if you trust this router and understand the security implications.',
-                          style: Theme.of(context).textTheme.bodySmall
+                          dialogContext.l10n.certificateSafetyWarning,
+                          style: Theme.of(dialogContext).textTheme.bodySmall
                               ?.copyWith(
-                                color: Theme.of(context).colorScheme.error,
+                                color: Theme.of(
+                                  dialogContext,
+                                ).colorScheme.error,
                               ),
                         ),
                       ),
@@ -492,15 +500,15 @@ class HttpClientManager {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
+              child: Text(dialogContext.l10n.cancel),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
               style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error,
-                foregroundColor: Theme.of(context).colorScheme.onError,
+                backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                foregroundColor: Theme.of(dialogContext).colorScheme.onError,
               ),
-              child: const Text('Accept Risk'),
+              child: Text(dialogContext.l10n.acceptRisk),
             ),
           ],
         ),
