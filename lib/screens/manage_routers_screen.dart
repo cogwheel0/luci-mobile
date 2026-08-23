@@ -183,10 +183,14 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                   await appState.removeRouter(router.id);
                                   if (!context.mounted) return;
                                   if (appState.routers.isEmpty) {
-                                    unawaited(Navigator.of(context).pushNamedAndRemoveUntil(
-                                      '/login',
-                                      (route) => false,
-                                    ));
+                                    unawaited(
+                                      Navigator.of(
+                                        context,
+                                      ).pushNamedAndRemoveUntil(
+                                        '/login',
+                                        (route) => false,
+                                      ),
+                                    );
                                   }
                                 }
                               },
@@ -314,43 +318,81 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                 .username,
                                                           ],
                                                         ),
-                                                        const SizedBox(height: 6),
+                                                        const SizedBox(
+                                                          height: 6,
+                                                        ),
                                                         if (!showAlternate)
                                                           Align(
-                                                            alignment: Alignment.centerLeft,
+                                                            alignment: Alignment
+                                                                .centerLeft,
                                                             child: TextButton.icon(
-                                                              onPressed: () => setState(
-                                                                () => showAlternate = true,
+                                                              onPressed: () =>
+                                                                  setState(
+                                                                    () =>
+                                                                        showAlternate =
+                                                                            true,
+                                                                  ),
+                                                              icon: const Icon(
+                                                                Icons.add,
+                                                                size: 18,
                                                               ),
-                                                              icon: const Icon(Icons.add, size: 18),
-                                                              label: const Text('Add fallback address'),
+                                                              label: const Text(
+                                                                'Add fallback address',
+                                                              ),
                                                             ),
                                                           )
                                                         else
                                                           TextFormField(
-                                                            controller: alternateController,
+                                                            controller:
+                                                                alternateController,
                                                             decoration: const InputDecoration(
-                                                              labelText: 'Fallback Address',
-                                                              border: OutlineInputBorder(),
-                                                              prefixIcon: Icon(Icons.swap_horiz),
-                                                              helperText: 'Same credentials will be used for both addresses',
+                                                              labelText:
+                                                                  'Fallback Address',
+                                                              border:
+                                                                  OutlineInputBorder(),
+                                                              prefixIcon: Icon(
+                                                                Icons
+                                                                    .swap_horiz,
+                                                              ),
+                                                              helperText:
+                                                                  'Same credentials will be used for both addresses',
                                                               helperMaxLines: 2,
                                                             ),
                                                             validator: (value) {
-                                                              if (value == null || value.isEmpty) return null;
-                                                              final parsed = UrlParser.parse(value);
-                                                              if (!parsed.isValid) {
-                                                                return parsed.error ?? 'Invalid address format';
+                                                              if (value ==
+                                                                      null ||
+                                                                  value
+                                                                      .isEmpty) {
+                                                                return null;
                                                               }
-                                                              final primary = UrlParser.parse(ipController.text);
-                                                              if (primary.isValid &&
-                                                                  parsed.hostWithPort == primary.hostWithPort) {
+                                                              final parsed =
+                                                                  UrlParser.parse(
+                                                                    value,
+                                                                  );
+                                                              if (!parsed
+                                                                  .isValid) {
+                                                                return parsed
+                                                                        .error ??
+                                                                    'Invalid address format';
+                                                              }
+                                                              final primary =
+                                                                  UrlParser.parse(
+                                                                    ipController
+                                                                        .text,
+                                                                  );
+                                                              if (primary
+                                                                      .isValid &&
+                                                                  parsed.hostWithPort ==
+                                                                      primary
+                                                                          .hostWithPort) {
                                                                 return 'Must differ from primary address';
                                                               }
                                                               return null;
                                                             },
                                                           ),
-                                                        const SizedBox(height: 10),
+                                                        const SizedBox(
+                                                          height: 10,
+                                                        ),
                                                         TextFormField(
                                                           controller:
                                                               userController,
@@ -519,11 +561,12 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                       final useHttps =
                                                                           parsedUrl
                                                                               .useHttps;
-                                                                      final altText =
-                                                                          alternateController
-                                                                              .text
-                                                                              .trim();
-                                                                      final parsedAlt = altText.isEmpty
+                                                                      final altText = alternateController
+                                                                          .text
+                                                                          .trim();
+                                                                      final parsedAlt =
+                                                                          altText
+                                                                              .isEmpty
                                                                           ? null
                                                                           : UrlParser.parse(
                                                                               altText,
@@ -562,11 +605,9 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                           fromRouter:
                                                                               false,
                                                                           alternateAddress:
-                                                                              parsedAlt
-                                                                                  ?.hostWithPort,
+                                                                              parsedAlt?.hostWithPort,
                                                                           alternateUseHttps:
-                                                                              parsedAlt
-                                                                                  ?.useHttps,
+                                                                              parsedAlt?.useHttps,
                                                                           context:
                                                                               context,
                                                                         );
