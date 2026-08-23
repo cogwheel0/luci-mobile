@@ -316,6 +316,9 @@ class AppState extends ChangeNotifier {
   }
 
   String? get sysauth => _authService?.sysauth;
+  bool get isAuthenticated => _authService?.isAuthenticated ?? false;
+  bool get hasRouters =>
+      _routerService != null && _routerService!.routers.isNotEmpty;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool? get canReboot => _reviewerModeEnabled ? true : _canReboot;
@@ -388,13 +391,19 @@ class AppState extends ChangeNotifier {
 
     // Clear certificates for this specific router
     await _httpClientManager.clearCertificatesForHost(router.ipAddress);
+    if (router.alternateAddress != null) {
+      await _httpClientManager.clearCertificatesForHost(
+        router.alternateAddress!,
+      );
+    }
 
     final needsSwitch = await _routerService!.removeRouter(id);
     if (needsSwitch && _routerService!.routers.isNotEmpty) {
       await selectRouter(_routerService!.routers.first.id);
-    } else if (_routerService!.selectedRouter == null) {
-      _dashboardData = null;
-      notifyListeners();
+    } else if (_routerService!.routers.isEmpty) {
+      // All routers deleted — clear auth state so tryAutoLogin won't
+      // succeed with stale credentials and cause a navigation loop
+      await logout();
     } else {
       notifyListeners();
     }
@@ -435,11 +444,14 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     // ignore: use_build_context_synchronously
     final loginSuccess = await login(
-      found.ipAddress,
+      found.activeAddress,
       found.username,
       found.password,
-      found.useHttps,
+      found.activeUseHttps,
       fromRouter: true,
+      alternateAddress: found.inactiveAddress,
+      alternateUseHttps: found.inactiveUseHttps,
+      activeAddressIndex: found.activeAddressIndex,
       context: safeContext, // ignore: use_build_context_synchronously
     );
     // A newer session started while this switch was in flight - it owns the
@@ -466,6 +478,9 @@ class AppState extends ChangeNotifier {
     String pass,
     bool useHttps, {
     bool fromRouter = false,
+    String? alternateAddress,
+    bool? alternateUseHttps,
+    int activeAddressIndex = 0,
     BuildContext? context,
   }) async {
     // A fresh login starts a new session; discard stale results from the
@@ -494,45 +509,76 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _serializeAuthOp<void>(
-        () => _authService!.login(ip, user, pass, useHttps, context: context),
+      final result = await _serializeAuthOp<FallbackLoginResult>(
+        () => _authService!.loginWithFallback(
+          activeAddress: ip,
+          activeHttps: useHttps,
+          activeIndex: activeAddressIndex,
+          fallbackAddress: alternateAddress,
+          fallbackHttps: alternateUseHttps,
+          username: user,
+          password: pass,
+          context: context,
+        ),
       );
       // A newer session (logout / another login) superseded this one while
       // the credential exchange was in flight - do not touch any state.
       if (token != _sessionToken) return false;
 
-      // Check if authentication was successful
-      if (_authService!.isAuthenticated) {
-        // Get the actual protocol used (might be different due to redirect)
+      if (result.success && _authService!.isAuthenticated) {
         final actualUseHttps = _authService!.useHttps;
 
         if (!fromRouter) {
-          // If not from router selection, add or update router with detected protocol
           if (_routerService != null) {
+            final primaryUseHttps = result.usedAddressIndex == 0
+                ? actualUseHttps
+                : useHttps;
             final router = _routerService!.createRouter(
               ip,
               user,
               pass,
-              actualUseHttps, // Use the detected protocol
+              primaryUseHttps,
+            );
+            // Preserve alternate address in the new router
+            final routerWithAlternate = router.copyWith(
+              alternateAddress: alternateAddress,
+              alternateUseHttps: result.usedAddressIndex == 1
+                  ? actualUseHttps
+                  : alternateUseHttps,
+              activeAddressIndex: result.usedAddressIndex,
             );
             final idx = _routerService!.routers.indexWhere(
-              (r) => r.id == router.id,
+              (r) => r.id == routerWithAlternate.id,
             );
             if (idx == -1) {
-              await addRouter(router);
+              await addRouter(routerWithAlternate);
             } else {
-              await updateRouter(router);
+              await updateRouter(routerWithAlternate);
             }
           }
-        } else if (actualUseHttps != useHttps && _routerService != null) {
-          // If we're logging in from a saved router and the protocol changed, update it
+        } else if (_routerService != null) {
           final router = _routerService!.selectedRouter;
           if (router != null) {
-            final updatedRouter = router.copyWith(useHttps: actualUseHttps);
-            await updateRouter(updatedRouter);
-            Logger.info(
-              'Updated router protocol from ${useHttps ? "HTTPS" : "HTTP"} to ${actualUseHttps ? "HTTPS" : "HTTP"}',
-            );
+            final needsUpdate =
+                actualUseHttps != useHttps ||
+                result.usedAddressIndex != router.activeAddressIndex;
+            if (needsUpdate) {
+              final updatedRouter = result.usedAddressIndex == 0
+                  ? router.copyWith(
+                      useHttps: actualUseHttps,
+                      activeAddressIndex: 0,
+                    )
+                  : router.copyWith(
+                      alternateUseHttps: actualUseHttps,
+                      activeAddressIndex: 1,
+                    );
+              await updateRouter(updatedRouter);
+              if (result.usedAddressIndex != router.activeAddressIndex) {
+                Logger.info(
+                  'Switched to ${result.usedAddressIndex == 0 ? "primary" : "alternate"} address',
+                );
+              }
+            }
           }
         }
         await fetchDashboardData();
@@ -586,7 +632,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> fetchDashboardData() async {
+  Future<void> fetchDashboardData({bool isRetryAfterFallback = false}) async {
     if (_reviewerModeEnabled) {
       // For reviewer mode, return mock data immediately
       _isDashboardLoading = true;
@@ -681,8 +727,9 @@ class AppState extends ChangeNotifier {
     // If already loading, don't start another request (but this shouldn't prevent pull-to-refresh)
     // We'll let the new request proceed and the loading state will be handled properly
     final selectedRouter = _routerService!.selectedRouter!;
-    final ip = selectedRouter.ipAddress;
-    final useHttps = selectedRouter.useHttps;
+    // Use the address and protocol that actually succeeded during login.
+    final ip = _authService!.ipAddress ?? selectedRouter.activeAddress;
+    final useHttps = _authService!.useHttps;
     final routerPassword = selectedRouter.password;
     // Snapshot the credentials for this exact session: reading the mutable
     // auth service mid-flight could send newer credentials to this router.
@@ -984,11 +1031,44 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       // A newer session started; don't surface this fetch's error.
       if (token != _sessionToken) return;
+      final status = e is DioException ? e.response?.statusCode : null;
+      final retryable =
+          e is DioException &&
+          (status == 401 ||
+              status == 403 ||
+              e.type == DioExceptionType.connectionError ||
+              e.type == DioExceptionType.connectionTimeout ||
+              e.type == DioExceptionType.sendTimeout ||
+              e.type == DioExceptionType.receiveTimeout);
+      final router = _routerService?.selectedRouter;
+      if (retryable &&
+          !isRetryAfterFallback &&
+          router != null &&
+          router.hasFallback &&
+          _authService != null) {
+        final result = await _serializeAuthOp<FallbackLoginResult>(
+          () => _authService!.loginWithFallback(
+            activeAddress: router.activeAddress,
+            activeHttps: router.activeUseHttps,
+            activeIndex: router.activeAddressIndex,
+            fallbackAddress: router.inactiveAddress,
+            fallbackHttps: router.inactiveUseHttps,
+            username: router.username,
+            password: router.password,
+          ),
+        );
+        if (token != _sessionToken) return;
+        if (result.success) {
+          if (result.usedAddressIndex != router.activeAddressIndex) {
+            await updateRouter(
+              router.copyWith(activeAddressIndex: result.usedAddressIndex),
+            );
+          }
+          _isDashboardLoading = false;
+          return await fetchDashboardData(isRetryAfterFallback: true);
+        }
+      }
       _dashboardError = userFacingApiError(e);
-      // Log error with stack trace for debugging
-      // print('Dashboard fetch error: $e\n$stack');
-      // Clear dashboard data when there's an error so we don't show stale data
-      _dashboardData = null;
     } finally {
       // A newer session (router switch / re-login / logout) started while this
       // fetch was in flight - drop the stale results instead of clobbering it.
@@ -1188,8 +1268,10 @@ class AppState extends ChangeNotifier {
       return;
     }
 
-    final ip = _routerService!.selectedRouter!.ipAddress;
-    final useHttps = _routerService!.selectedRouter!.useHttps;
+    // Use the address that actually succeeded during login
+    final ip =
+        _authService!.ipAddress ?? _routerService!.selectedRouter!.ipAddress;
+    final useHttps = _authService!.useHttps;
 
     try {
       // Only fetch network devices for throughput calculation
@@ -1421,13 +1503,18 @@ class AppState extends ChangeNotifier {
           onRouterBackOnline!();
         }
 
-        // Force relogin
-        if (_routerService?.selectedRouter != null) {
+        // Force relogin using active address (may have changed via fallback)
+        final reloginRouter = _routerService?.selectedRouter;
+        if (reloginRouter != null) {
           await login(
-            _routerService!.selectedRouter!.ipAddress,
-            _routerService!.selectedRouter!.username,
-            _routerService!.selectedRouter!.password,
-            _routerService!.selectedRouter!.useHttps,
+            reloginRouter.activeAddress,
+            reloginRouter.username,
+            reloginRouter.password,
+            reloginRouter.activeUseHttps,
+            fromRouter: true,
+            alternateAddress: reloginRouter.inactiveAddress,
+            alternateUseHttps: reloginRouter.inactiveUseHttps,
+            activeAddressIndex: reloginRouter.activeAddressIndex,
           );
         }
       } else {
@@ -2645,12 +2732,53 @@ class AppState extends ChangeNotifier {
         context: context,
       );
     }
+
+    // Ensure routers are loaded (constructor fires _initialize async,
+    // so it may not have finished by the time login_screen calls us)
+    if (_routerService != null && _routerService!.routers.isEmpty) {
+      await loadRouters();
+    }
+
+    // No routers saved — nothing to auto-login to.
+    // Also clear any stale credentials from secure storage.
+    if (_routerService == null || _routerService!.routers.isEmpty) {
+      await _authService?.logout();
+      return false;
+    }
+
+    // If we have a selected router, use loginWithFallback
+    final router = _routerService?.selectedRouter;
+    if (router != null && _authService != null) {
+      final result = await _serializeAuthOp<FallbackLoginResult>(
+        () => _authService!.loginWithFallback(
+          activeAddress: router.activeAddress,
+          activeHttps: router.activeUseHttps,
+          activeIndex: router.activeAddressIndex,
+          fallbackAddress: router.inactiveAddress,
+          fallbackHttps: router.inactiveUseHttps,
+          username: router.username,
+          password: router.password,
+          context: context?.mounted == true ? context : null,
+        ),
+      );
+      if (result.success) {
+        if (result.usedAddressIndex != router.activeAddressIndex) {
+          await updateRouter(
+            router.copyWith(activeAddressIndex: result.usedAddressIndex),
+          );
+        }
+        return true;
+      }
+      return false;
+    }
+
+    // Fallback to legacy auto-login from secure storage
     return await _authService?.tryAutoLogin(
           null,
           null,
           null,
           null,
-          context: context,
+          context: context?.mounted == true ? context : null,
         ) ??
         false;
   }
@@ -2672,8 +2800,10 @@ class AppState extends ChangeNotifier {
         return {};
       }
 
-      final ip = _routerService!.selectedRouter!.ipAddress;
-      final useHttps = _routerService!.selectedRouter!.useHttps;
+      // Use the address that actually succeeded during login
+      final ip =
+          _authService!.ipAddress ?? _routerService!.selectedRouter!.ipAddress;
+      final useHttps = _authService!.useHttps;
 
       final stationsMap = await _apiService!
           .fetchAllAssociatedWirelessMacsWithContext(
@@ -2837,7 +2967,13 @@ class AppState extends ChangeNotifier {
           _authService?.sysauth == null) {
         return [];
       }
-      final router = _routerService!.selectedRouter!;
+
+      // Use the address that actually succeeded during login (may differ
+      // from router.ipAddress after fallback)
+      final activeIp =
+          _authService!.ipAddress ??
+          _routerService!.selectedRouter!.activeAddress;
+      final activeHttps = _authService!.useHttps;
 
       final wireless = <String>{};
       Object? wirelessError;
@@ -2845,9 +2981,9 @@ class AppState extends ChangeNotifier {
       try {
         final stationsMap = await _apiService!
             .fetchAllAssociatedWirelessMacsWithContext(
-              ipAddress: router.ipAddress,
+              ipAddress: activeIp,
               sysauth: _authService!.sysauth!,
-              useHttps: router.useHttps,
+              useHttps: activeHttps,
             );
         stationsMap.forEach(
           (_, stations) =>
@@ -2863,9 +2999,9 @@ class AppState extends ChangeNotifier {
       StackTrace? leaseStack;
       try {
         final callRes = await _apiService!.call(
-          router.ipAddress,
+          activeIp,
           _authService!.sysauth!,
-          router.useHttps,
+          activeHttps,
           object: 'luci-rpc',
           method: 'getDHCPLeases',
           params: {},
@@ -3038,17 +3174,17 @@ class AppState extends ChangeNotifier {
           if (_apiService is RealApiService) {
             final real = _apiService as RealApiService;
             final res = await real.loginWithProtocolDetection(
-              r.ipAddress,
+              r.activeAddress,
               r.username,
               r.password,
-              r.useHttps,
+              r.activeUseHttps,
             );
             if (res.token == null) {
               throw Exception('Login failed for ${r.ipAddress}');
             }
             final map = await _apiService!
                 .fetchAllAssociatedWirelessMacsWithContext(
-                  ipAddress: r.ipAddress,
+                  ipAddress: r.activeAddress,
                   sysauth: res.token!,
                   useHttps: res.actualUseHttps,
                 );
@@ -3107,16 +3243,16 @@ class AppState extends ChangeNotifier {
           if (_apiService is RealApiService) {
             final real = _apiService as RealApiService;
             final res = await real.loginWithProtocolDetection(
-              r.ipAddress,
+              r.activeAddress,
               r.username,
               r.password,
-              r.useHttps,
+              r.activeUseHttps,
             );
             if (res.token == null) {
               throw Exception('Login failed for ${r.ipAddress}');
             }
             final callRes = await _apiService!.call(
-              r.ipAddress,
+              r.activeAddress,
               res.token!,
               res.actualUseHttps,
               object: 'luci-rpc',

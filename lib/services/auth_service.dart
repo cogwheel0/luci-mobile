@@ -103,6 +103,52 @@ class RealAuthService implements IAuthService {
   }
 
   @override
+  Future<FallbackLoginResult> loginWithFallback({
+    required String activeAddress,
+    required bool activeHttps,
+    required int activeIndex,
+    String? fallbackAddress,
+    bool? fallbackHttps,
+    required String username,
+    required String password,
+    BuildContext? context,
+  }) async {
+    // Try the active address first
+    final activeOk = await _login(
+      activeAddress,
+      username,
+      password,
+      activeHttps,
+      context: context,
+    );
+    if (activeOk) {
+      return FallbackLoginResult(success: true, usedAddressIndex: activeIndex);
+    }
+
+    // Try the fallback address if available
+    if (fallbackAddress != null &&
+        fallbackAddress.isNotEmpty &&
+        fallbackHttps != null) {
+      final fallbackIndex = activeIndex == 0 ? 1 : 0;
+      final fallbackOk = await _login(
+        fallbackAddress,
+        username,
+        password,
+        fallbackHttps,
+        context: context?.mounted == true ? context : null,
+      );
+      if (fallbackOk) {
+        return FallbackLoginResult(
+          success: true,
+          usedAddressIndex: fallbackIndex,
+        );
+      }
+    }
+
+    return FallbackLoginResult(success: false, usedAddressIndex: activeIndex);
+  }
+
+  @override
   Future<bool> tryAutoLogin(
     String? ipAddress,
     String? username,
