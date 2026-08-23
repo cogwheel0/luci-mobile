@@ -195,7 +195,7 @@
   "noDashboardDataDescription": "Nie je možné načítať údaje informačného panela. Potiahnutím nadol obnovte alebo klepnite na tlačidlo nižšie.",
   "fetchData": "Načítať údaje",
   "releaseStable": "STABILNÝ",
-  "releaseSnapshot": "SNÍMAČKA",
+  "releaseSnapshot": "SNÍMKA",
   "releaseBeta": "BETA",
   "releaseCandidate": "RC",
   "releaseTesting": "TESTOVANIE",

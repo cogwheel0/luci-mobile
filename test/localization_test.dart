@@ -35,6 +35,8 @@ void main() {
       final localizations = await AppLocalizations.delegate.load(locale);
       expect(localizations.reviewerModeConfirmation, contains('REVIEWER'));
       expect(localizations.typeReviewer, contains('REVIEWER'));
+      expect(localizations.networkExample, contains('lan'));
+      expect(localizations.networkExample, contains('wwan'));
     }
 
     const traditionalChinese = Locale.fromSubtags(

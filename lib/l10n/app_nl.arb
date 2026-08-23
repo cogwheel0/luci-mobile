@@ -195,7 +195,7 @@
   "noDashboardDataDescription": "Kan dashboardgegevens niet ophalen. Trek omlaag om te vernieuwen of tik op de onderstaande knop.",
   "fetchData": "Gegevens ophalen",
   "releaseStable": "STABIEL",
-  "releaseSnapshot": "MOMENTOPNAME",
+  "releaseSnapshot": "SNAPSHOT",
   "releaseBeta": "BÈTA",
   "releaseCandidate": "RC",
   "releaseTesting": "TESTEN",

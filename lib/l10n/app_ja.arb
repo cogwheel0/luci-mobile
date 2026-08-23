@@ -248,7 +248,7 @@
   "passwordRequired": "パスワード(必須)",
   "passwordKeepCurrent": "パスワード (最新の状態に保つには空のままにしてください)",
   "enterNewPassword": "新しいパスワードを入力してください",
-  "networkExample": "例: ラン、ワン",
+  "networkExample": "例: lan、wwan",
   "wifiChangesWarning": "変更はすぐに適用されます。 WiFi が一時的に再起動します。",
   "applying": "適用中...",
   "saveChanges": "変更を保存",

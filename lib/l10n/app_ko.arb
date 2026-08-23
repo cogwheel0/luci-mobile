@@ -195,7 +195,7 @@
   "noDashboardDataDescription": "대시보드 데이터를 가져올 수 없습니다. 아래로 당겨 새로고침하거나 아래 버튼을 탭하세요.",
   "fetchData": "데이터 가져오기",
   "releaseStable": "안정 버전",
-  "releaseSnapshot": "스냅 사진",
+  "releaseSnapshot": "스냅샷",
   "releaseBeta": "베타",
   "releaseCandidate": "RC",
   "releaseTesting": "테스트",

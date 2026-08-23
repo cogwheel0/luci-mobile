@@ -195,7 +195,7 @@
   "noDashboardDataDescription": "Impossibile recuperare i dati del dashboard. Trascina verso il basso per aggiornare o tocca il pulsante in basso.",
   "fetchData": "Recupera dati",
   "releaseStable": "STABILE",
-  "releaseSnapshot": "ISTANTANEA",
+  "releaseSnapshot": "SNAPSHOT",
   "releaseBeta": "BETA",
   "releaseCandidate": "RC",
   "releaseTesting": "TEST",

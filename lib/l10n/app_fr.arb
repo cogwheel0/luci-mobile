@@ -248,7 +248,7 @@
   "passwordRequired": "Mot de passe (obligatoire)",
   "passwordKeepCurrent": "Mot de passe (laissez vide pour rester à jour)",
   "enterNewPassword": "Entrez le nouveau mot de passe",
-  "networkExample": "par exemple, LAN, WWAN",
+  "networkExample": "par exemple, lan, wwan",
   "wifiChangesWarning": "Les modifications seront appliquées immédiatement. Le WiFi redémarrera brièvement.",
   "applying": "Application en cours...",
   "saveChanges": "Enregistrer les modifications",

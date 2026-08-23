@@ -248,7 +248,7 @@
   "passwordRequired": "密碼（必填）",
   "passwordKeepCurrent": "密碼（留空以保持最新）",
   "enterNewPassword": "輸入新密碼",
-  "networkExample": "例如，LAN、WWAN",
+  "networkExample": "例如：lan、wwan",
   "wifiChangesWarning": "更改將立即套用。 WiFi 將短暫重啟。",
   "applying": "正在套用...",
   "saveChanges": "儲存變更",
