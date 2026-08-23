@@ -954,7 +954,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         uciInterfaces.forEach((uciName, config) {
           if (!addedInterfaces.contains(uciName)) {
             final ssid = config['ssid'] ?? 'Unnamed';
-            final device = config['device'] ?? '';
+            final device = config['device']?.toString() ?? '';
             final interfaceId = '$ssid ($device)';
 
             // Check if this interface should be shown based on preferences
@@ -966,6 +966,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             final isRadioEnabled = uciRadios[device]?['disabled'] != '1';
             final isIfaceEnabled = config['disabled'] != '1';
             final isEnabled = isRadioEnabled && isIfaceEnabled;
+            final channel = resolveWifiChannel(
+              actual: glInetData?.radios[device]?.channel,
+              configured: uciRadios[device]?['channel'],
+            );
 
             networkCardWidgets.add(
               Card(
@@ -989,7 +993,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ssid: ssid,
                       isEnabled: isEnabled,
                       signal: null, // No signal for disabled interfaces
-                      channel: config['channel']?.toString() ?? 'N/A',
+                      channel: channel,
                     ),
                   ),
                 ),

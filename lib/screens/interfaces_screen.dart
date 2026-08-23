@@ -745,6 +745,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
         final isIfaceEnabled = _uciString(config['disabled']) != '1';
         final isEnabled = isRadioEnabled && isIfaceEnabled;
         final mode = config['mode'] ?? 'N/A';
+        final channel = resolveWifiChannel(
+          actual: glInetData?.radios[radioName]?.channel,
+          configured: uciRadios[radioName]?['channel'],
+        );
 
         final name = _uciString(config['ssid'], 'Unnamed');
         interfacesList.add({
@@ -766,12 +770,13 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
           'network': (config['network'] is List)
               ? (config['network'] as List).join(', ')
               : config['network']?.toString() ?? '',
-          'channel': config['channel']?.toString() ?? 'auto',
+          'channel': channel,
           'signal': '--',
           'details': {
             'Device': radioName,
             'Mode': _uciString(config['mode'], 'N/A'),
             'SSID': _uciString(config['ssid'], 'N/A'),
+            'Channel': channel,
             'Network': (config['network'] is List)
                 ? (config['network'] as List).join(', ')
                 : _uciString(config['network'], 'N/A'),

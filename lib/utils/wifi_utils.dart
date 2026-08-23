@@ -29,3 +29,7 @@ String? normalizeWifiChannel(Object? value) {
   }
   return channel;
 }
+
+/// Chooses an actual radio channel before its configured fallback.
+String resolveWifiChannel({Object? actual, Object? configured}) =>
+    normalizeWifiChannel(actual) ?? normalizeWifiChannel(configured) ?? 'N/A';

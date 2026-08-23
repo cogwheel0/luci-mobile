@@ -54,6 +54,12 @@ void main() {
     expect(normalizeWifiChannel(' 44 '), '44');
   });
 
+  test('prefers an actual channel for configuration-only networks', () {
+    expect(resolveWifiChannel(actual: 44, configured: 'auto'), '44');
+    expect(resolveWifiChannel(configured: '6'), '6');
+    expect(resolveWifiChannel(configured: 'N/A'), 'N/A');
+  });
+
   test('parses radio, client, system, fan, and Tailscale data', () async {
     final server = await _startRpcServer((request) {
       final method = request['method'];
