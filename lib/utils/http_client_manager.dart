@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -400,14 +401,14 @@ class HttpClientManager {
             color: Theme.of(context).colorScheme.error,
             size: 32,
           ),
-          title: const Text('Certificate Warning'),
+          title: Text(context.l10n.certificateWarning),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'The certificate for $host is not trusted by your device. This could indicate a security risk.',
+                  context.l10n.untrustedCertificateDescription(host),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 16),
@@ -428,22 +429,28 @@ class HttpClientManager {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Certificate Details:',
+                        context.l10n.certificateDetails,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 8),
-                      _buildCertDetail('Subject', presentedCert!.subject),
-                      _buildCertDetail('Issuer', presentedCert!.issuer),
                       _buildCertDetail(
-                        'Valid From',
+                        context.l10n.certificateSubject,
+                        presentedCert!.subject,
+                      ),
+                      _buildCertDetail(
+                        context.l10n.certificateIssuer,
+                        presentedCert!.issuer,
+                      ),
+                      _buildCertDetail(
+                        context.l10n.certificateValidFrom,
                         presentedCert!.startValidity.toLocal().toString().split(
                           '.',
                         )[0],
                       ),
                       _buildCertDetail(
-                        'Valid Until',
+                        context.l10n.certificateValidUntil,
                         presentedCert!.endValidity.toLocal().toString().split(
                           '.',
                         )[0],
@@ -476,7 +483,7 @@ class HttpClientManager {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Only proceed if you trust this router and understand the security implications.',
+                          context.l10n.certificateSafetyWarning,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: Theme.of(context).colorScheme.error,
@@ -492,7 +499,7 @@ class HttpClientManager {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
+              child: Text(context.l10n.cancel),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
@@ -500,7 +507,7 @@ class HttpClientManager {
                 backgroundColor: Theme.of(context).colorScheme.error,
                 foregroundColor: Theme.of(context).colorScheme.onError,
               ),
-              child: const Text('Accept Risk'),
+              child: Text(context.l10n.acceptRisk),
             ),
           ],
         ),

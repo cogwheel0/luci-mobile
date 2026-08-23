@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/screens/dashboard_settings_list_screen.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -18,15 +19,12 @@ class SettingsScreen extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Exit Reviewer Mode?'),
-        content: const Text(
-          'This will disable reviewer mode and return to normal authentication. '
-          'You will need to log in with real router credentials.',
-        ),
+        title: Text(context.l10n.exitReviewerModeQuestion),
+        content: Text(context.l10n.exitReviewerModeDescription),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.cancel),
           ),
           FilledButton(
             onPressed: () async {
@@ -37,7 +35,7 @@ class SettingsScreen extends ConsumerWidget {
                 navigator.pushNamedAndRemoveUntil('/login', (route) => false),
               );
             },
-            child: const Text('Exit'),
+            child: Text(context.l10n.exit),
           ),
         ],
       ),
@@ -47,7 +45,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: const LuciAppBar(title: 'Settings', showBack: true),
+      appBar: LuciAppBar(title: context.l10n.settings, showBack: true),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8.0),
         children: [
@@ -60,7 +58,7 @@ class SettingsScreen extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 28, 16, 8),
                     child: Text(
-                      'Theme',
+                      context.l10n.theme,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -74,15 +72,15 @@ class SettingsScreen extends ConsumerWidget {
                     child: Column(
                       children: [
                         RadioListTile<ThemeMode>(
-                          title: const Text('System Default'),
+                          title: Text(context.l10n.systemDefault),
                           value: ThemeMode.system,
                         ),
                         RadioListTile<ThemeMode>(
-                          title: const Text('Light'),
+                          title: Text(context.l10n.light),
                           value: ThemeMode.light,
                         ),
                         RadioListTile<ThemeMode>(
-                          title: const Text('Dark'),
+                          title: Text(context.l10n.dark),
                           value: ThemeMode.dark,
                         ),
                       ],
@@ -92,7 +90,7 @@ class SettingsScreen extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                     child: Text(
-                      'Dashboard',
+                      context.l10n.dashboard,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -122,12 +120,12 @@ class SettingsScreen extends ConsumerWidget {
                           size: 24,
                         ),
                       ),
-                      title: const Text(
-                        'Customize Dashboard',
+                      title: Text(
+                        context.l10n.customizeDashboard,
                         style: TextStyle(fontWeight: FontWeight.w600),
                       ),
-                      subtitle: const Text(
-                        'Configure interface visibility and throughput monitoring',
+                      subtitle: Text(
+                        context.l10n.customizeDashboardDescription,
                       ),
                       trailing: Icon(
                         Icons.arrow_forward_ios,
@@ -149,7 +147,7 @@ class SettingsScreen extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                       child: Text(
-                        'Reviewer Mode',
+                        context.l10n.reviewerMode,
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
@@ -159,9 +157,9 @@ class SettingsScreen extends ConsumerWidget {
                         Icons.info_outline,
                         color: Colors.orange,
                       ),
-                      title: const Text('Reviewer Mode Active'),
+                      title: Text(context.l10n.reviewerModeActive),
                       subtitle: Text(
-                        'Mock data is being used for demonstration',
+                        context.l10n.reviewerModeActiveDescription,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
@@ -174,7 +172,7 @@ class SettingsScreen extends ConsumerWidget {
                         onPressed: () =>
                             _showReviewerModeResetDialog(context, ref),
                         icon: const Icon(Icons.exit_to_app),
-                        label: const Text('Exit Reviewer Mode'),
+                        label: Text(context.l10n.exitReviewerMode),
                         style: FilledButton.styleFrom(
                           backgroundColor: Theme.of(context).colorScheme.error,
                           foregroundColor: Theme.of(

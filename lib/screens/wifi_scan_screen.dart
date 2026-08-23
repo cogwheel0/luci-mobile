@@ -4,6 +4,23 @@ import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/models/wifi_scan_result.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/state/app_state.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
+
+String _signalStrength(BuildContext context, int signal) {
+  if (signal >= -50) return context.l10n.excellent;
+  if (signal >= -60) return context.l10n.good;
+  if (signal >= -70) return context.l10n.fair;
+  if (signal >= -80) return context.l10n.weak;
+  return context.l10n.veryWeak;
+}
+
+String _encryptionLabel(BuildContext context, WifiEncryption encryption) =>
+    encryption.isOpen ? context.l10n.open : encryption.shortLabel;
+
+String _encryptionDescription(
+  BuildContext context,
+  WifiEncryption encryption,
+) => encryption.isOpen ? context.l10n.encryptionNone : encryption.description;
 
 class WifiScanScreen extends ConsumerStatefulWidget {
   const WifiScanScreen({super.key});
@@ -102,14 +119,14 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
         _scanResults = results;
         _isScanning = false;
         if (results.isEmpty) {
-          _error = 'No networks found. Try scanning again.';
+          _error = context.l10n.noNetworksFound;
         }
       });
     } catch (e) {
       if (!mounted || generation != _scanGeneration) return;
       setState(() {
         _isScanning = false;
-        _error = 'Scan failed: $e';
+        _error = context.l10n.scanFailed(e);
       });
     }
     if (mounted && generation == _scanGeneration) {
@@ -156,7 +173,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
               children: [
                 const Icon(Icons.check_circle, color: Colors.white, size: 20),
                 const SizedBox(width: 8),
-                Text('$_selectedRadio restarted'),
+                Text(context.l10n.radioRestarted(_selectedRadio!)),
               ],
             ),
             backgroundColor: Colors.green.shade700,
@@ -171,7 +188,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Failed to restart radio'),
+            content: Text(context.l10n.radioRestartFailed),
             backgroundColor: Theme.of(context).colorScheme.error,
             behavior: SnackBarBehavior.floating,
           ),
@@ -181,7 +198,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
       if (!mounted) return;
       setState(() {
         _isRestarting = false;
-        _error = 'Restart failed: $e';
+        _error = context.l10n.restartFailed(e);
       });
     }
   }
@@ -209,7 +226,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('WiFi Scanner'),
+        title: Text(context.l10n.wifiScanner),
         centerTitle: true,
         elevation: 0,
       ),
@@ -271,7 +288,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
                   color: colorScheme.onSurfaceVariant,
                 ),
                 hint: Text(
-                  'Select radio',
+                  context.l10n.selectRadio,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
@@ -341,7 +358,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
                     ? OutlinedButton.icon(
                         onPressed: _stopScan,
                         icon: const Icon(Icons.stop, size: 20),
-                        label: const Text('Stop Scan'),
+                        label: Text(context.l10n.stopScan),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           foregroundColor: colorScheme.error,
@@ -358,7 +375,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
                             ? null
                             : _startScan,
                         icon: const Icon(Icons.radar, size: 20),
-                        label: const Text('Scan Networks'),
+                        label: Text(context.l10n.scanNetworks),
                         style: FilledButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
@@ -386,7 +403,9 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
                         )
                       : const Icon(Icons.restart_alt, size: 20),
                   label: Text(
-                    _isRestarting ? 'Restarting...' : 'Restart Radio',
+                    _isRestarting
+                        ? context.l10n.restarting
+                        : context.l10n.restartRadio,
                   ),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -473,7 +492,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
           ),
           const SizedBox(height: LuciSpacing.lg),
           Text(
-            'Scanning for networks...',
+            context.l10n.scanningNetworks,
             style: theme.textTheme.titleMedium?.copyWith(
               color: colorScheme.onSurface,
               fontWeight: FontWeight.w500,
@@ -481,7 +500,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
           ),
           const SizedBox(height: LuciSpacing.sm),
           Text(
-            'This may take a few seconds',
+            context.l10n.scanWaitMessage,
             style: theme.textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),
@@ -503,8 +522,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
           ),
           const SizedBox(height: LuciSpacing.md),
           Text(
-            _error ??
-                'Select a radio and tap Scan\nto find nearby WiFi networks',
+            _error ?? context.l10n.scanEmptyMessage,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: _error != null
@@ -515,7 +533,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
           if (_radioDevices.isEmpty) ...[
             const SizedBox(height: LuciSpacing.md),
             Text(
-              'No wireless radios detected.\nMake sure your router has wireless interfaces.',
+              context.l10n.noWirelessRadios,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
@@ -546,12 +564,12 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
           child: Row(
             children: [
               Text(
-                'AVAILABLE NETWORKS',
+                context.l10n.availableNetworks,
                 style: LuciTextStyles.sectionHeader(context),
               ),
               const Spacer(),
               Text(
-                '${_scanResults.length} found',
+                context.l10n.networksFound(_scanResults.length),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
@@ -578,7 +596,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
               LuciSpacing.sm,
             ),
             child: Text(
-              'HIDDEN NETWORKS',
+              context.l10n.hiddenNetworks,
               style: LuciTextStyles.sectionHeader(context),
             ),
           ),
@@ -652,7 +670,7 @@ class _WifiNetworkTile extends StatelessWidget {
                       Text(
                         network.ssid.isNotEmpty
                             ? network.ssid
-                            : '(Hidden Network)',
+                            : context.l10n.hiddenNetwork,
                         style: LuciTextStyles.cardTitle(context).copyWith(
                           fontStyle: network.ssid.isEmpty
                               ? FontStyle.italic
@@ -662,7 +680,11 @@ class _WifiNetworkTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${network.band} • Ch. ${network.channel} • ${network.signal} dBm',
+                        context.l10n.networkSummary(
+                          network.band,
+                          network.channel,
+                          network.signal,
+                        ),
                         style: LuciTextStyles.cardSubtitle(context),
                       ),
                     ],
@@ -682,7 +704,7 @@ class _WifiNetworkTile extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    network.encryption.shortLabel,
+                    _encryptionLabel(context, network.encryption),
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: network.encryption.isOpen
                           ? colorScheme.error
@@ -841,7 +863,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
   Future<void> _connect() async {
     if (_selectedRadio == null) {
       setState(() {
-        _error = 'Please select a radio device.';
+        _error = context.l10n.radioRequired;
       });
       return;
     }
@@ -849,7 +871,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
     // For hidden networks, an SSID must be entered by the user.
     if (_isHidden && _hiddenSsidController.text.trim().isEmpty) {
       setState(() {
-        _error = 'Please enter the network name (SSID).';
+        _error = context.l10n.ssidRequired;
       });
       return;
     }
@@ -857,8 +879,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
     // Block unsupported enterprise networks.
     if (widget.network.encryption.isEnterprise) {
       setState(() {
-        _error =
-            'Enterprise (EAP) networks are not supported for connecting here.';
+        _error = context.l10n.enterpriseNetworkUnsupported;
       });
       return;
     }
@@ -866,7 +887,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
     if (widget.network.encryption.requiresPassword &&
         _passwordController.text.isEmpty) {
       setState(() {
-        _error = 'Password is required for this network.';
+        _error = context.l10n.networkPasswordRequired;
       });
       return;
     }
@@ -876,7 +897,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
         !widget.network.encryption.wep &&
         _passwordController.text.length < 8) {
       setState(() {
-        _error = 'Password must be at least 8 characters.';
+        _error = context.l10n.passwordLengthError;
       });
       return;
     }
@@ -911,7 +932,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
             children: [
               const Icon(Icons.check_circle, color: Colors.white, size: 20),
               const SizedBox(width: 8),
-              Expanded(child: Text('Connecting to "$ssid"...')),
+              Expanded(child: Text(context.l10n.connectingToNetwork(ssid))),
             ],
           ),
           backgroundColor: Colors.green.shade700,
@@ -925,7 +946,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
     } else {
       setState(() {
         _isConnecting = false;
-        _error = 'Failed to connect. Check your password and try again.';
+        _error = context.l10n.networkConnectFailed;
       });
     }
   }
@@ -990,14 +1011,14 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
                         Text(
                           network.ssid.isNotEmpty
                               ? network.ssid
-                              : '(Hidden Network)',
+                              : context.l10n.hiddenNetwork,
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${network.encryption.shortLabel} • ${network.band} • Ch. ${network.channel}',
+                          '${_encryptionLabel(context, network.encryption)} • ${network.band} • ${context.l10n.channelShort(network.channel.toString())}',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),
@@ -1013,20 +1034,20 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
               // Network details
               _buildInfoRow(
                 context,
-                'BSSID',
+                context.l10n.bssid,
                 network.bssid,
                 Icons.router_outlined,
               ),
               _buildInfoRow(
                 context,
-                'Signal',
-                '${network.signal} dBm (${network.signalStrength})',
+                context.l10n.signal,
+                '${network.signal} dBm (${_signalStrength(context, network.signal)})',
                 Icons.signal_cellular_alt,
               ),
               _buildInfoRow(
                 context,
-                'Encryption',
-                network.encryption.description,
+                context.l10n.encryption,
+                _encryptionDescription(context, network.encryption),
                 Icons.security,
               ),
 
@@ -1036,7 +1057,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
 
               // Radio selector
               Text(
-                'Connect using radio:',
+                context.l10n.connectUsingRadio,
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -1085,7 +1106,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
               if (_isHidden) ...[
                 const SizedBox(height: LuciSpacing.md),
                 Text(
-                  'Network Name (SSID):',
+                  context.l10n.networkNameSsid,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -1095,7 +1116,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
                   controller: _hiddenSsidController,
                   enabled: !_isConnecting,
                   decoration: InputDecoration(
-                    hintText: 'Enter hidden network name',
+                    hintText: context.l10n.enterHiddenNetworkName,
                     prefixIcon: const Icon(Icons.wifi_find),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -1114,7 +1135,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
               if (network.encryption.requiresPassword) ...[
                 const SizedBox(height: LuciSpacing.md),
                 Text(
-                  'Password:',
+                  context.l10n.passwordLabel,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -1125,7 +1146,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
                   obscureText: _obscurePassword,
                   enabled: !_isConnecting,
                   decoration: InputDecoration(
-                    hintText: 'Enter network password',
+                    hintText: context.l10n.enterNetworkPassword,
                     prefixIcon: const Icon(Icons.key),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -1212,7 +1233,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'This will create a new station-mode (client) interface on the selected radio. The radio will connect to this network as a client.',
+                        context.l10n.stationModeWarning,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurface.withValues(alpha: 0.7),
                         ),
@@ -1240,7 +1261,9 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
                         )
                       : const Icon(Icons.wifi),
                   label: Text(
-                    _isConnecting ? 'Connecting...' : 'Connect',
+                    _isConnecting
+                        ? context.l10n.connecting
+                        : context.l10n.connect,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

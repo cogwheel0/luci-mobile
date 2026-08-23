@@ -95,6 +95,8 @@ coverage/
 # Generated files
 *.g.dart
 *.freezed.dart
+lib/l10n/app_localizations.dart
+lib/l10n/app_localizations_*.dart
 
 # FVM (Flutter Version Management)
 .fvm/

@@ -6,6 +6,7 @@ import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/utils/url_parser.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class ManageRoutersScreen extends ConsumerStatefulWidget {
   const ManageRoutersScreen({super.key});
@@ -31,7 +32,7 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
     final List<model.Router> routers = appState.routers;
     final String? selectedId = appState.selectedRouter?.id;
     return Scaffold(
-      appBar: const LuciAppBar(title: 'Routers', showBack: true),
+      appBar: LuciAppBar(title: context.l10n.routers, showBack: true),
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: Column(
         children: [
@@ -48,7 +49,7 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                         ),
                         Center(
                           child: Text(
-                            'No routers added yet.',
+                            context.l10n.noRoutersYet,
                             style: Theme.of(context).textTheme.bodyLarge
                                 ?.copyWith(
                                   color: Theme.of(
@@ -160,20 +161,22 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                 final confirm = await showDialog<bool>(
                                   context: context,
                                   builder: (context) => AlertDialog(
-                                    title: const Text('Remove Router'),
+                                    title: Text(context.l10n.removeRouter),
                                     content: Text(
-                                      'Are you sure you want to remove $routerLabel?',
+                                      context.l10n.removeRouterConfirmation(
+                                        routerLabel,
+                                      ),
                                     ),
                                     actions: [
                                       TextButton(
                                         onPressed: () =>
                                             Navigator.pop(context, false),
-                                        child: const Text('Cancel'),
+                                        child: Text(context.l10n.cancel),
                                       ),
                                       TextButton(
                                         onPressed: () =>
                                             Navigator.pop(context, true),
-                                        child: const Text('Remove'),
+                                        child: Text(context.l10n.remove),
                                       ),
                                     ],
                                   ),
@@ -204,7 +207,7 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               icon: const Icon(Icons.add, size: 20),
-                              label: const Text('Add Router'),
+                              label: Text(context.l10n.addRouter),
                               style: ElevatedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 16,
@@ -283,22 +286,26 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                         TextFormField(
                                                           controller:
                                                               ipController,
-                                                          decoration: const InputDecoration(
-                                                            labelText:
-                                                                'Router Address',
+                                                          decoration: InputDecoration(
+                                                            labelText: context
+                                                                .l10n
+                                                                .routerAddress,
                                                             border:
-                                                                OutlineInputBorder(),
-                                                            prefixIcon: Icon(
+                                                                const OutlineInputBorder(),
+                                                            prefixIcon: const Icon(
                                                               Icons
                                                                   .router_outlined,
                                                             ),
-                                                            helperText:
-                                                                'e.g. 192.168.1.1, router.local:8080, https://192.168.1.1',
+                                                            helperText: context
+                                                                .l10n
+                                                                .routerAddressExample,
                                                           ),
                                                           validator: (value) {
                                                             if (value == null ||
                                                                 value.isEmpty) {
-                                                              return 'Please enter the router address';
+                                                              return context
+                                                                  .l10n
+                                                                  .routerAddressRequired;
                                                             }
                                                             final parsed =
                                                                 UrlParser.parse(
@@ -306,9 +313,9 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                 );
                                                             if (!parsed
                                                                 .isValid) {
-                                                              return parsed
-                                                                      .error ??
-                                                                  'Invalid address format';
+                                                              return context
+                                                                  .l10n
+                                                                  .invalidAddressFormat;
                                                             }
                                                             return null;
                                                           },
@@ -336,8 +343,10 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                 Icons.add,
                                                                 size: 18,
                                                               ),
-                                                              label: const Text(
-                                                                'Add fallback address',
+                                                              label: Text(
+                                                                context
+                                                                    .l10n
+                                                                    .addFallbackAddress,
                                                               ),
                                                             ),
                                                           )
@@ -345,17 +354,20 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                           TextFormField(
                                                             controller:
                                                                 alternateController,
-                                                            decoration: const InputDecoration(
-                                                              labelText:
-                                                                  'Fallback Address',
+                                                            decoration: InputDecoration(
+                                                              labelText: context
+                                                                  .l10n
+                                                                  .fallbackAddress,
                                                               border:
-                                                                  OutlineInputBorder(),
-                                                              prefixIcon: Icon(
-                                                                Icons
-                                                                    .swap_horiz,
-                                                              ),
-                                                              helperText:
-                                                                  'Same credentials will be used for both addresses',
+                                                                  const OutlineInputBorder(),
+                                                              prefixIcon:
+                                                                  const Icon(
+                                                                    Icons
+                                                                        .swap_horiz,
+                                                                  ),
+                                                              helperText: context
+                                                                  .l10n
+                                                                  .fallbackCredentialsHelp,
                                                               helperMaxLines: 2,
                                                             ),
                                                             validator: (value) {
@@ -371,9 +383,9 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                   );
                                                               if (!parsed
                                                                   .isValid) {
-                                                                return parsed
-                                                                        .error ??
-                                                                    'Invalid address format';
+                                                                return context
+                                                                    .l10n
+                                                                    .invalidAddressFormat;
                                                               }
                                                               final primary =
                                                                   UrlParser.parse(
@@ -385,7 +397,9 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                   parsed.hostWithPort ==
                                                                       primary
                                                                           .hostWithPort) {
-                                                                return 'Must differ from primary address';
+                                                                return context
+                                                                    .l10n
+                                                                    .mustDifferFromPrimaryAddress;
                                                               }
                                                               return null;
                                                             },
@@ -396,22 +410,26 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                         TextFormField(
                                                           controller:
                                                               userController,
-                                                          decoration: const InputDecoration(
-                                                            labelText:
-                                                                'Username',
+                                                          decoration: InputDecoration(
+                                                            labelText: context
+                                                                .l10n
+                                                                .username,
                                                             border:
-                                                                OutlineInputBorder(),
-                                                            prefixIcon: Icon(
+                                                                const OutlineInputBorder(),
+                                                            prefixIcon: const Icon(
                                                               Icons
                                                                   .person_outline,
                                                             ),
-                                                            helperText:
-                                                                'Default is usually root',
+                                                            helperText: context
+                                                                .l10n
+                                                                .usernameDefaultHelp,
                                                           ),
                                                           validator: (v) =>
                                                               v == null ||
                                                                   v.isEmpty
-                                                              ? 'Required'
+                                                              ? context
+                                                                    .l10n
+                                                                    .required
                                                               : null,
                                                           autofillHints: const [
                                                             AutofillHints
@@ -425,16 +443,18 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                           controller:
                                                               passController,
                                                           decoration: InputDecoration(
-                                                            labelText:
-                                                                'Password',
+                                                            labelText: context
+                                                                .l10n
+                                                                .password,
                                                             border:
                                                                 const OutlineInputBorder(),
                                                             prefixIcon: const Icon(
                                                               Icons
                                                                   .lock_outline,
                                                             ),
-                                                            helperText:
-                                                                'Your router password',
+                                                            helperText: context
+                                                                .l10n
+                                                                .routerPasswordHelp,
                                                             suffixIcon: IconButton(
                                                               icon: Icon(
                                                                 obscureText
@@ -449,8 +469,12 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                               ),
                                                               tooltip:
                                                                   obscureText
-                                                                  ? 'Hide password'
-                                                                  : 'Show password',
+                                                                  ? context
+                                                                        .l10n
+                                                                        .hidePassword
+                                                                  : context
+                                                                        .l10n
+                                                                        .showPassword,
                                                             ),
                                                           ),
                                                           obscureText:
@@ -548,9 +572,9 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                       if (!parsedUrl
                                                                           .isValid) {
                                                                         setState(() {
-                                                                          errorMessage =
-                                                                              parsedUrl.error ??
-                                                                              'Invalid address format';
+                                                                          errorMessage = context
+                                                                              .l10n
+                                                                              .invalidAddressFormat;
                                                                         });
                                                                         return;
                                                                       }
@@ -580,8 +604,9 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                             id,
                                                                       )) {
                                                                         setState(() {
-                                                                          errorMessage =
-                                                                              'Router already exists.';
+                                                                          errorMessage = context
+                                                                              .l10n
+                                                                              .routerAlreadyExists;
                                                                         });
                                                                         return;
                                                                       }
@@ -622,7 +647,7 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                           setState(() {
                                                                             errorMessage =
                                                                                 appState.errorMessage ??
-                                                                                'Failed to connect: Invalid credentials or host unreachable.';
+                                                                                context.l10n.failedToConnectCredentials;
                                                                             isConnecting =
                                                                                 false;
                                                                           });
@@ -639,8 +664,11 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                           return;
                                                                         }
                                                                         setState(() {
-                                                                          errorMessage =
-                                                                              'Failed to connect: ${e.toString()}';
+                                                                          errorMessage = context
+                                                                              .l10n
+                                                                              .failedToConnect(
+                                                                                e,
+                                                                              );
                                                                           isConnecting =
                                                                               false;
                                                                         });
@@ -712,8 +740,10 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                         width:
                                                                             12,
                                                                       ),
-                                                                      const Text(
-                                                                        'Connecting...',
+                                                                      Text(
+                                                                        context
+                                                                            .l10n
+                                                                            .connecting,
                                                                       ),
                                                                     ],
                                                                   )
@@ -724,17 +754,19 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                     mainAxisSize:
                                                                         MainAxisSize
                                                                             .min,
-                                                                    children: const [
-                                                                      Icon(
+                                                                    children: [
+                                                                      const Icon(
                                                                         Icons
                                                                             .add,
                                                                       ),
-                                                                      SizedBox(
+                                                                      const SizedBox(
                                                                         width:
                                                                             12,
                                                                       ),
                                                                       Text(
-                                                                        'Add',
+                                                                        context
+                                                                            .l10n
+                                                                            .add,
                                                                       ),
                                                                     ],
                                                                   ),
@@ -831,7 +863,7 @@ class _UnifiedRouterCard extends StatelessWidget {
                       ? colorScheme.primary
                       : colorScheme.onSurface,
                   size: 22,
-                  semanticLabel: 'Router icon',
+                  semanticLabel: context.l10n.routerIcon,
                 ),
               ),
               const SizedBox(width: 16),
@@ -867,7 +899,7 @@ class _UnifiedRouterCard extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(left: 8.0),
                   child: Chip(
-                    label: const Text('Active'),
+                    label: Text(context.l10n.active),
                     labelStyle: theme.textTheme.labelSmall?.copyWith(
                       color: colorScheme.onPrimary,
                     ),
@@ -893,23 +925,23 @@ class _UnifiedRouterCard extends StatelessWidget {
               if (onRemoveFallback != null)
                 IconButton(
                   icon: const Icon(Icons.link_off),
-                  tooltip: 'Remove fallback address',
+                  tooltip: context.l10n.removeFallbackAddress,
                   onPressed: () async {
                     final confirm = await showDialog<bool>(
                       context: context,
                       builder: (context) => AlertDialog(
-                        title: const Text('Remove Fallback Address'),
-                        content: const Text(
-                          'Are you sure you want to remove the fallback address?',
+                        title: Text(context.l10n.removeFallbackAddressTitle),
+                        content: Text(
+                          context.l10n.removeFallbackAddressConfirmation,
                         ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Cancel'),
+                            child: Text(context.l10n.cancel),
                           ),
                           TextButton(
                             onPressed: () => Navigator.pop(context, true),
-                            child: const Text('Remove'),
+                            child: Text(context.l10n.remove),
                           ),
                         ],
                       ),
@@ -922,7 +954,7 @@ class _UnifiedRouterCard extends StatelessWidget {
               if (onDelete != null)
                 IconButton(
                   icon: const Icon(Icons.delete_outline),
-                  tooltip: 'Remove',
+                  tooltip: context.l10n.remove,
                   onPressed: onDelete,
                 ),
             ],
