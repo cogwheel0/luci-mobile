@@ -2,63 +2,52 @@
 
 <div align="center">
   <a href="https://play.google.com/store/apps/details?id=com.cogwheel.LuCIMobile">
-    <img src="store-badges/google.webp" alt="Get it on Google Play" style="height:56px;"/>
+    <img src="store-badges/google.webp" alt="Get LuCI Mobile on Google Play" height="56"/>
   </a>
   <a href="https://apps.apple.com/app/luci-mobile/id6749455847">
-    <img src="store-badges/apple.webp" alt="Download on the App Store" style="height:56px;"/>
+    <img src="store-badges/apple.webp" alt="Download LuCI Mobile on the App Store" height="56"/>
   </a>
   <a href="https://apt.izzysoft.de/fdroid/index/apk/com.cogwheel.LuCIMobile">
-    <img src="store-badges/izzyondroid.webp" alt="Get it on IzzyOnDroid" style="height:56px;"/>
+    <img src="store-badges/izzyondroid.webp" alt="Get LuCI Mobile on IzzyOnDroid" height="56"/>
   </a>
   <br><br>
 
-![Latest Release](https://shields.rbtlog.dev/simple/com.cogwheel.LuCIMobile)
-![GitHub all downloads](https://img.shields.io/github/downloads/cogwheel0/luci-mobile/total?style=flat-square&label=Downloads&logo=github&color=0A84FF)
+  <img src="https://shields.rbtlog.dev/simple/com.cogwheel.LuCIMobile" alt="Latest LuCI Mobile release"/>
+  <img src="https://img.shields.io/github/downloads/cogwheel0/luci-mobile/total?style=flat-square&amp;label=Downloads&amp;logo=github&amp;color=0A84FF" alt="Total GitHub downloads"/>
+  <br><br>
 
-<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_01.png" width="300"/>
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_01.png" alt="LuCI Mobile dashboard on Android" width="320"/>
 </div>
 
-<br>
+LuCI Mobile is an open-source Flutter client for OpenWrt routers. It talks to LuCI RPC so you can check router health, inspect clients and interfaces, scan Wi-Fi networks, and handle common admin tasks from a phone.
 
-**LuCI Mobile** is a modern Flutter app for managing and monitoring multiple OpenWrt/LuCI routers. It features a beautiful Material 3 UI, secure authentication, real-time stats, and seamless multi-router support.
+## What it does
 
----
+- Saves multiple router profiles and switches between them. A profile can include a fallback address for access from another network.
+- Shows throughput, CPU load, memory use, uptime, wireless signal, and interface status on one dashboard.
+- Lists clients for every saved router or only the selected router. Search by hostname, IP address, MAC address, or vendor.
+- Shows wired and wireless interface details, traffic totals, addresses, radio state, and channel information.
+- Scans nearby Wi-Fi networks and can connect a router radio as a station.
+- Reboots a router after confirmation.
+- Follows the system theme or uses a selected light or dark theme.
 
-## Features
-
-- **Multiple Router Management:** Add, switch, and manage any number of OpenWrt routers. Each router’s data is kept separate and secure.
-- **Secure Login:** HTTP/HTTPS support, self-signed certificate handling, and secure credential storage.
-- **Dashboard Overview:** Real-time system stats, interface status, connected clients, and interactive charts.
-- **Network Interface Management:** View and monitor all wired and wireless interfaces, bandwidth, IPs, and DNS.
-- **Client Management:** See all connected devices, connection type, MAC/IP, vendor, DHCP lease, and more.
-- **System Control:** Remote reboot, settings, and theme customization (light/dark mode).
-- **Modern UI/UX:** Material Design 3, responsive layout, and intuitive navigation.
-- **Open Source:** GPLv3 licensed and available on [Google Play](https://play.google.com/store/apps/details?id=com.cogwheel.LuCIMobile) and [IzzyOnDroid](https://apt.izzysoft.de/fdroid/index/apk/com.cogwheel.LuCIMobile).
-
----
-
-## Multiple Router Functionality
-
-- **Add Unlimited Routers:** Each with its own credentials and settings.
-- **Quick Switch:** Instantly switch routers from the dashboard dropdown or "Manage Routers" screen.
-- **Isolated Data:** Each router’s dashboard, clients, and settings are kept separate.
-- **Edit & Remove:** Update credentials, rename, or remove routers at any time.
-- **Auto-Connect:** Remembers your last selected router and auto-connects on launch.
-- **Secure Storage:** All credentials are stored securely on your device.
-
----
+Credentials and router profiles are stored through `flutter_secure_storage`. The app asks before trusting a self-signed HTTPS certificate. It does not include analytics, tracking, or advertising SDKs.
 
 ## Screenshots
 
-| Login | Dashboard | Clients | Interfaces |
-|-------|-----------|---------|------------|
-| <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_02.png" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_01.png" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_03.png" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_05.png" width="200"/> |
+| Dashboard | Login | Clients | Client details |
+| --- | --- | --- | --- |
+| <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_01.png" alt="Router dashboard" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_02.png" alt="Router login" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_03.png" alt="Connected clients" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_04.png" alt="Expanded client details" width="200"/> |
 
----
+| Interfaces | Interface details | More |
+| --- | --- | --- |
+| <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_05.png" alt="Router interfaces" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_06.png" alt="Expanded interface details" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_07.png" alt="Router and app actions" width="200"/> |
 
-## Installation
+## Install
 
-**Get it on [Google Play](https://play.google.com/store/apps/details?id=com.cogwheel.LuCIMobile)**, **[Apple App Store](https://apps.apple.com/app/luci-mobile/id6749455847)**, or **[IzzyOnDroid](https://apt.izzysoft.de/fdroid/index/apk/com.cogwheel.LuCIMobile)**, or build from source:
+Use [Google Play](https://play.google.com/store/apps/details?id=com.cogwheel.LuCIMobile), the [Apple App Store](https://apps.apple.com/app/luci-mobile/id6749455847), or [IzzyOnDroid](https://apt.izzysoft.de/fdroid/index/apk/com.cogwheel.LuCIMobile).
+
+To run the source, install Flutter with Dart 3.8.1 or newer, then run:
 
 ```bash
 git clone https://github.com/cogwheel0/luci-mobile.git
@@ -67,64 +56,49 @@ flutter pub get
 flutter run
 ```
 
-- Requires Flutter 3.35+ and Dart 3.9+
-- Android: `flutter build apk`  
-- iOS: `flutter build ios`
+Useful checks:
 
----
-
-## Project Structure
-
-```
-lib/
-├── config/                 # App configuration
-├── models/                 # Data models (client, interface, router)
-├── screens/                # UI screens (dashboard, clients, interfaces, login, more, etc.)
-├── services/               # Business logic (API, secure storage)
-├── state/                  # State management (app_state.dart)
-├── widgets/                # Reusable UI components (luci_app_bar.dart)
-└── main.dart               # App entry point
+```bash
+flutter analyze
+flutter test
 ```
 
----
+## Router setup
 
-## Development & Contribution
+The router must run OpenWrt with LuCI enabled. LuCI Mobile also needs the LuCI RPC and wireless information modules:
 
-- Run in dev mode: `flutter run`
-- Build for release: `flutter build apk --release` or `flutter build ios --release`
-- Analyze code: `flutter analyze`
+```sh
+# OpenWrt using opkg
+opkg update
+opkg install rpcd-mod-luci rpcd-mod-iwinfo
 
-**Contributions welcome!** Please fork, branch, and submit a pull request.
+# OpenWrt using apk
+apk update
+apk add rpcd-mod-luci rpcd-mod-iwinfo
 
----
+/etc/init.d/rpcd restart
+```
 
-## Security & Privacy
-- All credentials are stored securely on-device
-- HTTPS and self-signed certificate support
-- No analytics or tracking
+Check that the RPC object is available:
 
----
+```sh
+ubus list luci-rpc
+ubus call luci-rpc getNetworkDevices '{}'
+```
 
 ## Troubleshooting
 
-- **Connection Failed:** Check router IP, LuCI web interface, firewall, and try both HTTP/HTTPS.
-- **Authentication Failed:** Verify credentials and admin privileges.
-- **No Data Displayed:** Ensure the router has LuCI RPC support: install `rpcd-mod-luci` and `rpcd-mod-iwinfo` (`opkg update && opkg install rpcd-mod-luci rpcd-mod-iwinfo` on OpenWrt ≤ 24.10, or `apk add rpcd-mod-luci rpcd-mod-iwinfo` on OpenWrt ≥ 25.12), restart `rpcd` (or reboot), then verify with `ubus list luci-rpc` and `ubus call luci-rpc getNetworkDevices '{}'`.
+- If the app cannot connect, open the same router address in a browser and check the scheme, port, firewall, and VPN route.
+- If login fails, verify the username, password, and administrator permissions in LuCI.
+- If the dashboard is empty, install the RPC modules above, restart `rpcd`, and run the two `ubus` checks.
+- Accept a self-signed certificate only after checking that its fingerprint belongs to your router.
 
----
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow. Bug reports and focused pull requests are welcome.
 
 ## License
 
-GPL v3.0. See [LICENSE](LICENSE).
+LuCI Mobile is licensed under [GPL-3.0](LICENSE). It is an independent project and is not affiliated with OpenWrt.
 
----
-
-## Acknowledgments
-- OpenWrt community for LuCI
-- Flutter team
-- [OpenWrtManager](https://github.com/hagaygo/OpenWrtManager) inspiration
-- Contributors and testers
-
----
-
-**Note:** This app requires an OpenWrt router with LuCI web interface enabled. Make sure your router is properly configured before use.
+Thanks to the OpenWrt and Flutter communities, the project contributors and testers, and [OpenWrtManager](https://github.com/hagaygo/OpenWrtManager) for early inspiration.

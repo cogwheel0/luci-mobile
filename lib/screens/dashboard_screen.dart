@@ -1048,7 +1048,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                       colors: [
-                        Colors.transparent,
+                        Theme.of(
+                          context,
+                        ).colorScheme.surface.withValues(alpha: 0),
                         Theme.of(context).colorScheme.surface,
                       ],
                     ),
@@ -1077,7 +1079,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       begin: Alignment.centerRight,
                       end: Alignment.centerLeft,
                       colors: [
-                        Colors.transparent,
+                        Theme.of(
+                          context,
+                        ).colorScheme.surface.withValues(alpha: 0),
                         Theme.of(context).colorScheme.surface,
                       ],
                     ),
@@ -1327,7 +1331,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,
                           colors: [
-                            Colors.transparent,
+                            Theme.of(
+                              context,
+                            ).colorScheme.surface.withValues(alpha: 0),
                             Theme.of(context).colorScheme.surface,
                           ],
                         ),
@@ -1356,7 +1362,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           begin: Alignment.centerRight,
                           end: Alignment.centerLeft,
                           colors: [
-                            Colors.transparent,
+                            Theme.of(
+                              context,
+                            ).colorScheme.surface.withValues(alpha: 0),
                             Theme.of(context).colorScheme.surface,
                           ],
                         ),

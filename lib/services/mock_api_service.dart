@@ -58,7 +58,7 @@ class MockApiService implements IApiService {
             '${AppConfig.mockDataPath}$mockDataFile',
           );
           final jsonData = jsonDecode(jsonString);
-          return [0, jsonData]; // Wrap in standard RPC response format
+          return [0, _formatMockData(endpointKey, jsonData)];
         } catch (e) {
           // Log file loading error and fall back to default data
           debugPrint(
@@ -107,7 +107,7 @@ class MockApiService implements IApiService {
             '${AppConfig.mockDataPath}$mockDataFile',
           );
           final jsonData = jsonDecode(jsonString);
-          return [0, jsonData]; // Wrap in standard RPC response format
+          return [0, _formatMockData(endpointKey, jsonData)];
         } catch (e) {
           // Log file loading error and fall back to default data
           debugPrint(
@@ -263,6 +263,25 @@ class MockApiService implements IApiService {
     };
 
     return mockFileMap[key];
+  }
+
+  dynamic _formatMockData(String endpoint, dynamic data) {
+    if (endpoint != 'luci-rpc.getDHCPLeases' || data is! Map) return data;
+
+    final leases = <Map<String, dynamic>>[];
+    for (final line in (data['stdout'] as String? ?? '').split('\n')) {
+      final parts = line.trim().split(RegExp(r'\s+'));
+      if (parts.length < 4) continue;
+      leases.add({
+        'expires': int.tryParse(parts[0]) ?? 0,
+        'macaddr': parts[1],
+        'ipaddr': parts[2],
+        'hostname': parts[3],
+        'activetime': 0,
+        'leasetime': int.tryParse(parts[0]) ?? 0,
+      });
+    }
+    return {'dhcp_leases': leases};
   }
 
   dynamic _getDefaultMockData(String object, String method) {
