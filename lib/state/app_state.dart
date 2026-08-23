@@ -403,9 +403,7 @@ class AppState extends ChangeNotifier {
     } else if (_routerService!.routers.isEmpty) {
       // All routers deleted — clear auth state so tryAutoLogin won't
       // succeed with stale credentials and cause a navigation loop
-      _dashboardData = null;
-      await _authService?.logout();
-      notifyListeners();
+      await logout();
     } else {
       notifyListeners();
     }
