@@ -33,13 +33,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
   final Map<String, GlobalKey> _interfaceKeys = {};
 
   /// Safely extract a String from a UCI config value that may be a List or String.
-  static String _uciString(dynamic value, [String fallback = '']) {
-    if (value is String) return value;
-    if (value is List) {
-      return value.isNotEmpty ? value.first.toString() : fallback;
-    }
-    return value?.toString() ?? fallback;
-  }
+  static String _uciString(dynamic value, [String fallback = '']) =>
+      uciString(value, fallback);
 
   // Unified key generator for all interfaces
   String _interfaceKey({String? name, String? ssid, String? deviceName}) {

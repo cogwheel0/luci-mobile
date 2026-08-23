@@ -956,7 +956,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         uciInterfaces.forEach((uciName, config) {
           if (!addedInterfaces.contains(uciName)) {
             final ssid = config['ssid'] ?? 'Unnamed';
-            final device = config['device']?.toString() ?? '';
+            final device = uciString(config['device']);
             final interfaceId = '$ssid ($device)';
 
             // Check if this interface should be shown based on preferences

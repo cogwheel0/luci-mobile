@@ -33,3 +33,9 @@ String? normalizeWifiChannel(Object? value) {
 /// Chooses an actual radio channel before its configured fallback.
 String resolveWifiChannel({Object? actual, Object? configured}) =>
     normalizeWifiChannel(actual) ?? normalizeWifiChannel(configured) ?? 'N/A';
+
+/// Extracts a scalar string from a UCI value that may be list-valued.
+String uciString(Object? value, [String fallback = '']) {
+  if (value is List) return value.isEmpty ? fallback : value.first.toString();
+  return value?.toString() ?? fallback;
+}

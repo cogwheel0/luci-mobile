@@ -61,6 +61,11 @@ void main() {
     expect(resolveWifiChannel(configured: 'N/A'), 'N/A');
   });
 
+  test('unwraps list-valued UCI device names', () {
+    expect(uciString(['radio0']), 'radio0');
+    expect(uciString([]), '');
+  });
+
   test('maps GL.iNet radio names to UCI device names', () {
     const wifi = GlInetData(radios: {'wifi0': GlInetRadio(channel: 44)});
     const defaultRadio = GlInetData(
