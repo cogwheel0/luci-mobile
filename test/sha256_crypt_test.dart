@@ -58,5 +58,12 @@ void main() {
         r'$5$rounds=1000$roundstest$Jiw5psqD9nmIaRRyp0o3qJZ7KwsvqJtCNaU8M/3GXxC',
       );
     });
+
+    test('rounds below the SHA-crypt minimum are clamped', () {
+      expect(
+        Sha256Crypt.hash('test', 'roundstest', rounds: 999),
+        Sha256Crypt.hash('test', 'roundstest', rounds: 1000),
+      );
+    });
   });
 }

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/models/client.dart';
+import 'package:luci_mobile/models/glinet_data.dart';
 import 'package:luci_mobile/services/glinet_api_service.dart';
 import 'package:luci_mobile/services/mock_glinet_api_service.dart';
 import 'package:luci_mobile/utils/http_client_manager.dart';
@@ -58,6 +59,16 @@ void main() {
     expect(resolveWifiChannel(actual: 44, configured: 'auto'), '44');
     expect(resolveWifiChannel(configured: '6'), '6');
     expect(resolveWifiChannel(configured: 'N/A'), 'N/A');
+  });
+
+  test('maps GL.iNet radio names to UCI device names', () {
+    const wifi = GlInetData(radios: {'wifi0': GlInetRadio(channel: 44)});
+    const defaultRadio = GlInetData(
+      radios: {'default_radio1': GlInetRadio(channel: 149)},
+    );
+
+    expect(wifi.radioForDevice('radio0')?.channel, 44);
+    expect(defaultRadio.radioForDevice('radio1')?.channel, 149);
   });
 
   test('parses radio, client, system, fan, and Tailscale data', () async {

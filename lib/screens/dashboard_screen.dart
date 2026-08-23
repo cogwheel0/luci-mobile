@@ -710,7 +710,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       Expanded(
         child: _buildVitalsColumn(
           context,
-          label: cpuCores != null ? 'CPU' : 'Load',
+          label: glInetData == null
+              ? 'CPU Load'
+              : (cpuCores == null ? 'Load' : 'CPU'),
           value: cpuLoadValue,
         ),
       ),
@@ -889,7 +891,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             }
 
             final isEnabled = !(config['disabled'] as bool? ?? false);
-            final glInetRadio = glInetData?.radios[radioName];
+            final glInetRadio = glInetData?.radioForDevice(radioName);
             final channel =
                 normalizeWifiChannel(iwinfo['channel']) ??
                 normalizeWifiChannel(config['channel']) ??
@@ -966,8 +968,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             final isRadioEnabled = uciRadios[device]?['disabled'] != '1';
             final isIfaceEnabled = config['disabled'] != '1';
             final isEnabled = isRadioEnabled && isIfaceEnabled;
+            final glInetRadio = glInetData?.radioForDevice(device);
             final channel = resolveWifiChannel(
-              actual: glInetData?.radios[device]?.channel,
+              actual: glInetRadio?.channel,
               configured: uciRadios[device]?['channel'],
             );
 

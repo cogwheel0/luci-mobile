@@ -44,6 +44,16 @@ class GlInetData {
     this.cpuCores,
   });
 
+  GlInetRadio? radioForDevice(String device) {
+    final direct = radios[device];
+    if (direct != null) return direct;
+
+    final index = RegExp(r'^radio(\d+)$').firstMatch(device)?.group(1);
+    return index == null
+        ? null
+        : radios['wifi$index'] ?? radios['default_radio$index'];
+  }
+
   GlInetData withCpuCores(int cores) => GlInetData(
     radios: radios,
     clients: clients,

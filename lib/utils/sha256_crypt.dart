@@ -49,6 +49,7 @@ class Sha256Crypt {
       Uint8List.fromList(crypto.sha256.convert(data).bytes);
 
   static String hash(String password, String salt, {int rounds = 5000}) {
+    final effectiveRounds = rounds.clamp(1000, 999999999);
     final pw = utf8.encode(password);
     final normalizedSalt = salt.length > 16 ? salt.substring(0, 16) : salt;
     final s = utf8.encode(normalizedSalt);
@@ -81,7 +82,7 @@ class Sha256Crypt {
 
     // Rounds
     var c = Uint8List.fromList(da);
-    for (var r = 0; r < rounds; r++) {
+    for (var r = 0; r < effectiveRounds; r++) {
       final input = <int>[];
       input.addAll(r & 1 != 0 ? dp : c);
       if (r % 3 != 0) input.addAll(ds);
@@ -104,7 +105,9 @@ class Sha256Crypt {
     }
     _b64Encode(sb, 0, c[_transpose[31]], c[_transpose[30]], 3);
 
-    final roundsPrefix = rounds == 5000 ? '' : 'rounds=$rounds\$';
+    final roundsPrefix = effectiveRounds == 5000
+        ? ''
+        : 'rounds=$effectiveRounds\$';
     return '\$5\$$roundsPrefix$normalizedSalt\$$sb';
   }
 
