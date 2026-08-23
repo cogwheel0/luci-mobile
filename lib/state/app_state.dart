@@ -1270,7 +1270,8 @@ class AppState extends ChangeNotifier {
 
     // Use the address that actually succeeded during login
     final ip =
-        _authService!.ipAddress ?? _routerService!.selectedRouter!.ipAddress;
+        _authService!.ipAddress ??
+        _routerService!.selectedRouter!.activeAddress;
     final useHttps = _authService!.useHttps;
 
     try {
@@ -2802,7 +2803,8 @@ class AppState extends ChangeNotifier {
 
       // Use the address that actually succeeded during login
       final ip =
-          _authService!.ipAddress ?? _routerService!.selectedRouter!.ipAddress;
+          _authService!.ipAddress ??
+          _routerService!.selectedRouter!.activeAddress;
       final useHttps = _authService!.useHttps;
 
       final stationsMap = await _apiService!
