@@ -2972,7 +2972,9 @@ class AppState extends ChangeNotifier {
 
       // Use the address that actually succeeded during login (may differ
       // from router.ipAddress after fallback)
-      final activeIp = _authService!.ipAddress!;
+      final activeIp =
+          _authService!.ipAddress ??
+          _routerService!.selectedRouter!.activeAddress;
       final activeHttps = _authService!.useHttps;
 
       final wireless = <String>{};
