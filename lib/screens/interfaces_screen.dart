@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:flutter/services.dart';
+import 'package:luci_mobile/models/glinet_data.dart';
 import 'package:luci_mobile/models/interface.dart';
+import 'package:luci_mobile/utils/wifi_utils.dart';
 import 'dart:math';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
@@ -31,13 +33,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
   final Map<String, GlobalKey> _interfaceKeys = {};
 
   /// Safely extract a String from a UCI config value that may be a List or String.
-  static String _uciString(dynamic value, [String fallback = '']) {
-    if (value is String) return value;
-    if (value is List) {
-      return value.isNotEmpty ? value.first.toString() : fallback;
-    }
-    return value?.toString() ?? fallback;
-  }
+  static String _uciString(dynamic value, [String fallback = '']) =>
+      uciString(value, fallback);
 
   // Unified key generator for all interfaces
   String _interfaceKey({String? name, String? ssid, String? deviceName}) {
@@ -565,6 +562,30 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
         }
         return NetworkInterface.fromJson(detailedInterfaceMap);
       }).toList();
+
+      // Enrich Tailscale interface with GL.iNet API data
+      final glInetData = appState.dashboardData?['glinet'] as GlInetData?;
+      if (glInetData?.tailscaleIp != null) {
+        interfacesList = interfacesList.map((iface) {
+          if (iface.name.toLowerCase() == 'tailscale' &&
+              iface.ipAddress == null) {
+            return NetworkInterface(
+              name: iface.name,
+              isUp: iface.isUp,
+              protocol: 'tailscale',
+              uptime: iface.uptime,
+              device: iface.device,
+              ipAddress: glInetData!.tailscaleIp,
+              netmask: iface.netmask,
+              gateway: iface.gateway,
+              dnsServers: iface.dnsServers,
+              stats: iface.stats,
+              ipv6Addresses: iface.ipv6Addresses,
+            );
+          }
+          return iface;
+        }).toList();
+      }
     }
 
     final interfaces = interfacesList;
@@ -602,6 +623,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     final dashboardData = appState.dashboardData;
     final wirelessData = dashboardData?['wireless'] as Map<String, dynamic>?;
     final uciWirelessConfig = dashboardData?['uciWirelessConfig'];
+    final glInetData = dashboardData?['glinet'] as GlInetData?;
     final interfacesList = <Map<String, dynamic>>[];
 
     final uciRadios = <String, Map>{};
@@ -650,6 +672,18 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             final mode = _uciString(config['mode']).toUpperCase().isNotEmpty
                 ? _uciString(config['mode']).toUpperCase()
                 : (iwinfo['mode']?.toString().toUpperCase() ?? 'N/A');
+            final glInetRadio = glInetData?.radioForDevice(radioName);
+            final channel =
+                normalizeWifiChannel(iwinfo['channel']) ??
+                normalizeWifiChannel(config['channel']) ??
+                normalizeWifiChannel(glInetRadio?.channel) ??
+                'N/A';
+            final bandStr =
+                glInetRadio?.band ?? config['band']?.toString() ?? '';
+            final bandLabel = formatWifiBand(bandStr);
+            final subtitleParts = <String>[mode];
+            if (bandLabel.isNotEmpty) subtitleParts.add(bandLabel);
+            subtitleParts.add('Ch. $channel');
 
             // Build encryption description
             final rawEncIwinfo = iwinfo['encryption'];
@@ -662,8 +696,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               'name': _uciString(config['ssid']).isNotEmpty
                   ? _uciString(config['ssid'])
                   : (iwinfo['ssid']?.toString() ?? 'Unnamed'),
-              'subtitle':
-                  '$mode • Ch. ${iwinfo['channel']?.toString() ?? _uciString(config['channel'], 'N/A')}',
+              'subtitle': subtitleParts.join(' • '),
               'isEnabled': isEnabled,
               'isIfaceEnabled': isIfaceEnabled,
               'isRadioEnabled': isRadioEnabled,
@@ -680,16 +713,15 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               'network': (config['network'] is List)
                   ? (config['network'] as List).join(', ')
                   : config['network']?.toString() ?? '',
-              'channel': iwinfo['channel']?.toString() ?? 'auto',
+              'channel': channel,
               'signal': iwinfo['signal']?.toString() ?? '--',
               'details': {
                 'Device': _uciString(config['device'], radioName),
                 'Mode': _uciString(config['mode']).isNotEmpty
                     ? _uciString(config['mode'])
                     : (iwinfo['mode']?.toString() ?? 'N/A'),
-                'Channel':
-                    iwinfo['channel']?.toString() ??
-                    _uciString(config['channel'], 'N/A'),
+                'Band': bandLabel.isNotEmpty ? bandLabel : 'N/A',
+                'Channel': channel,
                 'Signal': '${iwinfo['signal']?.toString() ?? '--'} dBm',
                 'Network': (config['network'] is List)
                     ? (config['network'] as List).join(', ')
@@ -706,15 +738,19 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
         final radioName = _uciString(config['device']);
         final isRadioEnabled = uciRadios[radioName]?['disabled'] != '1';
         final isIfaceEnabled = _uciString(config['disabled']) != '1';
-        final isEnabled = isRadioEnabled && isIfaceEnabled;
         final mode = config['mode'] ?? 'N/A';
+        final glInetRadio = glInetData?.radioForDevice(radioName);
+        final channel = resolveWifiChannel(
+          actual: glInetRadio?.channel,
+          configured: uciRadios[radioName]?['channel'],
+        );
 
         final name = _uciString(config['ssid'], 'Unnamed');
         interfacesList.add({
           'name': name,
           'subtitle':
-              '${_uciString(config['mode'], 'N/A').toUpperCase()} • Disabled',
-          'isEnabled': isEnabled,
+              '${_uciString(config['mode'], 'N/A').toUpperCase()} • Not Running',
+          'isEnabled': false,
           'isIfaceEnabled': isIfaceEnabled,
           'isRadioEnabled': isRadioEnabled,
           'deviceName': radioName,
@@ -729,12 +765,13 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
           'network': (config['network'] is List)
               ? (config['network'] as List).join(', ')
               : config['network']?.toString() ?? '',
-          'channel': config['channel']?.toString() ?? 'auto',
+          'channel': channel,
           'signal': '--',
           'details': {
             'Device': radioName,
             'Mode': _uciString(config['mode'], 'N/A'),
             'SSID': _uciString(config['ssid'], 'N/A'),
+            'Channel': channel,
             'Network': (config['network'] is List)
                 ? (config['network'] as List).join(', ')
                 : _uciString(config['network'], 'N/A'),

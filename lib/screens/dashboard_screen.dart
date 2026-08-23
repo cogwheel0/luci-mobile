@@ -5,7 +5,9 @@ import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_animation_system.dart';
+import 'package:luci_mobile/models/glinet_data.dart';
 import 'package:luci_mobile/models/router.dart' as model;
+import 'package:luci_mobile/utils/wifi_utils.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -111,10 +113,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return parts.join(' ');
   }
 
-  String _formatCpuLoad(List<dynamic> load) {
+  String _formatCpuLoad(
+    List<dynamic> load, {
+    int? cores,
+    bool showRawLoad = false,
+  }) {
     if (load.isEmpty) return 'N/A';
-    // Use the first value as the main CPU load
-    final percent = ((load[0] / 65536) * 100).clamp(0, 100);
+    final loadAvg = load[0] / 65536;
+    if (cores != null && cores > 0) {
+      final percent = (loadAvg / cores * 100).clamp(0, 100).toInt();
+      return '$percent%';
+    }
+    if (showRawLoad) return loadAvg.toStringAsFixed(2);
+    final percent = (loadAvg * 100).clamp(0, 100);
     return '${percent.toStringAsFixed(0)}%';
   }
 
@@ -648,7 +659,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: labelStyle),
+        Text(
+          label,
+          style: labelStyle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 4),
         Text(
           value,
@@ -667,7 +684,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final uptimeValue = uptime != null ? _formatUptime(uptime) : 'N/A';
 
     final cpuLoad = sysInfo?['load'] as List<dynamic>?;
-    final cpuLoadValue = cpuLoad != null ? _formatCpuLoad(cpuLoad) : 'N/A';
+    final glInetData = appState.dashboardData?['glinet'] as GlInetData?;
+    final cpuCores = glInetData?.cpuCores;
+    final cpuLoadValue = cpuLoad != null
+        ? _formatCpuLoad(
+            cpuLoad,
+            cores: cpuCores,
+            showRawLoad: glInetData != null && cpuCores == null,
+          )
+        : 'N/A';
 
     final totalMem = sysInfo?['memory']?['total'] as int? ?? 0;
     final freeMem = sysInfo?['memory']?['free'] as int? ?? 0;
@@ -677,37 +702,61 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ? '${(usedMem / totalMem * 100).toStringAsFixed(0)}%'
         : 'N/A';
 
+    final cpuTemp = glInetData?.cpuTemperature;
+    final fanActive = glInetData?.fanActive;
+    final fanSpeed = glInetData?.fanSpeed;
+
+    final vitals = <Widget>[
+      Expanded(
+        child: _buildVitalsColumn(
+          context,
+          label: glInetData == null
+              ? 'CPU Load'
+              : (cpuCores == null ? 'Load' : 'CPU'),
+          value: cpuLoadValue,
+        ),
+      ),
+      Expanded(
+        child: _buildVitalsColumn(context, label: 'Memory', value: memoryValue),
+      ),
+      Expanded(
+        child: _buildVitalsColumn(context, label: 'Uptime', value: uptimeValue),
+      ),
+    ];
+
+    if (cpuTemp != null) {
+      vitals.add(
+        Expanded(
+          child: _buildVitalsColumn(
+            context,
+            label: 'CPU Temp',
+            value: '${cpuTemp.toStringAsFixed(1)}\u00B0C',
+          ),
+        ),
+      );
+    }
+
+    if (fanActive != null) {
+      vitals.add(
+        Expanded(
+          child: _buildVitalsColumn(
+            context,
+            label: 'Fan',
+            value: fanActive
+                ? (fanSpeed == null ? 'On' : '$fanSpeed RPM')
+                : 'Off',
+          ),
+        ),
+      );
+    }
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       margin: EdgeInsets.zero,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
-        child: Row(
-          children: [
-            Expanded(
-              child: _buildVitalsColumn(
-                context,
-                label: 'CPU Load',
-                value: cpuLoadValue,
-              ),
-            ),
-            Expanded(
-              child: _buildVitalsColumn(
-                context,
-                label: 'Memory',
-                value: memoryValue,
-              ),
-            ),
-            Expanded(
-              child: _buildVitalsColumn(
-                context,
-                label: 'Uptime',
-                value: uptimeValue,
-              ),
-            ),
-          ],
-        ),
+        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
+        child: Row(children: vitals),
       ),
     );
   }
@@ -808,6 +857,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final wirelessRadios =
         appState.dashboardData?['wireless'] as Map<String, dynamic>?;
     final uciWirelessConfig = appState.dashboardData?['uciWirelessConfig'];
+    final glInetData = appState.dashboardData?['glinet'] as GlInetData?;
 
     // Track which interfaces we've already added from runtime data
     final addedInterfaces = <String>{};
@@ -841,8 +891,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             }
 
             final isEnabled = !(config['disabled'] as bool? ?? false);
-            final channel = (iwinfo['channel'] ?? config['channel'] ?? 'N/A')
-                .toString();
+            final glInetRadio = glInetData?.radioForDevice(radioName);
+            final channel =
+                normalizeWifiChannel(iwinfo['channel']) ??
+                normalizeWifiChannel(config['channel']) ??
+                normalizeWifiChannel(glInetRadio?.channel) ??
+                'N/A';
+            final bandStr =
+                glInetRadio?.band ?? config['band']?.toString() ?? '';
+            final bandLabel = formatWifiBand(bandStr);
             final signal = iwinfo['signal'] as int?;
 
             networkCardWidgets.add(
@@ -864,7 +921,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     padding: const EdgeInsets.all(6.0),
                     child: _buildWirelessInfoCardContent(
                       context,
-                      ssid: ssid,
+                      ssid: bandLabel.isNotEmpty ? '$ssid ($bandLabel)' : ssid,
                       isEnabled: isEnabled,
                       signal: signal,
                       channel: channel,
@@ -899,7 +956,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         uciInterfaces.forEach((uciName, config) {
           if (!addedInterfaces.contains(uciName)) {
             final ssid = config['ssid'] ?? 'Unnamed';
-            final device = config['device'] ?? '';
+            final device = uciString(config['device']);
             final interfaceId = '$ssid ($device)';
 
             // Check if this interface should be shown based on preferences
@@ -911,6 +968,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             final isRadioEnabled = uciRadios[device]?['disabled'] != '1';
             final isIfaceEnabled = config['disabled'] != '1';
             final isEnabled = isRadioEnabled && isIfaceEnabled;
+            final glInetRadio = glInetData?.radioForDevice(device);
+            final channel = resolveWifiChannel(
+              actual: glInetRadio?.channel,
+              configured: uciRadios[device]?['channel'],
+            );
 
             networkCardWidgets.add(
               Card(
@@ -934,7 +996,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ssid: ssid,
                       isEnabled: isEnabled,
                       signal: null, // No signal for disabled interfaces
-                      channel: config['channel']?.toString() ?? 'N/A',
+                      channel: channel,
                     ),
                   ),
                 ),
