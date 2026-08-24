@@ -68,6 +68,9 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
+      - name: Disable jni GNU build-id
+        run: sed -i -e 's/-Wl,/-Wl,--build-id=none,/' ${PUB_CACHE}/hosted/*/jni-*/src/CMakeLists.txt
+
         #5 Setup Keystore
       - name: Create Keystore
         run: |
