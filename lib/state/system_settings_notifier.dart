@@ -178,6 +178,9 @@ class SystemSettingsMutations {
       describe: 'system settings',
       context: context,
       onPhase: onPhase,
+      // The hostname is on the dashboard, so the whole app is stale after
+      // this, not just this screen.
+      refreshDashboard: true,
     );
     // The hostname is on the dashboard, so the whole app is stale after
     // this, not just this screen.
@@ -252,8 +255,15 @@ class PasswordMutations {
 
   Future<void> _rotateBackgroundCredential(model.Router router) async {
     try {
+      final raw = await _storage.readValue(BackgroundKeys.router);
       // Nothing to rotate for a user who never switched monitoring on.
-      if (await _storage.readValue(BackgroundKeys.router) == null) return;
+      if (raw == null) return;
+      final monitored = MonitoredRouter.fromJson(
+        jsonDecode(raw) as Map<String, dynamic>,
+      );
+      // Monitoring follows one router. Changing a *different* router's
+      // password must not quietly repoint it at that one instead.
+      if (monitored?.id != router.id) return;
       await _storage.writeValue(
         BackgroundKeys.router,
         jsonEncode(
@@ -268,6 +278,15 @@ class PasswordMutations {
       );
     } catch (e, stack) {
       Logger.exception('Updating the background credential failed', e, stack);
+      // Monitoring cannot work with a credential the router no longer
+      // accepts. Switching it off is visible and recoverable; leaving it on
+      // means notifications just stop, which is the failure this whole
+      // rotation exists to prevent.
+      try {
+        await _storage.writeValue(BackgroundKeys.enabled, 'false');
+      } catch (e2, stack2) {
+        Logger.exception('Could not disable background monitoring', e2, stack2);
+      }
     }
   }
 }

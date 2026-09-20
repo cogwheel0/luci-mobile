@@ -208,6 +208,32 @@ void main() {
       expect(stored!.password, 'old-password');
     });
 
+    // Monitoring follows one router; changing a different router's password
+    // must not quietly repoint it.
+    test('a different router\'s password does not steal the monitor', () async {
+      final storage = _FakeStorage()
+        ..values[BackgroundKeys.router] = jsonEncode(
+          const MonitoredRouter(
+            id: 'other',
+            ipAddress: '10.0.0.1',
+            username: 'root',
+            password: 'other-password',
+            useHttps: false,
+          ).toJson(),
+        );
+      final h = _harness(_RecordingApi(), storage: storage);
+
+      await h.container.read(passwordMutationsProvider).change('new-password');
+
+      final stored = MonitoredRouter.fromJson(
+        jsonDecode(storage.values[BackgroundKeys.router]!)
+            as Map<String, dynamic>,
+      );
+      expect(stored!.id, 'other');
+      expect(stored.ipAddress, '10.0.0.1');
+      expect(stored.password, 'other-password');
+    });
+
     test('a transport failure leaves the saved credential alone', () async {
       final h = _harness(_RecordingApi(throws: true));
       final error = await h.container

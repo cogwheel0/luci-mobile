@@ -21,6 +21,7 @@ Future<ApplyOutcome?> applyUciOperations(
   required String describe,
   BuildContext? context,
   void Function(ApplyPhase phase, Duration remaining)? onPhase,
+  bool refreshDashboard = false,
 }) async {
   if (ops.isEmpty) return null;
   final service = ref.read(uciChangesetServiceProvider);
@@ -49,7 +50,10 @@ Future<ApplyOutcome?> applyUciOperations(
       error: e.cause,
     );
   } finally {
-    await appState.endCriticalSection(refresh: false);
+    // Most changes only affect the screen that made them. A few — the
+    // hostname is the obvious one — are shown on the dashboard too, and
+    // invalidating the feature provider alone would leave it stale.
+    await appState.endCriticalSection(refresh: refreshDashboard);
   }
 }
 
