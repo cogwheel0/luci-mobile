@@ -106,6 +106,7 @@ class UciChangeSet {
   final DateTime? fetchedAt;
 
   bool get isEmpty => byConfig.values.every((rows) => rows.isEmpty);
+
   bool get isNotEmpty => !isEmpty;
 
   int get count => byConfig.values.fold(0, (sum, rows) => sum + rows.length);

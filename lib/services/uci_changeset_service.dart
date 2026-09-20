@@ -43,6 +43,10 @@ enum RollbackReason {
 
   /// The router refused the apply outright.
   routerRejected,
+
+  /// The session had unrelated changes staged, and `uci.apply` commits the
+  /// whole session — so going ahead would have committed those too.
+  foreignChanges,
 }
 
 @immutable
@@ -50,6 +54,7 @@ class ApplyOutcome {
   const ApplyOutcome({
     required this.phase,
     required this.applied,
+    this.foreign = const UciChangeSet.empty(),
     this.reason,
     this.error,
   });
@@ -58,6 +63,10 @@ class ApplyOutcome {
 
   /// What was staged at the moment the apply began.
   final UciChangeSet applied;
+
+  /// Staged changes this operation did not make, when that is why it was
+  /// refused.
+  final UciChangeSet foreign;
 
   final RollbackReason? reason;
   final Object? error;
@@ -170,6 +179,31 @@ class UciChangesetService {
     final generatedSections = <int, String>{};
     final touched = <String>{};
 
+    // `uci.revert` is config-wide, so cleaning up after a failed batch would
+    // also discard anything already staged in the same config — typically
+    // leftovers from an earlier operation in this session that the user has
+    // not applied yet. Capture what was pending first and leave those
+    // configs alone.
+    //
+    // Measured on OpenWrt 24.10.4: rpcd keeps staging *per session*, so this
+    // is not about another admin's work — a second rpcd session's edits and
+    // CLI-staged edits are both invisible here, and unaffected by our apply.
+    Set<String>? preExisting;
+    try {
+      preExisting = (await pending(session, context: context)).configs;
+    } catch (e, stack) {
+      Logger.exception(
+        'Could not read pending changes before staging',
+        e,
+        stack,
+      );
+      // Null means "we do not know what else is staged". Cleanup then
+      // reverts nothing: leaving our own half-staged change behind is
+      // recoverable — it shows up as unsaved and can be discarded — whereas
+      // silently dropping an edit the user still wanted is not.
+      preExisting = null;
+    }
+
     for (var i = 0; i < ops.length; i++) {
       final op = ops[i];
       try {
@@ -228,11 +262,23 @@ class UciChangesetService {
         }
       } catch (e, stack) {
         Logger.exception('Failed to stage UCI operation $i', e, stack);
+        // Only ours: a config that was already dirty belongs to whoever
+        // dirtied it.
+        final safeToRevert = preExisting == null
+            ? <String>{}
+            : touched.difference(preExisting);
+        final leftStaged = touched.difference(safeToRevert);
+        if (leftStaged.isNotEmpty) {
+          Logger.warning(
+            'Leaving ${leftStaged.join(", ")} staged: another client had '
+            'unsaved changes there',
+          );
+        }
         var revertFailed = false;
         try {
           await revert(
             session,
-            touched,
+            safeToRevert,
             context: context?.mounted == true ? context : null,
           );
         } catch (revertError, revertStack) {
@@ -246,7 +292,7 @@ class UciChangesetService {
         throw UciStagingException(
           failedIndex: i,
           cause: e,
-          revertedConfigs: touched,
+          revertedConfigs: safeToRevert,
           revertFailed: revertFailed,
         );
       }
@@ -290,6 +336,7 @@ class UciChangesetService {
     RouterSession session, {
     ApplyMode mode = ApplyMode.checked,
     Duration timeout = defaultTimeout,
+    Set<String>? ours,
     void Function(ApplyPhase phase, Duration remaining)? onPhase,
     BuildContext? context,
   }) async {
@@ -301,9 +348,34 @@ class UciChangesetService {
       staged = const UciChangeSet.empty();
     }
 
-    onPhase?.call(ApplyPhase.applying, timeout);
+    // `uci.apply` commits everything this session has staged, not just the
+    // configs this operation touched. A change left pending by an earlier
+    // operation — a failed batch, an edit the user backed out of — would ride
+    // along silently. Refusing and naming the configs is recoverable.
+    //
+    // Measured on OpenWrt 24.10.4: staging is per rpcd session, so this
+    // cannot pick up another client's work; `uci.changes` does not report it
+    // and our apply leaves it pending.
+    if (ours != null) {
+      final foreign = staged.foreignTo(ours);
+      if (foreign.isNotEmpty) {
+        Logger.warning(
+          'Refusing to apply: unrelated changes still staged in '
+          '${foreign.configs.join(", ")}',
+        );
+        onPhase?.call(ApplyPhase.failed, Duration.zero);
+        return ApplyOutcome(
+          phase: ApplyPhase.failed,
+          applied: const UciChangeSet.empty(),
+          foreign: foreign,
+          reason: RollbackReason.foreignChanges,
+        );
+      }
+    }
 
     final rollback = mode == ApplyMode.checked;
+    // Only promise a countdown the router can actually honour.
+    onPhase?.call(ApplyPhase.applying, rollback ? timeout : Duration.zero);
     try {
       await _api.uciApply(
         session.ipAddress,

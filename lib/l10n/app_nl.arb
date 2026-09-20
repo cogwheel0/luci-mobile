@@ -504,5 +504,6 @@
   "notifyRebooted": "De router herstart",
   "notifyClientJoined": "Een nieuw apparaat verbindt",
   "notifyIntervalNote": "Android voert achtergrondcontroles niet vaker dan elke 15 minuten uit en kan ze verder uitstellen om batterij te sparen.",
-  "notifyAwayNote": "Controles werken alleen op het netwerk van de router. Onderweg worden ze overgeslagen in plaats van als storing gemeld."
+  "notifyAwayNote": "Controles werken alleen op het netwerk van de router. Onderweg worden ze overgeslagen in plaats van als storing gemeld.",
+  "changeBlockedByOthers": "De router heeft nog niet-opgeslagen wijzigingen in {configs}. Nu toepassen zou die ook doorvoeren — verwerp of pas ze eerst toe."
 }

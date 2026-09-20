@@ -10,8 +10,7 @@ import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
-import 'package:luci_mobile/state/feature_notifier.dart';
-import 'package:luci_mobile/state/feature_providers.dart';
+import 'package:luci_mobile/state/uci_mutation.dart';
 import 'package:luci_mobile/state/router_session.dart';
 import 'package:luci_mobile/utils/logger.dart';
 
@@ -328,34 +327,15 @@ class ClientMutations {
     BuildContext? context,
     void Function(ApplyPhase phase, Duration remaining)? onPhase,
   }) async {
-    if (ops.isEmpty) return null;
-    final service = ref.read(uciChangesetServiceProvider);
-    if (service == null) return null;
-
-    final appState = ref.read(appStateProvider);
-    appState.beginCriticalSection();
-    try {
-      return await ref.read(sessionGuardProvider).run<ApplyOutcome>((
-        session,
-        ctx,
-      ) async {
-        await service.stage(session, ops, context: ctx);
-        // No context for the apply: it runs a long probe/confirm loop, and a
-        // certificate prompt raised inside the rollback window would be both
-        // unanswerable and a good way to miss the confirm deadline.
-        return service.apply(session, onPhase: onPhase);
-      }, context: context?.mounted == true ? context : null);
-    } on UciStagingException catch (e, stack) {
-      Logger.exception('Staging client change failed', e, stack);
-      return ApplyOutcome(
-        phase: ApplyPhase.failed,
-        applied: const UciChangeSet.empty(),
-        error: e.cause,
-      );
-    } finally {
-      await appState.endCriticalSection(refresh: false);
-      if (ref.mounted) ref.invalidate(clientDetailProvider(mac));
-    }
+    final outcome = await applyUciOperations(
+      ref,
+      ops,
+      describe: 'client change',
+      context: context,
+      onPhase: onPhase,
+    );
+    if (ref.mounted) ref.invalidate(clientDetailProvider(mac));
+    return outcome;
   }
 }
 

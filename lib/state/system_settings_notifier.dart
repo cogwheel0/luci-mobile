@@ -1,11 +1,16 @@
+import 'dart:convert';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/models/uci_change.dart';
+import 'package:luci_mobile/services/background_monitor.dart';
+import 'package:luci_mobile/services/background_worker.dart';
+import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
-import 'package:luci_mobile/state/feature_notifier.dart';
-import 'package:luci_mobile/state/feature_providers.dart';
+import 'package:luci_mobile/state/uci_mutation.dart';
 import 'package:luci_mobile/utils/logger.dart';
 
 /// Hostname and time settings out of the `system` config.
@@ -167,33 +172,17 @@ class SystemSettingsMutations {
     BuildContext? context,
     void Function(ApplyPhase phase, Duration remaining)? onPhase,
   }) async {
-    if (ops.isEmpty) return null;
-    final service = ref.read(uciChangesetServiceProvider);
-    if (service == null) return null;
-
-    final appState = ref.read(appStateProvider);
-    appState.beginCriticalSection();
-    try {
-      return await ref.read(sessionGuardProvider).run<ApplyOutcome>((
-        session,
-        ctx,
-      ) async {
-        await service.stage(session, ops, context: ctx);
-        return service.apply(session, onPhase: onPhase);
-      }, context: context?.mounted == true ? context : null);
-    } on UciStagingException catch (e, stack) {
-      Logger.exception('Staging system settings failed', e, stack);
-      return ApplyOutcome(
-        phase: ApplyPhase.failed,
-        applied: const UciChangeSet.empty(),
-        error: e.cause,
-      );
-    } finally {
-      // The hostname is on the dashboard, so the whole app is stale after
-      // this, not just this screen.
-      await appState.endCriticalSection(refresh: true);
-      if (ref.mounted) ref.invalidate(systemSettingsProvider);
-    }
+    final outcome = await applyUciOperations(
+      ref,
+      ops,
+      describe: 'system settings',
+      context: context,
+      onPhase: onPhase,
+    );
+    // The hostname is on the dashboard, so the whole app is stale after
+    // this, not just this screen.
+    if (ref.mounted) ref.invalidate(systemSettingsProvider);
+    return outcome;
   }
 }
 
@@ -205,9 +194,11 @@ final passwordMutationsProvider = Provider<PasswordMutations>(
 );
 
 class PasswordMutations {
-  PasswordMutations(this.ref);
+  PasswordMutations(this.ref, {SecureStorageService? storage})
+    : _storage = storage ?? SecureStorageService();
 
   final Ref ref;
+  final SecureStorageService _storage;
 
   /// Changes the router account's password and rotates the saved credential.
   ///
@@ -243,12 +234,40 @@ class PasswordMutations {
 
     // Only after the router accepted it — storing a password the router does
     // not have would be the same lockout in the other direction.
+    final updated = router.copyWith(password: password);
     try {
-      await appState.updateRouter(router.copyWith(password: password));
+      await appState.updateRouter(updated);
     } catch (e, stack) {
       Logger.exception('Saving the new password failed', e, stack);
       return PasswordChangeError.failed;
     }
+
+    // The background isolate keeps its own copy of the credentials, because
+    // it shares no memory with the app. Leaving that one stale means the
+    // next poll fails to log in while the notifications switch still reads
+    // "on" — the user simply stops being told anything, with no clue why.
+    await _rotateBackgroundCredential(updated);
     return null;
+  }
+
+  Future<void> _rotateBackgroundCredential(model.Router router) async {
+    try {
+      // Nothing to rotate for a user who never switched monitoring on.
+      if (await _storage.readValue(BackgroundKeys.router) == null) return;
+      await _storage.writeValue(
+        BackgroundKeys.router,
+        jsonEncode(
+          MonitoredRouter(
+            id: router.id,
+            ipAddress: router.ipAddress,
+            username: router.username,
+            password: router.password,
+            useHttps: router.useHttps,
+          ).toJson(),
+        ),
+      );
+    } catch (e, stack) {
+      Logger.exception('Updating the background credential failed', e, stack);
+    }
   }
 }

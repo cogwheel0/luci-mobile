@@ -782,5 +782,13 @@
   "notifyRebooted": "The router restarts",
   "notifyClientJoined": "A new device joins",
   "notifyIntervalNote": "Android will not run background checks more often than every 15 minutes, and may delay them further to save battery.",
-  "notifyAwayNote": "Checks only work on the router’s network. Away from home they are skipped rather than reported as an outage."
+  "notifyAwayNote": "Checks only work on the router’s network. Away from home they are skipped rather than reported as an outage.",
+  "changeBlockedByOthers": "The router still has unsaved changes in {configs}. Applying now would commit those too — discard or apply them first.",
+  "@changeBlockedByOthers": {
+    "placeholders": {
+      "configs": {
+        "type": "String"
+      }
+    }
+  }
 }

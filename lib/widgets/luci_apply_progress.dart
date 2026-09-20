@@ -111,3 +111,24 @@ class LuciApplyProgressDialog extends StatelessWidget {
         _ => context.l10n.applying,
       };
 }
+
+/// What to tell the user about an apply that has finished.
+///
+/// Shared by every configuration screen: when each kept its own copy, a new
+/// outcome had to be remembered in five places, and the wording drifted.
+String applyOutcomeMessage(BuildContext context, ApplyOutcome? outcome) {
+  final l10n = context.l10n;
+  if (outcome == null) return l10n.changeFailed;
+  return switch (outcome.phase) {
+    ApplyPhase.confirmed => l10n.changeApplied,
+    ApplyPhase.rolledBack =>
+      outcome.reason == RollbackReason.deadlineMissed
+          ? l10n.changeUnconfirmed
+          : l10n.changeRolledBack,
+    // Naming the configs matters: the user has to go and deal with them in
+    // LuCI, and "something is staged somewhere" is not actionable.
+    _ when outcome.reason == RollbackReason.foreignChanges =>
+      l10n.changeBlockedByOthers(outcome.foreign.configs.join(', ')),
+    _ => l10n.changeFailed,
+  };
+}

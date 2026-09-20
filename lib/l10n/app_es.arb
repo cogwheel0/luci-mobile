@@ -504,5 +504,6 @@
   "notifyRebooted": "El router se reinicia",
   "notifyClientJoined": "Se conecta un dispositivo nuevo",
   "notifyIntervalNote": "Android no ejecuta comprobaciones en segundo plano más de cada 15 minutos, y puede retrasarlas para ahorrar batería.",
-  "notifyAwayNote": "Las comprobaciones solo funcionan en la red del router. Fuera de casa se omiten en vez de informarse como una caída."
+  "notifyAwayNote": "Las comprobaciones solo funcionan en la red del router. Fuera de casa se omiten en vez de informarse como una caída.",
+  "changeBlockedByOthers": "El router aún tiene cambios sin guardar en {configs}. Aplicar ahora también los confirmaría: descártalos o aplícalos primero."
 }

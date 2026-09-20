@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +9,9 @@ import 'package:luci_mobile/services/mock_api_service.dart';
 import 'package:luci_mobile/services/mock_auth_service.dart';
 import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
+import 'package:luci_mobile/services/background_monitor.dart';
+import 'package:luci_mobile/services/background_worker.dart';
+import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/state/system_settings_notifier.dart';
 
 /// Records what was asked of the router, and can refuse.
@@ -63,14 +68,39 @@ class _TestAppState extends AppState {
 }
 
 ({_TestAppState state, ProviderContainer container}) _harness(
-  _RecordingApi api,
-) {
+  _RecordingApi api, {
+  _FakeStorage? storage,
+}) {
   final state = _TestAppState(api);
   final container = ProviderContainer(
-    overrides: [appStateProvider.overrideWith((ref) => state)],
+    overrides: [
+      appStateProvider.overrideWith((ref) => state),
+      if (storage != null)
+        passwordMutationsProvider.overrideWith(
+          (ref) => PasswordMutations(ref, storage: storage),
+        ),
+    ],
   );
   addTearDown(container.dispose);
   return (state: state, container: container);
+}
+
+/// An in-memory stand-in; the real one needs platform channels.
+class _FakeStorage implements SecureStorageService {
+  final Map<String, String> values = {};
+
+  @override
+  Future<String?> readValue(String key) async => values[key];
+
+  @override
+  Future<void> writeValue(String key, String value) async =>
+      values[key] = value;
+
+  @override
+  Future<void> deleteValue(String key) async => values.remove(key);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {
@@ -114,6 +144,68 @@ void main() {
 
       expect(error, PasswordChangeError.rejected);
       expect(h.state.updated, isNull);
+    });
+
+    // The background isolate keeps its own copy of the credentials. Leaving
+    // that stale means the next poll fails to log in while the switch still
+    // reads "on" — the user just stops being told anything.
+    test('the background monitor credential is rotated too', () async {
+      final storage = _FakeStorage()
+        ..values[BackgroundKeys.router] = jsonEncode(
+          const MonitoredRouter(
+            id: 'r1',
+            ipAddress: '192.168.1.1',
+            username: 'root',
+            password: 'old-password',
+            useHttps: false,
+          ).toJson(),
+        );
+      final h = _harness(_RecordingApi(), storage: storage);
+
+      await h.container.read(passwordMutationsProvider).change('new-password');
+
+      final stored = MonitoredRouter.fromJson(
+        jsonDecode(storage.values[BackgroundKeys.router]!)
+            as Map<String, dynamic>,
+      );
+      expect(stored!.password, 'new-password');
+    });
+
+    // Nothing should be written for a user who never turned it on.
+    test(
+      'no background credential is created when monitoring is off',
+      () async {
+        final storage = _FakeStorage();
+        final h = _harness(_RecordingApi(), storage: storage);
+
+        await h.container
+            .read(passwordMutationsProvider)
+            .change('new-password');
+
+        expect(storage.values[BackgroundKeys.router], isNull);
+      },
+    );
+
+    test('a refused change leaves the background credential alone', () async {
+      final storage = _FakeStorage()
+        ..values[BackgroundKeys.router] = jsonEncode(
+          const MonitoredRouter(
+            id: 'r1',
+            ipAddress: '192.168.1.1',
+            username: 'root',
+            password: 'old-password',
+            useHttps: false,
+          ).toJson(),
+        );
+      final h = _harness(_RecordingApi(accepts: false), storage: storage);
+
+      await h.container.read(passwordMutationsProvider).change('new-password');
+
+      final stored = MonitoredRouter.fromJson(
+        jsonDecode(storage.values[BackgroundKeys.router]!)
+            as Map<String, dynamic>,
+      );
+      expect(stored!.password, 'old-password');
     });
 
     test('a transport failure leaves the saved credential alone', () async {

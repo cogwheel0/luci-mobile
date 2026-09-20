@@ -177,6 +177,8 @@ class _RecordingApi extends MockApiService {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  _foreignChangeRegressions();
+
   group('stage', () {
     test(
       'runs operations in order and returns generated section ids',
@@ -191,6 +193,9 @@ void main() {
         ]);
 
         expect(h.api.calls, [
+          // Read first, so cleanup can tell our configs from anybody
+          // else's before it reverts anything.
+          'changes',
           'add dhcp host',
           'set dhcp.lan start',
           'delete firewall.cfg03.src_mac',
@@ -457,6 +462,142 @@ void main() {
       final foreign = (await h.service.pending(_session)).foreignTo({'dhcp'});
 
       expect(foreign.configs, {'network'});
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// `uci.apply` commits the whole session and `uci.revert` is config-wide, so
+// neither may be used as if it only touched the configs this operation named.
+//
+// Measured on OpenWrt 24.10.4: rpcd stages per session, so the changes at
+// risk here are this session's own leftovers — a failed batch, an edit backed
+// out of — not another admin's. Another rpcd session's work is invisible to
+// `uci.changes` and survives our apply untouched.
+// ---------------------------------------------------------------------------
+
+void _foreignChangeRegressions() {
+  group('unrelated changes are still staged', () {
+    // Applying would commit the leftover firewall edit alongside ours.
+    test('apply refuses rather than committing an unrelated edit', () async {
+      final h = _build();
+      h.api.changes = {
+        'dhcp': [
+          ['set', 'lan', 'start', '100'],
+        ],
+        'firewall': [
+          ['set', 'cfg02', 'enabled', '0'],
+        ],
+      };
+
+      final outcome = await h.service.apply(_session, ours: const {'dhcp'});
+
+      expect(outcome.phase, ApplyPhase.failed);
+      expect(outcome.reason, RollbackReason.foreignChanges);
+      expect(outcome.foreign.configs, {'firewall'});
+      expect(
+        h.api.calls.where((c) => c.startsWith('apply')),
+        isEmpty,
+        reason: 'nothing may reach the router once a stray edit is seen',
+      );
+    });
+
+    test('apply proceeds when every pending change is ours', () async {
+      final h = _build();
+      h.api.changes = {
+        'dhcp': [
+          ['set', 'lan', 'start', '100'],
+        ],
+      };
+
+      final outcome = await h.service.apply(
+        _session,
+        ours: const {'dhcp'},
+        mode: ApplyMode.unchecked,
+      );
+
+      expect(outcome.phase, ApplyPhase.confirmed);
+    });
+
+    // Callers that do not say what they staged keep the old behaviour, so
+    // the guard cannot silently change an unrelated call site.
+    test('no ownership set means no ownership check', () async {
+      final h = _build();
+      h.api.changes = {
+        'firewall': [
+          ['set', 'cfg02', 'enabled', '0'],
+        ],
+      };
+
+      final outcome = await h.service.apply(
+        _session,
+        mode: ApplyMode.unchecked,
+      );
+
+      expect(outcome.phase, ApplyPhase.confirmed);
+    });
+
+    // `uci.revert` is config-wide. Cleaning up our own failed batch must not
+    // discard an edit that was already staged in the same config.
+    test('staging cleanup spares a config that was already dirty', () async {
+      final h = _build();
+      h.api.changes = {
+        'firewall': [
+          ['set', 'cfg02', 'enabled', '0'],
+        ],
+      };
+      h.api.setError = Exception('nope');
+
+      await expectLater(
+        h.service.stage(_session, const [
+          UciSet('firewall', section: 'cfg03', values: {'target': 'REJECT'}),
+        ]),
+        throwsA(isA<UciStagingException>()),
+      );
+
+      expect(
+        h.api.calls.where((c) => c.startsWith('revert')),
+        isEmpty,
+        reason: 'firewall already held changes we did not stage',
+      );
+    });
+
+    test('staging cleanup still reverts a config only we touched', () async {
+      final h = _build();
+      h.api.changes = const {};
+      h.api.setError = Exception('nope');
+
+      await expectLater(
+        h.service.stage(_session, const [
+          UciSet('dhcp', section: 'lan', values: {'start': '100'}),
+        ]),
+        throwsA(isA<UciStagingException>()),
+      );
+
+      expect(h.api.calls, contains('revert dhcp'));
+    });
+  });
+
+  group('rollback the router will not perform', () {
+    // Counting down to a rollback that cannot happen promises a safety net
+    // that is not there.
+    test('unchecked mode asks for no rollback and no countdown', () async {
+      final h = _build();
+      final phases = <({ApplyPhase phase, Duration remaining})>[];
+
+      await h.service.apply(
+        _session,
+        mode: ApplyMode.unchecked,
+        onPhase: (p, r) => phases.add((phase: p, remaining: r)),
+      );
+
+      expect(h.api.calls, contains('apply rollback=false timeout=0'));
+      expect(
+        phases.every((p) => p.remaining == Duration.zero),
+        isTrue,
+        reason: 'no countdown may be shown when nothing will roll back',
+      );
+      expect(h.api.confirmCount, 0);
     });
   });
 }

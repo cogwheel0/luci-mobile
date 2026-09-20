@@ -504,5 +504,6 @@
   "notifyRebooted": "路由器重启时",
   "notifyClientJoined": "有新设备接入时",
   "notifyIntervalNote": "Android 的后台检查最快每 15 分钟一次，并可能为省电进一步延后。",
-  "notifyAwayNote": "检查仅在路由器所在网络内有效。不在家时会跳过，而不会误报为断网。"
+  "notifyAwayNote": "检查仅在路由器所在网络内有效。不在家时会跳过，而不会误报为断网。",
+  "changeBlockedByOthers": "路由器在 {configs} 中仍有未保存的更改。现在应用会一并提交它们，请先放弃或应用这些更改。"
 }

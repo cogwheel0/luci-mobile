@@ -64,7 +64,6 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
 
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
-    final l10n = context.l10n;
     final progress = ApplyProgress();
     try {
       final outcome = await LuciApplyProgressDialog.run<ApplyOutcome?>(
@@ -75,7 +74,9 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
             .apply(ops, onPhase: progress.update),
       );
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(_message(l10n, outcome))));
+      messenger.showSnackBar(
+        SnackBar(content: Text(applyOutcomeMessage(context, outcome))),
+      );
     } finally {
       progress.dispose();
       if (mounted) setState(() => _busy = false);
@@ -109,18 +110,6 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  String _message(dynamic l10n, ApplyOutcome? outcome) {
-    if (outcome == null) return l10n.changeFailed as String;
-    return switch (outcome.phase) {
-      ApplyPhase.confirmed => l10n.changeApplied as String,
-      ApplyPhase.rolledBack =>
-        outcome.reason == RollbackReason.deadlineMissed
-            ? l10n.changeUnconfirmed as String
-            : l10n.changeRolledBack as String,
-      _ => l10n.changeFailed as String,
-    };
   }
 
   @override

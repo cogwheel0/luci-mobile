@@ -504,5 +504,6 @@
   "notifyRebooted": "Redémarrage du routeur",
   "notifyClientJoined": "Un nouvel appareil se connecte",
   "notifyIntervalNote": "Android n’exécute pas les vérifications en arrière-plan plus souvent que toutes les 15 minutes, et peut les retarder pour économiser la batterie.",
-  "notifyAwayNote": "Les vérifications ne fonctionnent que sur le réseau du routeur. En dehors, elles sont ignorées plutôt que signalées comme une panne."
+  "notifyAwayNote": "Les vérifications ne fonctionnent que sur le réseau du routeur. En dehors, elles sont ignorées plutôt que signalées comme une panne.",
+  "changeBlockedByOthers": "Le routeur a encore des modifications non enregistrées dans {configs}. Appliquer maintenant les validerait aussi — annulez-les ou appliquez-les d'abord."
 }
