@@ -283,17 +283,24 @@ class PasswordMutations {
       // accepts. Switching it off is visible and recoverable; leaving it on
       // means notifications just stop, which is the failure this whole
       // rotation exists to prevent.
+      // Cancel first, and in its own right: a scheduled task that keeps
+      // running with a credential the router rejects is the actual harm, and
+      // it must not be skipped just because writing the flag failed.
+      try {
+        await cancelPoll();
+      } catch (e2, stack2) {
+        Logger.exception('Could not cancel the background poll', e2, stack2);
+      }
       try {
         await _storage.writeValue(BackgroundKeys.enabled, 'false');
-        await cancelPoll();
-        // The settings notifier caches its state and only reads storage when
-        // it builds, so writing the flag is not enough — without this the
-        // switch keeps showing "on" while nothing polls, which is the same
-        // silent lie this whole path exists to avoid.
-        if (ref.mounted) ref.invalidate(notificationSettingsProvider);
       } catch (e2, stack2) {
         Logger.exception('Could not disable background monitoring', e2, stack2);
       }
+      // The settings notifier caches its state and only reads storage when it
+      // builds, so writing the flag is not enough — without this the switch
+      // keeps showing "on" while nothing polls, which is the same silent lie
+      // this whole path exists to avoid.
+      if (ref.mounted) ref.invalidate(notificationSettingsProvider);
     }
   }
 }
