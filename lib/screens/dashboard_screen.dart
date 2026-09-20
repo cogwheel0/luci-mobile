@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/main.dart';
+import 'package:luci_mobile/navigation/luci_tab.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_animation_system.dart';
 import 'package:luci_mobile/models/glinet_data.dart';
@@ -934,7 +935,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   onLongPress: () {
                     // Navigate to interfaces tab with the specific interface name
                     final appState = ref.read(appStateProvider);
-                    appState.requestTab(2, interfaceToScroll: uciName);
+                    appState.requestTab(
+                      LuciTab.network,
+                      interfaceToScroll: uciName,
+                    );
                   },
                   child: Padding(
                     padding: const EdgeInsets.all(6.0),
@@ -1006,7 +1010,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   onLongPress: () {
                     // Navigate to interfaces tab with the specific interface name
                     final appState = ref.read(appStateProvider);
-                    appState.requestTab(2, interfaceToScroll: uciName);
+                    appState.requestTab(
+                      LuciTab.network,
+                      interfaceToScroll: uciName,
+                    );
                   },
                   child: Padding(
                     padding: const EdgeInsets.all(6.0),
@@ -1225,7 +1232,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             onLongPress: () {
               // Navigate to interfaces tab with the specific interface name
               final appState = ref.read(appStateProvider);
-              appState.requestTab(2, interfaceToScroll: name);
+              appState.requestTab(LuciTab.network, interfaceToScroll: name);
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(

@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
+import 'package:luci_mobile/models/service_status.dart';
+import 'package:luci_mobile/models/station_info.dart';
 import '../utils/http_client_manager.dart';
 import '../utils/logger.dart';
 
@@ -795,7 +797,7 @@ class RealApiService implements IApiService {
     bool useHttps, {
     required String config,
     required String section,
-    required Map<String, String> values,
+    required Map<String, Object> values,
     BuildContext? context,
   }) async {
     return _requireRpcSuccess(
@@ -1042,5 +1044,481 @@ class RealApiService implements IApiService {
       ),
       'uci.get',
     );
+  }
+
+  @override
+  Future<List<String>> uciConfigs(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'configs',
+        context: context,
+      ),
+      'uci.configs',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is Map && data['configs'] is List) {
+      return (data['configs'] as List).map((e) => e.toString()).toList();
+    }
+    return const <String>[];
+  }
+
+  @override
+  Future<Map<String, List<List<String>>>> uciChanges(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    String? config,
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'changes',
+        params: config == null ? null : {'config': config},
+        context: context,
+      ),
+      'uci.changes',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is! Map) return const <String, List<List<String>>>{};
+    final changes = data['changes'];
+
+    // uci.changes returns one of two shapes: with a config filter it is a flat
+    // list of change rows; without one it is a map of config name -> rows.
+    if (config != null) {
+      final rows = _parseChangeRows(changes);
+      return rows.isEmpty
+          ? const <String, List<List<String>>>{}
+          : {config: rows};
+    }
+    if (changes is! Map) return const <String, List<List<String>>>{};
+    final out = <String, List<List<String>>>{};
+    for (final entry in changes.entries) {
+      final rows = _parseChangeRows(entry.value);
+      if (rows.isNotEmpty) out[entry.key.toString()] = rows;
+    }
+    return out;
+  }
+
+  /// Normalizes one config's worth of `uci.changes` rows into
+  /// `[op, section, option?, value?]` string lists.
+  static List<List<String>> _parseChangeRows(dynamic raw) {
+    if (raw is! List) return const <List<String>>[];
+    final rows = <List<String>>[];
+    for (final row in raw) {
+      if (row is! List || row.isEmpty) continue;
+      rows.add(row.map((e) => e?.toString() ?? '').toList());
+    }
+    return rows;
+  }
+
+  @override
+  Future<dynamic> uciRevert(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String config,
+    BuildContext? context,
+  }) async {
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'revert',
+        params: {'config': config},
+        context: context,
+      ),
+      'uci.revert',
+    );
+  }
+
+  @override
+  Future<dynamic> uciApply(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required bool rollback,
+    required int timeoutSeconds,
+    BuildContext? context,
+  }) async {
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'apply',
+        params: {'rollback': rollback, 'timeout': timeoutSeconds},
+        context: context,
+      ),
+      'uci.apply',
+    );
+  }
+
+  @override
+  Future<dynamic> uciConfirm(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'confirm',
+        context: context,
+      ),
+      'uci.confirm',
+    );
+  }
+
+  @override
+  Future<dynamic> uciRollback(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'rollback',
+        context: context,
+      ),
+      'uci.rollback',
+    );
+  }
+
+  @override
+  Future<Map<String, dynamic>> luciGetFeatures(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'luci',
+        method: 'getFeatures',
+        context: context,
+      ),
+      'luci.getFeatures',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return const <String, dynamic>{};
+  }
+
+  @override
+  Future<Map<String, Set<String>>?> fetchSessionAcl(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'session',
+        method: 'list',
+        params: {'ubus_rpc_session': sysauth},
+        context: context,
+      ),
+      'session.list',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    return _extractUbusAcl(data, sysauth);
+  }
+
+  /// Pulls the `acls.ubus` map out of a `session.list` response.
+  ///
+  /// rpcd answers either with the session object directly or with a map of
+  /// session id -> session object depending on version, so handle both.
+  static Map<String, Set<String>>? _extractUbusAcl(dynamic data, String sid) {
+    if (data is! Map) return null;
+
+    Map<dynamic, dynamic>? session;
+    if (data['acls'] is Map) {
+      session = data;
+    } else if (data[sid] is Map) {
+      session = data[sid] as Map;
+    } else {
+      // A map of sessions keyed by id: take the only one that has acls.
+      for (final value in data.values) {
+        if (value is Map && value['acls'] is Map) {
+          session = value;
+          break;
+        }
+      }
+    }
+    if (session == null) return null;
+
+    final acls = session['acls'];
+    if (acls is! Map) return null;
+    final ubus = acls['ubus'];
+    if (ubus is! Map) return null;
+
+    final out = <String, Set<String>>{};
+    for (final entry in ubus.entries) {
+      final value = entry.value;
+      if (value is List) {
+        out[entry.key.toString()] = value.map((e) => e.toString()).toSet();
+      } else if (value is String) {
+        out[entry.key.toString()] = {value};
+      }
+    }
+    return out;
+  }
+
+  @override
+  Future<Map<String, StationInfo>> fetchStationDetails(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String device,
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'iwinfo',
+        method: 'assoclist',
+        params: {'device': device},
+        context: context,
+      ),
+      'iwinfo.assoclist',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is! Map || data['results'] is! List) {
+      return const <String, StationInfo>{};
+    }
+    final out = <String, StationInfo>{};
+    for (final row in data['results'] as List) {
+      if (row is! Map) continue;
+      final station = StationInfo.fromJson(
+        Map<String, dynamic>.from(row),
+        interface: device,
+      );
+      if (station != null) out[station.macAddress] = station;
+    }
+    return out;
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchHostHints(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'luci-rpc',
+        method: 'getHostHints',
+        context: context,
+      ),
+      'luci-rpc.getHostHints',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is! Map) return const <String, dynamic>{};
+    return {
+      for (final entry in data.entries)
+        StationInfo.normalizeMac(entry.key.toString()): entry.value,
+    };
+  }
+
+  @override
+  Future<List<List<num>>> luciRealtimeStats(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String mode,
+    String? device,
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'luci',
+        method: 'getRealtimeStats',
+        params: {'mode': mode, 'device': ?device},
+        context: context,
+      ),
+      'luci.getRealtimeStats',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    final rows = data is Map ? data['result'] : null;
+    if (rows is! List) return const <List<num>>[];
+    return [
+      for (final row in rows)
+        if (row is List)
+          [
+            for (final v in row)
+              if (v is num) v else num.tryParse(v.toString()) ?? 0,
+          ],
+    ];
+  }
+
+  @override
+  Future<Map<String, ServiceStatus>> rcList(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'rc',
+        method: 'list',
+        context: context,
+      ),
+      'rc.list',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is! Map) return const <String, ServiceStatus>{};
+    return {
+      for (final entry in data.entries)
+        if (entry.value is Map)
+          entry.key.toString(): ServiceStatus.fromJson(
+            entry.key.toString(),
+            Map<String, dynamic>.from(entry.value as Map),
+          ),
+    };
+  }
+
+  @override
+  Future<bool> rcInit(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String name,
+    required String action,
+    BuildContext? context,
+  }) async {
+    _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'rc',
+        method: 'init',
+        params: {'name': name, 'action': action},
+        context: context,
+      ),
+      'rc.init',
+    );
+    return true;
+  }
+
+  @override
+  Future<bool> luciSetPassword(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String username,
+    required String password,
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'luci',
+        method: 'setPassword',
+        params: {'username': username, 'password': password},
+        context: context,
+      ),
+      'luci.setPassword',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    // rpcd answers `{"result": true}`; a bare success envelope with no body
+    // means it ran, so both count.
+    if (data is Map) return data['result'] != false;
+    return true;
+  }
+
+  @override
+  @override
+  Future<Map<String, String>> luciTimezones(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'luci',
+        method: 'getTimezones',
+        context: context,
+      ),
+      'luci.getTimezones',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is! Map) return const <String, String>{};
+    return {
+      for (final entry in data.entries)
+        if (entry.value is Map && (entry.value as Map)['tzstring'] != null)
+          entry.key.toString(): (entry.value as Map)['tzstring'].toString(),
+    };
+  }
+
+  @override
+  Future<bool?> checkUbusAccess(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String object,
+    required String function,
+    BuildContext? context,
+  }) async {
+    final result = await callWithContext(
+      ipAddress,
+      sysauth,
+      useHttps,
+      object: 'session',
+      method: 'access',
+      params: {'scope': 'ubus', 'object': object, 'function': function},
+      context: context,
+    );
+    return rpcAccessAllowed(result);
   }
 }

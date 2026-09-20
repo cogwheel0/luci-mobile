@@ -1,0 +1,283 @@
+import 'package:flutter/foundation.dart';
+
+/// Something the app can offer only if the router supports it.
+enum RouterFeature {
+  /// `uci.apply` + `uci.confirm` — the rollback-protected commit path.
+  uciApplyRollback,
+
+  /// Static DHCP leases: `dhcp` config plus write access.
+  dhcpReservations,
+
+  /// Blocking a client with a `firewall` rule.
+  clientBlocking,
+
+  /// Per-station signal and rates from `iwinfo.assoclist`.
+  wirelessStations,
+
+  /// `luci-rpc.getHostHints` — hostname/IP hints for clients.
+  hostHints,
+
+  /// `system.reboot`.
+  reboot,
+
+  /// `iwinfo.scan`.
+  wirelessScan,
+
+  /// init.d control via the `rc` ubus object.
+  serviceControl,
+
+  /// Hostname and timezone in the `system` config.
+  systemSettings,
+
+  /// Waking a device with `etherwake`.
+  wakeOnLan,
+
+  /// `luci.getRealtimeStats` — load/traffic/conntrack series.
+  realtimeStats,
+
+  /// Per-client traffic accounting (nlbwmon).
+  trafficAccounting,
+
+  sqm,
+  ddns,
+  adblock,
+  upnp,
+  wireguardServer,
+  openvpnServer,
+}
+
+/// Why a feature is not offered. The distinction matters: a missing package is
+/// not a defect, a denied permission is the user's account, and a failed probe
+/// is neither — it means we do not know yet.
+enum UnavailableReason {
+  /// Capabilities have not been read yet.
+  notProbed,
+
+  /// The probe itself failed. Show "couldn't check", never "not supported".
+  probeFailed,
+
+  /// The router does not have the package configured.
+  missingPackage,
+
+  /// This login is not allowed to perform the operation.
+  noPermission,
+}
+
+@immutable
+class FeatureAvailability {
+  const FeatureAvailability.available()
+    : available = true,
+      reason = null,
+      requiredPackage = null;
+
+  const FeatureAvailability.unavailable(this.reason, {this.requiredPackage})
+    : available = false;
+
+  final bool available;
+  final UnavailableReason? reason;
+
+  /// The package to install, when [reason] is [UnavailableReason.missingPackage].
+  final String? requiredPackage;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FeatureAvailability &&
+          other.available == available &&
+          other.reason == reason &&
+          other.requiredPackage == requiredPackage;
+
+  @override
+  int get hashCode => Object.hash(available, reason, requiredPackage);
+
+  @override
+  String toString() => available
+      ? 'FeatureAvailability.available()'
+      : 'FeatureAvailability.unavailable(${reason?.name}'
+            '${requiredPackage == null ? '' : ', $requiredPackage'})';
+}
+
+/// What one router supports, as read once per session.
+///
+/// [of] is a pure function of this data, so the rules are unit-testable
+/// without any I/O.
+@immutable
+class RouterCapabilities {
+  const RouterCapabilities({
+    this.uciConfigs = const <String>{},
+    this.features = const <String, dynamic>{},
+    this.ubusAcl,
+    this.probeFailed = false,
+    this.probedAt,
+  });
+
+  /// Nothing read yet — every feature reports [UnavailableReason.notProbed].
+  static const RouterCapabilities unknown = RouterCapabilities();
+
+  /// Every config present on the router (`uci.configs`). A cheap proxy for
+  /// "is this package installed".
+  final Set<String> uciConfigs;
+
+  /// The raw `luci.getFeatures` map (`firewall4`, `ipv6`, `wifi`, `opkg`, …).
+  final Map<String, dynamic> features;
+
+  /// ubus object -> permitted functions, where `*` means all. Null when the
+  /// router would not tell us, in which case permission checks are treated as
+  /// "probably allowed" rather than blocking the UI on a guess.
+  final Map<String, Set<String>>? ubusAcl;
+
+  /// True when the probe could not be completed.
+  final bool probeFailed;
+
+  final DateTime? probedAt;
+
+  bool get isProbed => probedAt != null || probeFailed;
+
+  /// Whether this login may call `object.function`.
+  ///
+  /// Returns true when the ACL is unknown: a router that will not report its
+  /// ACL should not have every write hidden. The call itself will surface a
+  /// permission error if it really is denied.
+  bool allows(String object, String function) {
+    final acl = ubusAcl;
+    if (acl == null) return true;
+    final fns = acl[object];
+    if (fns == null) return false;
+    return fns.contains('*') || fns.contains(function);
+  }
+
+  /// A boolean out of `luci.getFeatures`, or null when it was not reported.
+  bool? feature(String name) {
+    final value = features[name];
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    return null;
+  }
+
+  bool get hasFirewall =>
+      uciConfigs.contains('firewall') &&
+      (feature('firewall4') ?? feature('firewall') ?? true);
+
+  bool get usesApk => feature('apk') ?? false;
+
+  FeatureAvailability of(RouterFeature target) {
+    if (!isProbed) {
+      return const FeatureAvailability.unavailable(UnavailableReason.notProbed);
+    }
+    if (probeFailed) {
+      return const FeatureAvailability.unavailable(
+        UnavailableReason.probeFailed,
+      );
+    }
+
+    switch (target) {
+      case RouterFeature.uciApplyRollback:
+        // `rollback` is included deliberately. Measured on stock OpenWrt
+        // 24.10: `apply` and `confirm` are granted but `rollback` is not, and
+        // in that configuration an unconfirmed apply was NOT reverted when the
+        // timer expired - it stayed committed. Treating apply+confirm alone as
+        // "rollback protected" would have the app promise a safety net it
+        // cannot demonstrate.
+        return _requireUbus('uci', const ['apply', 'confirm', 'rollback']);
+
+      case RouterFeature.dhcpReservations:
+        return _requireConfig('dhcp', 'dnsmasq', write: true);
+
+      case RouterFeature.clientBlocking:
+        if (!hasFirewall) {
+          return const FeatureAvailability.unavailable(
+            UnavailableReason.missingPackage,
+            requiredPackage: 'firewall4',
+          );
+        }
+        return _requireUbus('uci', const ['set']);
+
+      case RouterFeature.wirelessStations:
+      case RouterFeature.wirelessScan:
+        if (feature('wifi') == false) {
+          return const FeatureAvailability.unavailable(
+            UnavailableReason.missingPackage,
+            requiredPackage: 'wpad',
+          );
+        }
+        return _requireUbus('iwinfo', const ['assoclist', 'scan']);
+
+      case RouterFeature.hostHints:
+        return _requireUbus('luci-rpc', const ['getHostHints']);
+
+      case RouterFeature.reboot:
+        return _requireUbus('system', const ['reboot']);
+
+      case RouterFeature.serviceControl:
+        return _requireUbus('rc', const ['init']);
+
+      case RouterFeature.wakeOnLan:
+        // `luci-app-wol` is what grants `file.exec` on the etherwake path;
+        // the `etherwake` binary alone is not reachable over rpcd.
+        return _requireConfig('etherwake', 'luci-app-wol');
+
+      case RouterFeature.systemSettings:
+        // `system` is part of the base install, so the only real question is
+        // whether this login may write it.
+        return _requireUbus('uci', const ['set']);
+
+      case RouterFeature.realtimeStats:
+        return _requireUbus('luci', const ['getRealtimeStats']);
+
+      case RouterFeature.trafficAccounting:
+        return _requireConfig('nlbwmon', 'nlbwmon');
+      case RouterFeature.sqm:
+        return _requireConfig('sqm', 'sqm-scripts', write: true);
+      case RouterFeature.ddns:
+        return _requireConfig('ddns', 'ddns-scripts', write: true);
+      case RouterFeature.adblock:
+        return _requireConfig('adblock', 'adblock', write: true);
+      case RouterFeature.upnp:
+        return _requireConfig('upnpd', 'miniupnpd', write: true);
+      case RouterFeature.wireguardServer:
+        return _requireConfig('network', 'wireguard-tools', write: true);
+      case RouterFeature.openvpnServer:
+        return _requireConfig('openvpn', 'openvpn-openssl', write: true);
+    }
+  }
+
+  FeatureAvailability _requireConfig(
+    String config,
+    String package, {
+    bool write = false,
+  }) {
+    if (!uciConfigs.contains(config)) {
+      return FeatureAvailability.unavailable(
+        UnavailableReason.missingPackage,
+        requiredPackage: package,
+      );
+    }
+    if (write) return _requireUbus('uci', const ['set']);
+    return const FeatureAvailability.available();
+  }
+
+  FeatureAvailability _requireUbus(String object, List<String> functions) {
+    for (final fn in functions) {
+      if (!allows(object, fn)) {
+        return const FeatureAvailability.unavailable(
+          UnavailableReason.noPermission,
+        );
+      }
+    }
+    return const FeatureAvailability.available();
+  }
+
+  RouterCapabilities copyWith({
+    Set<String>? uciConfigs,
+    Map<String, dynamic>? features,
+    Map<String, Set<String>>? ubusAcl,
+    bool? probeFailed,
+    DateTime? probedAt,
+  }) => RouterCapabilities(
+    uciConfigs: uciConfigs ?? this.uciConfigs,
+    features: features ?? this.features,
+    ubusAcl: ubusAcl ?? this.ubusAcl,
+    probeFailed: probeFailed ?? this.probeFailed,
+    probedAt: probedAt ?? this.probedAt,
+  );
+}

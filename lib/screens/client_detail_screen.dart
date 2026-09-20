@@ -1,0 +1,746 @@
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:luci_mobile/design/luci_design_system.dart';
+import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/models/client.dart';
+import 'package:luci_mobile/models/client_config.dart';
+import 'package:luci_mobile/models/router_capabilities.dart';
+import 'package:luci_mobile/models/station_info.dart';
+import 'package:luci_mobile/models/uci_change.dart';
+import 'package:luci_mobile/services/api_service.dart';
+import 'package:luci_mobile/services/wol_service.dart';
+import 'package:luci_mobile/services/client_config_planner.dart';
+import 'package:luci_mobile/services/uci_changeset_service.dart';
+import 'package:luci_mobile/state/app_state_provider.dart';
+import 'package:luci_mobile/state/client_detail_notifier.dart';
+import 'package:luci_mobile/state/feature_providers.dart';
+import 'package:luci_mobile/widgets/luci_app_bar.dart';
+import 'package:luci_mobile/widgets/luci_feature_gate.dart';
+import 'package:luci_mobile/widgets/luci_apply_progress.dart';
+import 'package:luci_mobile/widgets/luci_loading_states.dart';
+
+class ClientDetailScreen extends ConsumerStatefulWidget {
+  const ClientDetailScreen({super.key, required this.client});
+
+  final Client client;
+
+  @override
+  ConsumerState<ClientDetailScreen> createState() => _ClientDetailScreenState();
+}
+
+class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
+  bool _busy = false;
+  bool _wakeBusy = false;
+
+  Client get client => widget.client;
+  String get mac => StationInfo.normalizeMac(client.macAddress);
+
+  /// Whether this client belongs to the router currently selected.
+  ///
+  /// The clients list can aggregate several routers; writing a reservation or
+  /// a block rule to whichever router happens to be selected would silently
+  /// configure the wrong device.
+  bool get _isOwnedBySelectedRouter {
+    final owner = client.routerId;
+    // An untagged client came from a path that lost provenance (the
+    // aggregated wireless-only fallback). Treat it as unknown, not as ours.
+    if (owner == null) return false;
+    // Fall back to the session's router id: reviewer mode has a live session
+    // but no saved router profile.
+    final selected =
+        ref.read(appStateProvider).selectedRouter?.id ??
+        ref.read(sessionProvider)?.routerId;
+    return selected != null && owner == selected;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final detailAsync = ref.watch(clientDetailProvider(mac));
+    final displayName = detailAsync.value?.alias?.isNotEmpty == true
+        ? detailAsync.value!.alias!
+        : (client.hostname.isNotEmpty && client.hostname != 'Unknown'
+              ? client.hostname
+              : client.macAddress);
+
+    return Scaffold(
+      appBar: LuciAppBar(title: displayName, showBack: true),
+      body: RefreshIndicator(
+        onRefresh: () async => ref.invalidate(clientDetailProvider(mac)),
+        child: ListView(
+          padding: const EdgeInsets.all(LuciSpacing.md),
+          children: [
+            _IdentityCard(client: client, displayName: displayName),
+            if (!_isOwnedBySelectedRouter) _crossRouterBanner(context),
+            const SizedBox(height: LuciSpacing.md),
+            ...detailAsync.when(
+              loading: () => const [
+                LuciCardSkeleton(contentLines: 3),
+                SizedBox(height: LuciSpacing.md),
+                LuciCardSkeleton(contentLines: 4),
+              ],
+              error: (error, _) => [
+                _MessageCard(
+                  icon: Icons.error_outline,
+                  message: userFacingApiError(error),
+                  action: context.l10n.retry,
+                  onAction: () => ref.invalidate(clientDetailProvider(mac)),
+                ),
+              ],
+              data: (detail) => _sections(context, detail),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _crossRouterBanner(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: LuciSpacing.md),
+      child: Container(
+        padding: const EdgeInsets.all(LuciSpacing.md),
+        decoration: BoxDecoration(
+          color: scheme.secondaryContainer,
+          borderRadius: LuciCardStyles.standardRadius,
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, color: scheme.onSecondaryContainer),
+            const SizedBox(width: LuciSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (client.routerLabel != null)
+                    Text(
+                      context.l10n.managedByRouter(client.routerLabel!),
+                      style: TextStyle(color: scheme.onSecondaryContainer),
+                    ),
+                  Text(
+                    context.l10n.switchToThisRouter,
+                    style: LuciTextStyles.cardSubtitle(context),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _sections(BuildContext context, ClientDetail detail) => [
+    if (detail.station != null || detail.stationUnavailable)
+      _SignalCard(detail: detail),
+    if (detail.station != null) _TrafficCard(station: detail.station!),
+    _AddressesCard(client: client, detail: detail),
+    _reservationCard(context, detail),
+    _wakeCard(context, detail),
+    _blockCard(context, detail),
+    const SizedBox(height: LuciSpacing.xl),
+  ];
+
+  // ------------------------------------------------------------ write cards
+
+  Widget _reservationCard(BuildContext context, ClientDetail detail) {
+    final availability = ref.watch(
+      featureProvider(RouterFeature.dhcpReservations),
+    );
+    return _GatedCard(
+      title: context.l10n.staticLeaseSection,
+      icon: Icons.bookmark_outline,
+      availability: availability,
+      writable: _isOwnedBySelectedRouter && !detail.configUnavailable,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: Text(context.l10n.reserveThisAddress),
+            subtitle: detail.hasReservation
+                ? Text('${context.l10n.reservedAddress}: ${detail.host!.ip}')
+                : null,
+            value: detail.hasReservation,
+            onChanged: _canWrite(availability, detail)
+                ? (want) => _toggleReservation(detail, want)
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Waking a sleeping device.
+  ///
+  /// It lives here rather than on a screen of its own because the MAC is
+  /// already known: a standalone WoL page would make the user type it.
+  Widget _wakeCard(BuildContext context, ClientDetail detail) {
+    final availability = ref.watch(featureProvider(RouterFeature.wakeOnLan));
+    final mac = WolService.normaliseMac(widget.client.macAddress);
+    return _GatedCard(
+      title: context.l10n.wakeSection,
+      icon: Icons.power_settings_new,
+      availability: availability,
+      writable: _isOwnedBySelectedRouter,
+      extraNote: mac == null ? context.l10n.wakeNeedsMac : null,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(context.l10n.wakeDevice),
+        subtitle: Text(
+          context.l10n.wakeDeviceDescription,
+          style: LuciTextStyles.cardSubtitle(context),
+        ),
+        trailing: FilledButton.tonal(
+          onPressed:
+              availability.available &&
+                  _isOwnedBySelectedRouter &&
+                  mac != null &&
+                  !_wakeBusy
+              ? () => _wake(mac)
+              : null,
+          child: Text(context.l10n.wakeAction),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _wake(String mac) async {
+    final session = ref.read(sessionProvider);
+    final api = ref.read(apiServiceProvider);
+    if (session == null || api == null) return;
+
+    setState(() => _wakeBusy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
+    try {
+      final sent = await WolService(api).wake(session, mac);
+      if (!mounted) return;
+      // Nothing acknowledges a magic packet, so the wording promises only
+      // that it was sent — not that anything woke up.
+      messenger.showSnackBar(
+        SnackBar(content: Text(sent ? l10n.wakeSent : l10n.wakeFailed)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(userFacingApiError(e))));
+    } finally {
+      if (mounted) setState(() => _wakeBusy = false);
+    }
+  }
+
+  Widget _blockCard(BuildContext context, ClientDetail detail) {
+    final availability = ref.watch(
+      featureProvider(RouterFeature.clientBlocking),
+    );
+    final noZone = detail.zone == null && detail.blockRule == null;
+    return _GatedCard(
+      title: context.l10n.accessSection,
+      icon: Icons.block_outlined,
+      availability: availability,
+      writable: _isOwnedBySelectedRouter && !detail.configUnavailable,
+      // Without a resolvable zone the rule would have to guess `lan`, which
+      // is wrong on any guest-VLAN or multi-zone router.
+      extraNote: noZone ? context.l10n.noZoneForClient : null,
+      child: SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        title: Text(context.l10n.blockClient),
+        subtitle: Text(
+          context.l10n.blockClientDescription,
+          style: LuciTextStyles.cardSubtitle(context),
+        ),
+        value: detail.isBlocked,
+        onChanged: _canWrite(availability, detail) && !noZone
+            ? (want) => _toggleBlock(detail, want)
+            : null,
+      ),
+    );
+  }
+
+  bool _canWrite(FeatureAvailability availability, ClientDetail detail) =>
+      availability.available &&
+      _isOwnedBySelectedRouter &&
+      !detail.configUnavailable &&
+      !_busy;
+
+  // ---------------------------------------------------------------- actions
+
+  Future<void> _toggleReservation(ClientDetail detail, bool want) async {
+    if (!want) {
+      final host = detail.host;
+      if (host == null) return;
+      await _apply(
+        ClientConfigPlanner.planRemoveReservation(
+          existing: host,
+          keepName: true,
+        ),
+      );
+      return;
+    }
+
+    final proposed = await _askForIp(detail);
+    if (proposed == null) return;
+    await _apply(
+      ClientConfigPlanner.planReservation(
+        mac: mac,
+        ip: proposed,
+        existing: detail.host,
+      ),
+    );
+  }
+
+  Future<void> _toggleBlock(ClientDetail detail, bool want) async {
+    final rule = detail.blockRule;
+    if (!want) {
+      if (rule == null) return;
+      await _apply(ClientConfigPlanner.planUnblock(existing: rule));
+      return;
+    }
+    final zone = detail.zone;
+    if (zone == null) return;
+    await _apply(
+      ClientConfigPlanner.planBlock(
+        mac: mac,
+        zone: zone,
+        displayName: client.hostname,
+        existing: rule,
+      ),
+    );
+  }
+
+  Future<String?> _askForIp(ClientDetail detail) async {
+    final controller = TextEditingController(
+      text:
+          detail.host?.ip ??
+          (client.ipAddress == 'N/A' ? '' : client.ipAddress),
+    );
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) =>
+          _ReservationDialog(controller: controller, detail: detail),
+    );
+  }
+
+  Future<void> _apply(List<UciOperation> ops) async {
+    if (ops.isEmpty) return;
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
+    final progress = ApplyProgress();
+    try {
+      // The dialog stays up for the whole rollback window, counting down. The
+      // router reverts by itself if we cannot confirm in time, and the user
+      // should be able to see that coming rather than stare at a dead switch.
+      final outcome = await LuciApplyProgressDialog.run<ApplyOutcome?>(
+        context,
+        progress: progress,
+        work: () => ref
+            .read(clientMutationsProvider(mac))
+            .applyOperations(ops, onPhase: progress.update),
+      );
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(_outcomeMessage(l10n, outcome))),
+      );
+    } finally {
+      progress.dispose();
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _outcomeMessage(dynamic l10n, ApplyOutcome? outcome) {
+    if (outcome == null) return l10n.changeFailed as String;
+    switch (outcome.phase) {
+      case ApplyPhase.confirmed:
+        return l10n.changeApplied as String;
+      case ApplyPhase.rolledBack:
+        // Only claim a revert when the router told us it was unreachable and
+        // the rollback window lapsed. A confirm that came back "no data" does
+        // NOT prove a revert happened - measured against stock OpenWrt 24.10,
+        // the change stayed committed in exactly that case - so say what we
+        // actually know and let the reloaded page show the truth.
+        return outcome.reason == RollbackReason.deadlineMissed
+            ? l10n.changeUnconfirmed as String
+            : l10n.changeRolledBack as String;
+      default:
+        return l10n.changeFailed as String;
+    }
+  }
+}
+
+// --------------------------------------------------------------------- cards
+
+class _IdentityCard extends StatelessWidget {
+  const _IdentityCard({required this.client, required this.displayName});
+
+  final Client client;
+  final String displayName;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return LuciCardStyles.standardCardWrapper(
+      context: context,
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: scheme.primaryContainer,
+            child: Icon(
+              client.connectionType == ConnectionType.wired
+                  ? Icons.settings_ethernet
+                  : Icons.wifi,
+              color: scheme.onPrimaryContainer,
+            ),
+          ),
+          const SizedBox(width: LuciSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(displayName, style: LuciTextStyles.cardTitle(context)),
+                Text(
+                  client.vendor ?? client.macAddress,
+                  style: LuciTextStyles.cardSubtitle(context),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SignalCard extends StatelessWidget {
+  const _SignalCard({required this.detail});
+
+  final ClientDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    if (detail.station == null) {
+      return _MessageCard(
+        icon: Icons.signal_wifi_statusbar_null,
+        message: context.l10n.signalUnavailable,
+      );
+    }
+    final s = detail.station!;
+    return _SectionCard(
+      title: context.l10n.signal,
+      icon: Icons.network_wifi,
+      rows: [
+        if (s.signal != null) (context.l10n.signal, '${s.signal} dBm'),
+        if (s.noise != null) (context.l10n.noiseFloor, '${s.noise} dBm'),
+        if (s.snr != null) (context.l10n.signalToNoise, '${s.snr} dB'),
+        if (s.rxRateKbps != null)
+          (context.l10n.downloadRate, _rate(s.rxRateKbps!)),
+        if (s.txRateKbps != null)
+          (context.l10n.uploadRate, _rate(s.txRateKbps!)),
+        if (s.connectedSeconds != null)
+          (context.l10n.connectedFor, _duration(s.connectedSeconds!)),
+      ],
+    );
+  }
+
+  static String _rate(int kbps) => kbps >= 1000
+      ? '${(kbps / 1000).toStringAsFixed(1)} Mbit/s'
+      : '$kbps kbit/s';
+
+  static String _duration(int seconds) {
+    final d = Duration(seconds: seconds);
+    if (d.inDays > 0) return '${d.inDays}d ${d.inHours % 24}h';
+    if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes % 60}m';
+    return '${d.inMinutes}m';
+  }
+}
+
+class _TrafficCard extends StatelessWidget {
+  const _TrafficCard({required this.station});
+
+  final StationInfo station;
+
+  @override
+  Widget build(BuildContext context) => _SectionCard(
+    title: context.l10n.trafficSection,
+    icon: Icons.swap_vert,
+    rows: [
+      if (station.rxBytes != null)
+        (context.l10n.downloaded, formatBytes(station.rxBytes!)),
+      if (station.txBytes != null)
+        (context.l10n.uploaded, formatBytes(station.txBytes!)),
+    ],
+  );
+
+  static String formatBytes(int bytes) {
+    if (bytes <= 0) return '0 B';
+    const suffixes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    final i = (math.log(bytes) / math.log(1024)).floor().clamp(
+      0,
+      suffixes.length - 1,
+    );
+    return '${(bytes / math.pow(1024, i)).toStringAsFixed(1)} ${suffixes[i]}';
+  }
+}
+
+class _AddressesCard extends StatelessWidget {
+  const _AddressesCard({required this.client, required this.detail});
+
+  final Client client;
+  final ClientDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final ipv6 = <String>{...?client.ipv6Addresses, ...detail.hintIpv6};
+    return _SectionCard(
+      title: context.l10n.addressesSection,
+      icon: Icons.language,
+      copyable: true,
+      rows: [
+        if (client.ipAddress != 'N/A')
+          (context.l10n.ipAddress, client.ipAddress),
+        for (final addr in ipv6) (context.l10n.ipv6Address, addr),
+        (context.l10n.macAddress, client.macAddress),
+        if (client.dnsName != null) (context.l10n.dnsName, client.dnsName!),
+      ],
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({
+    required this.title,
+    required this.icon,
+    required this.rows,
+    this.copyable = false,
+  });
+
+  final String title;
+  final IconData icon;
+  final List<(String, String)> rows;
+  final bool copyable;
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: LuciSpacing.md),
+      child: LuciCardStyles.standardCardWrapper(
+        context: context,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 20),
+                const SizedBox(width: LuciSpacing.sm),
+                Text(title, style: LuciTextStyles.cardTitle(context)),
+              ],
+            ),
+            const SizedBox(height: LuciSpacing.sm),
+            for (final (label, value) in rows)
+              InkWell(
+                onTap: copyable
+                    ? () {
+                        Clipboard.setData(ClipboardData(text: value));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('$label: $value')),
+                        );
+                      }
+                    : null,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: LuciSpacing.xs),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(label, style: LuciTextStyles.detailLabel(context)),
+                      Flexible(
+                        child: Text(
+                          value,
+                          style: LuciTextStyles.detailValue(context),
+                          textAlign: TextAlign.end,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A card whose content is disabled, with a reason, when the router or the
+/// account cannot support it.
+///
+/// Unavailable controls stay visible and explain themselves rather than
+/// silently disappearing: a page that differs between routers with no
+/// explanation reads as a bug.
+class _GatedCard extends StatelessWidget {
+  const _GatedCard({
+    required this.title,
+    required this.icon,
+    required this.availability,
+    required this.writable,
+    required this.child,
+    this.extraNote,
+  });
+
+  final String title;
+  final IconData icon;
+  final FeatureAvailability availability;
+  final bool writable;
+  final Widget child;
+  final String? extraNote;
+
+  @override
+  Widget build(BuildContext context) {
+    final note = _note(context) ?? extraNote;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: LuciSpacing.md),
+      child: LuciCardStyles.standardCardWrapper(
+        context: context,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 20),
+                const SizedBox(width: LuciSpacing.sm),
+                Text(title, style: LuciTextStyles.cardTitle(context)),
+              ],
+            ),
+            Opacity(
+              opacity: availability.available && writable ? 1 : 0.5,
+              child: child,
+            ),
+            if (note != null)
+              Padding(
+                padding: const EdgeInsets.only(top: LuciSpacing.xs),
+                child: Text(note, style: LuciTextStyles.cardSubtitle(context)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _note(BuildContext context) {
+    if (!writable) return null; // the cross-router banner already explains
+    return availability.explain(context);
+  }
+}
+
+class _MessageCard extends StatelessWidget {
+  const _MessageCard({
+    required this.icon,
+    required this.message,
+    this.action,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String message;
+  final String? action;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: LuciSpacing.md),
+    child: LuciCardStyles.standardCardWrapper(
+      context: context,
+      child: Row(
+        children: [
+          Icon(icon),
+          const SizedBox(width: LuciSpacing.sm),
+          Expanded(
+            child: Text(message, style: LuciTextStyles.cardSubtitle(context)),
+          ),
+          if (action != null)
+            TextButton(onPressed: onAction, child: Text(action!)),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Asks for a reservation address, validating it against the subnet, the DHCP
+/// pool and the other reservations before letting the user commit.
+class _ReservationDialog extends StatefulWidget {
+  const _ReservationDialog({required this.controller, required this.detail});
+
+  final TextEditingController controller;
+  final ClientDetail detail;
+
+  @override
+  State<_ReservationDialog> createState() => _ReservationDialogState();
+}
+
+class _ReservationDialogState extends State<_ReservationDialog> {
+  IpCheckResult _check = IpCheckResult.ok;
+
+  void _validate(String value) {
+    setState(() {
+      _check = ClientConfigPlanner.checkReservationIp(
+        value,
+        interfaceIp: widget.detail.subnetIp,
+        prefixLength: widget.detail.prefixLength,
+        alreadyReserved: widget.detail.reservedIps,
+        poolStart: widget.detail.poolStart,
+        poolLimit: widget.detail.poolLimit,
+      );
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _validate(widget.controller.text);
+  }
+
+  String? _message(BuildContext context) => switch (_check) {
+    IpCheckResult.ok => null,
+    IpCheckResult.malformed => context.l10n.invalidIpAddress,
+    IpCheckResult.outsideSubnet => context.l10n.addressOutsideSubnet,
+    IpCheckResult.duplicate => context.l10n.addressAlreadyReserved,
+    IpCheckResult.insidePool => context.l10n.addressInsideDhcpPool,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final message = _message(context);
+    return AlertDialog(
+      title: Text(context.l10n.reserveThisAddress),
+      content: TextField(
+        controller: widget.controller,
+        autofocus: true,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
+          labelText: context.l10n.ipAddress,
+          errorText: _check.isBlocking ? message : null,
+          // An address inside the pool still works, so it is a warning rather
+          // than something to refuse.
+          helperText: _check.isBlocking ? null : message,
+        ),
+        onChanged: _validate,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(context.l10n.cancel),
+        ),
+        FilledButton(
+          onPressed: _check.isBlocking
+              ? null
+              : () => Navigator.of(context).pop(widget.controller.text.trim()),
+          child: Text(context.l10n.saveAction),
+        ),
+      ],
+    );
+  }
+}

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
 import 'package:luci_mobile/config/app_config.dart';
+import 'package:luci_mobile/models/service_status.dart';
+import 'package:luci_mobile/models/station_info.dart';
 
 class MockApiService implements IApiService {
   static final Random _random = Random();
@@ -14,6 +16,109 @@ class MockApiService implements IApiService {
   static int _baseTxPackets = 9876;
   // Scan cancellation token — incremented by cancelScan().
   int _scanToken = 0;
+
+  // Staged-but-unapplied UCI changes, config -> rows of
+  // [op, section, option?, value?]. Mutated by uciSet/uciAdd/uciDelete and
+  // drained by uciApply/uciCommit/uciRevert, so that the unsaved-changes
+  // affordance and the apply flow are exercisable in reviewer mode.
+  final Map<String, List<List<String>>> _stagedChanges = {};
+
+  // Set between uciApply(rollback: true) and uciConfirm.
+  bool _applyAwaitingConfirm = false;
+
+  /// Whether a rollback-protected apply is still waiting for a confirm.
+  @visibleForTesting
+  bool get applyAwaitingConfirm => _applyAwaitingConfirm;
+
+  int _mockSectionCounter = 0;
+
+  void _stage(String config, List<String> row) {
+    _stagedChanges.putIfAbsent(config, () => <List<String>>[]).add(row);
+  }
+
+  // An in-memory UCI store: config -> section -> {option: value}. Seeded
+  // lazily from the fixtures, then mutated by uciSet/uciAdd/uciDelete and read
+  // back by uci.get. Without this a reviewer taps a toggle and watches it snap
+  // straight back, because every write would be forgotten.
+  final Map<String, Map<String, Map<String, dynamic>>> _uciOverlay = {};
+
+  // Pre-write snapshots so uci.revert can restore.
+  final Map<String, Map<String, Map<String, dynamic>>> _uciSnapshots = {};
+
+  static Map<String, Map<String, dynamic>> _deepCopyConfig(
+    Map<String, Map<String, dynamic>> src,
+  ) => {
+    for (final entry in src.entries)
+      entry.key: Map<String, dynamic>.from(entry.value),
+  };
+
+  /// Loads [config] into the overlay on first touch, from its fixture.
+  Future<Map<String, Map<String, dynamic>>?> _loadUciConfig(
+    String config,
+  ) async {
+    final existing = _uciOverlay[config];
+    if (existing != null) return existing;
+
+    final file = _getMockDataFile('uci', 'get', {'config': config});
+    if (file == null) return null;
+    try {
+      final raw = jsonDecode(
+        await rootBundle.loadString('${AppConfig.mockDataPath}$file'),
+      );
+      final values = raw is Map ? raw['values'] : null;
+      final sections = <String, Map<String, dynamic>>{};
+      if (values is Map) {
+        for (final entry in values.entries) {
+          if (entry.value is Map) {
+            sections[entry.key.toString()] = Map<String, dynamic>.from(
+              entry.value as Map,
+            );
+          }
+        }
+      }
+      _uciOverlay[config] = sections;
+      return sections;
+    } catch (e) {
+      debugPrint('MockApiService: failed to seed uci overlay for $config: $e');
+      return null;
+    }
+  }
+
+  /// Captures [config] before its first staged write so revert can undo it.
+  void _snapshotUci(String config) {
+    final current = _uciOverlay[config];
+    if (current == null) return;
+    _uciSnapshots.putIfAbsent(config, () => _deepCopyConfig(current));
+  }
+
+  void _restoreUci(String config) {
+    final snap = _uciSnapshots.remove(config);
+    if (snap != null) _uciOverlay[config] = snap;
+  }
+
+  /// Serves `uci.get` out of the overlay, or null when this is not a
+  /// config-scoped uci.get.
+  Future<dynamic> _uciGetFromOverlay(
+    String object,
+    String method,
+    Map<String, dynamic>? params,
+  ) async {
+    if (object != 'uci' || method != 'get') return null;
+    final config = params?['config']?.toString();
+    if (config == null) return null;
+    final sections = await _loadUciConfig(config);
+    if (sections == null) return null;
+    return [
+      0,
+      {
+        'values': {
+          for (final entry in sections.entries)
+            entry.key: Map<String, dynamic>.from(entry.value),
+        },
+      },
+    ];
+  }
+
   static int _baseLanRxBytes = 2345678901;
   static int _baseLanTxBytes = 1876543210;
   static int _baseLanRxPackets = 23456;
@@ -33,6 +138,38 @@ class MockApiService implements IApiService {
     return 'mock_sysauth_token_12345';
   }
 
+  /// Answers `file.exec` for nlbwmon's accounting helper, so the traffic
+  /// screen has real-shaped rows in reviewer mode instead of an empty table.
+  dynamic _mockNlbwmon(Map<String, dynamic>? params) {
+    final args = params?['params'];
+    final list = args is List
+        ? [for (final a in args) a.toString()]
+        : <String>[];
+    if (list.isEmpty) return null;
+    if (list.first == 'periods') {
+      return [
+        0,
+        {'code': 0, 'stdout': '{ "periods": [ "2026-09-01" ] }'},
+      ];
+    }
+    if (list.first != 'download') return null;
+    return [
+      0,
+      {
+        'code': 0,
+        'stdout':
+            '{"columns":["mac","ip","conns","rx_bytes","rx_pkts","tx_bytes",'
+            '"tx_pkts"],"data":['
+            '["a4:83:e7:2b:11:04","192.168.1.115",412,8402334721,6120044,'
+            '412883912,2904113],'
+            '["3c:22:fb:91:aa:17","192.168.1.132",188,2140998233,1704221,'
+            '98221044,812004],'
+            '["dc:a6:32:7f:0c:52","192.168.1.148",76,318442901,264118,'
+            '44219883,318442]]}',
+      },
+    ];
+  }
+
   @override
   Future<dynamic> call(
     String ipAddress,
@@ -49,8 +186,20 @@ class MockApiService implements IApiService {
     final endpointKey = '$object.$method';
 
     try {
+      // uci.get must reflect writes made this session, so it is served from
+      // the overlay rather than straight off the fixture.
+      final overlaid = await _uciGetFromOverlay(object, method, params);
+      if (overlaid != null) return overlaid;
+
+      if (object == 'file' &&
+          method == 'exec' &&
+          (params?['command']?.toString() ?? '').contains('nlbwmon-action')) {
+        final nlbw = _mockNlbwmon(params);
+        if (nlbw != null) return nlbw;
+      }
+
       // Return appropriate mock data based on object and method
-      final mockDataFile = _getMockDataFile(object, method);
+      final mockDataFile = _getMockDataFile(object, method, params);
 
       if (mockDataFile != null) {
         try {
@@ -98,8 +247,20 @@ class MockApiService implements IApiService {
     final endpointKey = '$object.$method';
 
     try {
+      // uci.get must reflect writes made this session, so it is served from
+      // the overlay rather than straight off the fixture.
+      final overlaid = await _uciGetFromOverlay(object, method, params);
+      if (overlaid != null) return overlaid;
+
+      if (object == 'file' &&
+          method == 'exec' &&
+          (params['command']?.toString() ?? '').contains('nlbwmon-action')) {
+        final nlbw = _mockNlbwmon(params);
+        if (nlbw != null) return nlbw;
+      }
+
       // Return appropriate mock data based on object and method
-      final mockDataFile = _getMockDataFile(object, method);
+      final mockDataFile = _getMockDataFile(object, method, params);
 
       if (mockDataFile != null) {
         try {
@@ -242,27 +403,67 @@ class MockApiService implements IApiService {
 
   // No HTTP client creation required for mock service when using Dio
 
-  String? _getMockDataFile(String object, String method) {
-    // Map object.method combinations to mock data files
-    final key = '$object.$method';
+  /// Resolves an endpoint to a fixture file.
+  ///
+  /// [params] matters: `uci.get` and `file.exec` serve completely different
+  /// data depending on the config or command asked for, and ignoring that
+  /// hands callers the wrong fixture entirely.
+  String? _getMockDataFile(
+    String object,
+    String method,
+    Map<String, dynamic>? params,
+  ) {
+    switch ('$object.$method') {
+      case 'uci.get':
+        switch (params?['config']) {
+          case 'wireless':
+            return 'uci_wireless.json';
+          case 'dhcp':
+            return 'uci_dhcp.json';
+          case 'firewall':
+            return 'uci_firewall.json';
+          case 'system':
+            return 'uci_system.json';
+          case 'sqm':
+            return 'uci_sqm.json';
+          case 'adblock':
+            return 'uci_adblock.json';
+          case 'upnpd':
+            return 'uci_upnpd.json';
+          case 'ddns':
+            return 'uci_ddns.json';
+          default:
+            return null;
+        }
+      case 'iwinfo.assoclist':
+        final device = params?['device']?.toString();
+        if (device == null) return null;
+        return 'assoclist_$device.json';
+      case 'file.exec':
+        final command = params?['command']?.toString() ?? '';
+        // Only the DHCP-lease shell-out is fixture-backed; everything else
+        // must fall through rather than be handed lease text.
+        if (command.contains('dnsmasq') || command.contains('dhcp')) {
+          return 'dhcp_leases.json';
+        }
+        return null;
+    }
 
-    final mockFileMap = {
+    const mockFileMap = {
       'system.board': 'system_board.json',
       'system.info': 'system_info.json',
       // 'network.device': 'network_devices.json', // Use dynamic data for throughput
       'network.interface': 'interface_dump.json',
       'network.interface.dump': 'interface_dump.json',
       'wireless.devices': 'wireless_devices.json',
-      'file.exec': 'dhcp_leases.json', // For DHCP leases command
-      'uci.get': 'uci_wireless.json', // For wireless config
       'luci.wireguard.getWgInstances': 'wireguard_peers.json',
-      'iwinfo.assoclist': 'associated_stations.json',
       'luci-rpc.getNetworkDevices': 'network_devices.json',
       'luci-rpc.getWirelessDevices': 'wireless_devices.json',
       'luci-rpc.getDHCPLeases': 'dhcp_leases.json',
+      'luci-rpc.getHostHints': 'host_hints.json',
     };
 
-    return mockFileMap[key];
+    return mockFileMap['$object.$method'];
   }
 
   dynamic _formatMockData(String endpoint, dynamic data) {
@@ -386,6 +587,14 @@ class MockApiService implements IApiService {
         ];
 
       case 'file.exec':
+        // A generic successful exec. Lease-reading commands are routed to the
+        // lease fixture by _getMockDataFile; everything else must not be
+        // handed lease text.
+        return [
+          0,
+          {'stdout': '', 'stderr': '', 'code': 0},
+        ];
+
       case 'luci-rpc.getDHCPLeases':
         // DHCP leases data
         return [
@@ -881,11 +1090,25 @@ class MockApiService implements IApiService {
     bool useHttps, {
     required String config,
     required String section,
-    required Map<String, String> values,
+    required Map<String, Object> values,
     BuildContext? context,
   }) async {
     await Future.delayed(const Duration(milliseconds: 200));
-    // Return success response for mock UCI set operation
+    final sections = await _loadUciConfig(config);
+    if (sections != null) {
+      _snapshotUci(config);
+      final target = sections.putIfAbsent(section, () => <String, dynamic>{});
+      target.addAll(values);
+    }
+    for (final entry in values.entries) {
+      final v = entry.value;
+      _stage(config, [
+        'set',
+        section,
+        entry.key,
+        v is List ? v.join(' ') : v.toString(),
+      ]);
+    }
     return [0, 'success'];
   }
 
@@ -898,7 +1121,8 @@ class MockApiService implements IApiService {
     BuildContext? context,
   }) async {
     await Future.delayed(const Duration(milliseconds: 200));
-    // Return success response for mock UCI commit operation
+    _uciSnapshots.remove(config);
+    _stagedChanges.remove(config);
     return [0, 'success'];
   }
 
@@ -1063,7 +1287,23 @@ class MockApiService implements IApiService {
     BuildContext? context,
   }) async {
     await Future.delayed(const Duration(milliseconds: 300));
-    return [0, name ?? 'cfg_new_section'];
+    final generated = (++_mockSectionCounter).toString().padLeft(6, '0');
+    final section = name ?? 'cfg$generated';
+    final sections = await _loadUciConfig(config);
+    if (sections != null) {
+      _snapshotUci(config);
+      sections[section] = <String, dynamic>{
+        '.type': type,
+        '.name': section,
+        '.anonymous': name == null,
+        ...values,
+      };
+    }
+    _stage(config, ['add', section, type]);
+    for (final entry in values.entries) {
+      _stage(config, ['set', section, entry.key, entry.value.toString()]);
+    }
+    return [0, section];
   }
 
   @override
@@ -1077,6 +1317,19 @@ class MockApiService implements IApiService {
     BuildContext? context,
   }) async {
     await Future.delayed(const Duration(milliseconds: 200));
+    final sections = await _loadUciConfig(config);
+    if (sections != null) {
+      _snapshotUci(config);
+      if (option == null) {
+        sections.remove(section);
+      } else {
+        sections[section]?.remove(option);
+      }
+    }
+    _stage(
+      config,
+      option == null ? ['remove', section] : ['remove', section, option],
+    );
     return [0, 'success'];
   }
 
@@ -1104,5 +1357,353 @@ class MockApiService implements IApiService {
   @override
   void cancelScan() {
     _scanToken++; // invalidates any in-flight scan
+  }
+
+  @override
+  Future<List<String>> uciConfigs(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 150));
+    // A plausible OpenWrt set with a few add-ons installed. Some are
+    // deliberately absent (`ddns`) so reviewer mode walks the "feature
+    // unavailable" path too — but enough are present that the add-ons hub
+    // is not a screen of greyed-out rows, which reads as broken.
+    return const [
+      'adblock',
+      'dhcp',
+      'dropbear',
+      'firewall',
+      'luci',
+      'network',
+      'nlbwmon',
+      'rpcd',
+      'sqm',
+      'system',
+      'ucitrack',
+      'uhttpd',
+      'upnpd',
+      'wireless',
+    ];
+  }
+
+  @override
+  Future<Map<String, List<List<String>>>> uciChanges(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    String? config,
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 150));
+    if (config == null) {
+      return {
+        for (final entry in _stagedChanges.entries)
+          entry.key: List<List<String>>.from(entry.value),
+      };
+    }
+    final rows = _stagedChanges[config];
+    if (rows == null || rows.isEmpty) return const {};
+    return {config: List<List<String>>.from(rows)};
+  }
+
+  @override
+  Future<dynamic> uciRevert(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String config,
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 150));
+    _restoreUci(config);
+    _stagedChanges.remove(config);
+    return [0, 'success'];
+  }
+
+  @override
+  Future<dynamic> uciApply(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required bool rollback,
+    required int timeoutSeconds,
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (rollback) {
+      _applyAwaitingConfirm = true;
+    } else {
+      _uciSnapshots.clear();
+      _stagedChanges.clear();
+    }
+    return [0, 'success'];
+  }
+
+  @override
+  Future<dynamic> uciConfirm(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 150));
+    _applyAwaitingConfirm = false;
+    _uciSnapshots.clear();
+    _stagedChanges.clear();
+    return [0, 'success'];
+  }
+
+  @override
+  Future<dynamic> uciRollback(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 150));
+    _applyAwaitingConfirm = false;
+    for (final config in _uciSnapshots.keys.toList()) {
+      _restoreUci(config);
+    }
+    _stagedChanges.clear();
+    return [0, 'success'];
+  }
+
+  @override
+  Future<Map<String, dynamic>> luciGetFeatures(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 150));
+    // A modern stock build: fw4, apk, IPv6, wifi present; no swconfig.
+    return const {
+      'firewall4': true,
+      'firewall': false,
+      'apk': true,
+      'opkg': false,
+      'ipv6': true,
+      'wifi': true,
+      'swconfig': false,
+      'offloading': true,
+      'dropbear': true,
+      'relayd': false,
+      'zram': false,
+      'sysntpd': true,
+      'cabundle': true,
+    };
+  }
+
+  @override
+  Future<Map<String, Set<String>>?> fetchSessionAcl(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 150));
+    // Reviewer mode stands in for a full-access (root) login.
+    return const {
+      'uci': {'*'},
+      'iwinfo': {'*'},
+      'luci-rpc': {'*'},
+      'luci': {'*'},
+      'system': {'*'},
+      'file': {'*'},
+      'rc': {'*'},
+      'network.interface': {'*'},
+      'session': {'*'},
+    };
+  }
+
+  @override
+  Future<Map<String, StationInfo>> fetchStationDetails(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String device,
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 250));
+    try {
+      final raw = jsonDecode(
+        await rootBundle.loadString(
+          '${AppConfig.mockDataPath}assoclist_$device.json',
+        ),
+      );
+      final results = raw is Map ? raw['results'] : null;
+      if (results is! List) return const <String, StationInfo>{};
+      final out = <String, StationInfo>{};
+      for (final row in results) {
+        if (row is! Map) continue;
+        final station = StationInfo.fromJson(
+          Map<String, dynamic>.from(row),
+          interface: device,
+        );
+        if (station != null) out[station.macAddress] = station;
+      }
+      return out;
+    } catch (e) {
+      debugPrint('MockApiService: no assoclist fixture for $device: $e');
+      return const <String, StationInfo>{};
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchHostHints(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    try {
+      final raw = jsonDecode(
+        await rootBundle.loadString('${AppConfig.mockDataPath}host_hints.json'),
+      );
+      if (raw is! Map) return const <String, dynamic>{};
+      return {
+        for (final entry in raw.entries)
+          StationInfo.normalizeMac(entry.key.toString()): entry.value,
+      };
+    } catch (e) {
+      debugPrint('MockApiService: failed to load host hints: $e');
+      return const <String, dynamic>{};
+    }
+  }
+
+  @override
+  Future<List<List<num>>> luciRealtimeStats(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String mode,
+    String? device,
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    // 60 samples at 1 Hz, shaped like the mode the caller asked for.
+    return [
+      for (var i = 59; i >= 0; i--)
+        switch (mode) {
+          // load: [time, 1min, 5min, 15min] in 1/100 units
+          'load' => [
+            now - i,
+            30 + _random.nextInt(120),
+            40 + _random.nextInt(80),
+            50 + _random.nextInt(40),
+          ],
+          // conntrack: [time, count]
+          'conntrack' => [now - i, 40 + _random.nextInt(60)],
+          // interface: [time, rx_bytes, rx_pkts, tx_bytes, tx_pkts]
+          _ => [
+            now - i,
+            _baseRxBytes + i * 1200,
+            _baseRxPackets + i * 8,
+            _baseTxBytes + i * 700,
+            _baseTxPackets + i * 5,
+          ],
+        },
+    ];
+  }
+
+  @override
+  Future<Map<String, ServiceStatus>> rcList(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    return {
+      for (final e in _mockServices.entries)
+        e.key: ServiceStatus(
+          name: e.key,
+          enabled: e.value.$1,
+          running: e.value.$2,
+        ),
+    };
+  }
+
+  // name -> (enabled, running); mutated so a toggle sticks in reviewer mode.
+  final Map<String, (bool, bool)> _mockServices = {
+    'dnsmasq': (true, true),
+    'dropbear': (true, true),
+    'firewall': (true, true),
+    'network': (true, true),
+    'odhcpd': (true, true),
+    'uhttpd': (true, true),
+    'cron': (true, false),
+    'sysntpd': (true, true),
+  };
+
+  @override
+  Future<bool> rcInit(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String name,
+    required String action,
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 400));
+    final current = _mockServices[name];
+    if (current == null) return true;
+    _mockServices[name] = switch (action) {
+      'start' || 'restart' || 'reload' => (current.$1, true),
+      'stop' => (current.$1, false),
+      'enable' => (true, current.$2),
+      'disable' => (false, current.$2),
+      _ => current,
+    };
+    return true;
+  }
+
+  @override
+  Future<bool> luciSetPassword(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String username,
+    required String password,
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return true;
+  }
+
+  @override
+  Future<Map<String, String>> luciTimezones(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    return const {
+      'UTC': 'UTC',
+      'Europe/Berlin': 'CET-1CEST,M3.5.0,M10.5.0/3',
+      'Europe/London': 'GMT0BST,M3.5.0/1,M10.5.0',
+      'America/New_York': 'EST5EDT,M3.2.0,M11.1.0',
+      'Asia/Tokyo': 'JST-9',
+    };
+  }
+
+  @override
+  Future<bool?> checkUbusAccess(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String object,
+    required String function,
+    BuildContext? context,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    return true;
   }
 }

@@ -1,0 +1,186 @@
+{
+  "AA:BB:CC:11:22:33": {
+    "name": "iPhone-John",
+    "ipaddrs": [
+      "192.168.1.100"
+    ],
+    "ip6addrs": [
+      "fd42:1::64"
+    ]
+  },
+  "AA:BB:CC:44:55:66": {
+    "name": "MacBook-Pro",
+    "ipaddrs": [
+      "192.168.1.101"
+    ],
+    "ip6addrs": []
+  },
+  "AA:BB:CC:77:88:99": {
+    "name": "Smart-TV-Living-Room",
+    "ipaddrs": [
+      "192.168.1.102"
+    ],
+    "ip6addrs": []
+  },
+  "AA:BB:CC:AA:BB:CC": {
+    "name": "Gaming-PC",
+    "ipaddrs": [
+      "192.168.1.103"
+    ],
+    "ip6addrs": [
+      "fd42:1::67"
+    ]
+  },
+  "AA:BB:CC:DD:EE:FF": {
+    "name": "Nest-Thermostat",
+    "ipaddrs": [
+      "192.168.1.104"
+    ],
+    "ip6addrs": []
+  },
+  "AA:BB:CC:12:34:56": {
+    "name": "iPad-Sarah",
+    "ipaddrs": [
+      "192.168.1.105"
+    ],
+    "ip6addrs": []
+  },
+  "AA:BB:CC:65:43:21": {
+    "name": "Amazon-Echo",
+    "ipaddrs": [
+      "192.168.1.106"
+    ],
+    "ip6addrs": [
+      "fd42:1::6a"
+    ]
+  },
+  "AA:BB:CC:98:76:54": {
+    "name": "Printer-HP-Office",
+    "ipaddrs": [
+      "192.168.1.107"
+    ],
+    "ip6addrs": []
+  },
+  "BB:CC:DD:11:22:33": {
+    "name": "Samsung-Galaxy-S23",
+    "ipaddrs": [
+      "192.168.1.108"
+    ],
+    "ip6addrs": []
+  },
+  "BB:CC:DD:44:55:66": {
+    "name": "Dell-Laptop-Work",
+    "ipaddrs": [
+      "192.168.1.109"
+    ],
+    "ip6addrs": [
+      "fd42:1::6d"
+    ]
+  },
+  "BB:CC:DD:77:88:99": {
+    "name": "Ring-Doorbell",
+    "ipaddrs": [
+      "192.168.1.110"
+    ],
+    "ip6addrs": []
+  },
+  "BB:CC:DD:AA:BB:CC": {
+    "name": "Nintendo-Switch",
+    "ipaddrs": [
+      "192.168.1.111"
+    ],
+    "ip6addrs": []
+  },
+  "BB:CC:DD:DD:EE:FF": {
+    "name": "Philips-Hue-Bridge",
+    "ipaddrs": [
+      "192.168.1.112"
+    ],
+    "ip6addrs": [
+      "fd42:1::70"
+    ]
+  },
+  "BB:CC:DD:12:34:56": {
+    "name": "iPad-Kids",
+    "ipaddrs": [
+      "192.168.1.113"
+    ],
+    "ip6addrs": []
+  },
+  "BB:CC:DD:65:43:21": {
+    "name": "Google-Home-Kitchen",
+    "ipaddrs": [
+      "192.168.1.114"
+    ],
+    "ip6addrs": []
+  },
+  "BB:CC:DD:98:76:54": {
+    "name": "Canon-Camera",
+    "ipaddrs": [
+      "192.168.1.115"
+    ],
+    "ip6addrs": [
+      "fd42:1::73"
+    ]
+  },
+  "CC:DD:EE:11:22:33": {
+    "name": "Tesla-Model-3",
+    "ipaddrs": [
+      "192.168.1.116"
+    ],
+    "ip6addrs": []
+  },
+  "CC:DD:EE:44:55:66": {
+    "name": "Roku-Ultra",
+    "ipaddrs": [
+      "192.168.1.117"
+    ],
+    "ip6addrs": []
+  },
+  "CC:DD:EE:77:88:99": {
+    "name": "Sonos-Speaker",
+    "ipaddrs": [
+      "192.168.1.118"
+    ],
+    "ip6addrs": [
+      "fd42:1::76"
+    ]
+  },
+  "CC:DD:EE:AA:BB:CC": {
+    "name": "Security-Camera-Front",
+    "ipaddrs": [
+      "192.168.1.119"
+    ],
+    "ip6addrs": []
+  },
+  "CC:DD:EE:DD:EE:FF": {
+    "name": "Raspberry-Pi-Server",
+    "ipaddrs": [
+      "192.168.1.120"
+    ],
+    "ip6addrs": []
+  },
+  "CC:DD:EE:12:34:56": {
+    "name": "Apple-Watch",
+    "ipaddrs": [
+      "192.168.1.121"
+    ],
+    "ip6addrs": [
+      "fd42:1::79"
+    ]
+  },
+  "CC:DD:EE:65:43:21": {
+    "name": "Chromecast-Bedroom",
+    "ipaddrs": [
+      "192.168.1.122"
+    ],
+    "ip6addrs": []
+  },
+  "CC:DD:EE:98:76:54": {
+    "name": "Baby-Monitor",
+    "ipaddrs": [
+      "192.168.1.123"
+    ],
+    "ip6addrs": []
+  }
+}

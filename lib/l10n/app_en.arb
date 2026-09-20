@@ -516,5 +516,271 @@
   "certificateValidFrom": "Valid From",
   "certificateValidUntil": "Valid Until",
   "certificateSafetyWarning": "Only proceed if you trust this router and understand the security implications.",
-  "acceptRisk": "Accept Risk"
+  "acceptRisk": "Accept Risk",
+  "clientDetails": "Client details",
+  "displayName": "Display name",
+  "displayNameHint": "Shown only in this app",
+  "saveAction": "Save",
+  "setDhcpHostname": "Also set the DHCP hostname",
+  "dhcpHostnameHint": "Updates the router's DNS record. Letters, digits and hyphens only.",
+  "invalidHostname": "Use letters, digits and hyphens only",
+  "noiseFloor": "Noise",
+  "signalToNoise": "SNR",
+  "connectedFor": "Connected for",
+  "lastSeen": "Last seen",
+  "downloadRate": "Download rate",
+  "uploadRate": "Upload rate",
+  "trafficSection": "Traffic",
+  "downloaded": "Downloaded",
+  "uploaded": "Uploaded",
+  "addressesSection": "Addresses",
+  "staticLeaseSection": "Static lease",
+  "reserveThisAddress": "Reserve this address",
+  "reservedAddress": "Reserved address",
+  "accessSection": "Access",
+  "blockClient": "Block internet access",
+  "blockClientDescription": "Blocks the internet and other networks. The router stays reachable so you can undo this.",
+  "managedByRouter": "Managed by {router}",
+  "@managedByRouter": {
+    "placeholders": {
+      "router": {
+        "type": "String"
+      }
+    }
+  },
+  "switchToThisRouter": "Switch to this router to change its settings",
+  "requiresPackage": "Requires {package} on the router",
+  "@requiresPackage": {
+    "placeholders": {
+      "package": {
+        "type": "String"
+      }
+    }
+  },
+  "requiresAdministrator": "Requires an administrator account",
+  "capabilityCheckFailed": "Couldn't check what this router supports",
+  "signalUnavailable": "Signal data unavailable",
+  "changeApplied": "Change applied",
+  "changeRolledBack": "The router rolled the change back",
+  "changeFailed": "The change could not be applied",
+  "confirmingChange": "Confirming...",
+  "addressOutsideSubnet": "Outside this network's subnet",
+  "addressAlreadyReserved": "Another reservation already uses this address",
+  "addressInsideDhcpPool": "Inside the DHCP pool - may clash with a dynamic lease",
+  "invalidIpAddress": "Enter a valid IPv4 address",
+  "noZoneForClient": "No firewall zone covers this client's network",
+  "revertsInSeconds": "Reverts in {seconds}s if the router cannot be reached",
+  "@revertsInSeconds": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "changeUnconfirmed": "Couldn't confirm in time - check whether the change took effect",
+  "insights": "Insights",
+  "insightsComingSoon": "Logs, diagnostics and activity land here",
+  "interfacesHubSubtitle": "Addresses, status and traffic for every interface",
+  "wirelessNetworksHubSubtitle": "SSIDs, passwords, channels and guest access",
+  "radioSettings": "Radio settings",
+  "addNetwork": "Add network",
+  "editNetwork": "Edit network",
+  "channelAuto": "Automatic",
+  "channelWidth": "Channel width",
+  "countryCode": "Country code",
+  "countryCodeDescription": "Two-letter code, e.g. DE. Sets the legal channels and power.",
+  "securityOpen": "Open",
+  "secured": "Secured",
+  "hiddenSsid": "Hidden",
+  "hiddenSsidDescription": "The name is not broadcast; devices must be told it",
+  "clientIsolation": "Client isolation",
+  "clientIsolationDescription": "Devices on this network cannot reach each other",
+  "guestNetwork": "Guest",
+  "ssidTooLong": "Network name is too long (max 32 bytes)",
+  "enterpriseNotEditable": "This is an enterprise (802.1X) network. Editing it here would drop its RADIUS settings, so it is read-only.",
+  "firewall": "Firewall",
+  "firewallHubSubtitle": "Port forwards, traffic rules and zones",
+  "portForwards": "Port forwards",
+  "trafficRules": "Traffic rules",
+  "zones": "Zones",
+  "staticRoutes": "Static routes",
+  "addPortForward": "Add port forward",
+  "editPortForward": "Edit port forward",
+  "forwardName": "Name",
+  "sourceZone": "From zone",
+  "protocol": "Protocol",
+  "externalPort": "External port",
+  "internalAddress": "Internal address",
+  "internalPort": "Internal port",
+  "invalidPort": "Enter a port between 1 and 65535",
+  "portAlreadyForwarded": "Another forward already uses this port",
+  "noPortForwards": "No port forwards yet",
+  "noTrafficRules": "No traffic rules",
+  "noZones": "No firewall zones",
+  "noStaticRoutes": "No static routes",
+  "zoneInput": "Input",
+  "zoneOutput": "Output",
+  "zoneForward": "Forward",
+  "disableRule": "Disable",
+  "diagnostics": "Diagnostics",
+  "diagnosticsHubSubtitle": "Ping, traceroute and DNS lookup, run on the router",
+  "systemLog": "System log",
+  "kernelLog": "Kernel log",
+  "logHubSubtitle": "What the router has been reporting",
+  "filterLog": "Filter",
+  "logEmpty": "The log is empty",
+  "logUnavailable": "Could not read the log",
+  "noMatchingLogLines": "No lines match that filter",
+  "toolPing": "Ping",
+  "toolTraceroute": "Trace",
+  "toolNslookup": "DNS",
+  "hostOrAddress": "Host or address",
+  "runDiagnostic": "Run",
+  "activity": "Activity",
+  "activityHubSubtitle": "What has changed while the app was watching",
+  "noActivityYet": "Nothing has changed yet",
+  "activityOnlyWhileOpen": "Activity is recorded while the app is open. Background alerts are not enabled.",
+  "clearActivity": "Clear activity",
+  "eventRouterUnreachable": "Router became unreachable",
+  "eventRouterBack": "Router came back",
+  "eventWanDown": "Internet connection went down",
+  "eventWanUp": "Internet connection came back",
+  "eventClientJoined": "{client} joined the network",
+  "@eventClientJoined": {
+    "placeholders": {
+      "client": {
+        "type": "String"
+      }
+    }
+  },
+  "eventClientLeft": "{client} left the network",
+  "@eventClientLeft": {
+    "placeholders": {
+      "client": {
+        "type": "String"
+      }
+    }
+  },
+  "eventRebooted": "Router rebooted",
+  "services": "Services",
+  "servicesHubSubtitle": "Start, stop and enable the router’s services",
+  "serviceRunning": "Running",
+  "serviceStopped": "Stopped",
+  "serviceStartsAtBoot": "starts at boot",
+  "serviceNotAtBoot": "not at boot",
+  "serviceStart": "Start",
+  "serviceStop": "Stop",
+  "serviceRestart": "Restart",
+  "serviceEnable": "Enable at boot",
+  "serviceDisable": "Disable at boot",
+  "serviceActionDone": "{service} updated",
+  "@serviceActionDone": {
+    "placeholders": {
+      "service": {
+        "type": "String"
+      }
+    }
+  },
+  "noServices": "No services reported",
+  "serviceCriticalTitle": "This may cut your connection",
+  "serviceCriticalBody": "{service} is part of how this app reaches the router. Stopping or restarting it may end this session.",
+  "@serviceCriticalBody": {
+    "placeholders": {
+      "service": {
+        "type": "String"
+      }
+    }
+  },
+  "continueAnyway": "Continue",
+  "systemSettings": "System",
+  "systemSettingsDescription": "Router name, description and time zone",
+  "hostname": "Hostname",
+  "hostnameHelp": "The name this router answers to on the network",
+  "routerDescription": "Description",
+  "routerNotes": "Notes",
+  "timezone": "Time zone",
+  "timezoneUtc": "UTC",
+  "searchTimezone": "Search time zones",
+  "save": "Save",
+  "noData": "Nothing to show",
+  "routerPassword": "Router password",
+  "routerPasswordWarning": "This is the router’s login password — the same one used for SSH and the web interface. The app will update its saved copy.",
+  "newPassword": "New password",
+  "confirmPassword": "Confirm password",
+  "passwordTooShort": "Use at least 5 characters",
+  "passwordsDoNotMatch": "Passwords do not match",
+  "passwordChanged": "Password changed",
+  "passwordRejected": "The router refused that password",
+  "appPreferences": "App preferences",
+  "addonSqm": "SQM / QoS",
+  "addonSqmSubtitle": "Shape traffic so one download cannot stall everything else",
+  "addonAdblock": "Ad blocking",
+  "addonAdblockSubtitle": "Block ad and tracking domains at the router’s DNS",
+  "addonUpnp": "UPnP / NAT-PMP",
+  "addonUpnpSubtitle": "Let devices on the network open their own inbound ports",
+  "addonDdns": "Dynamic DNS",
+  "addonDdnsSubtitle": "Keep a hostname pointed at this router’s changing address",
+  "addonEnabled": "Enabled",
+  "addonDownload": "Download speed",
+  "addonUpload": "Upload speed",
+  "addonRateHelp": "Set this a little below what the line really delivers — roughly 85–95%",
+  "addonQdisc": "Queue discipline",
+  "addonQdiscHelp": "cake is the right answer on almost every router",
+  "addonSqmScript": "Queue setup script",
+  "addonSafeSearch": "Force safe search",
+  "addonSafeSearchHelp": "Redirect major search engines to their filtered versions",
+  "addonForceDns": "Force devices to use this DNS",
+  "addonForceDnsHelp": "Redirects DNS queries aimed elsewhere back to the router",
+  "addonBlocklists": "Blocklists",
+  "addonBlocklistsHelp": "More lists block more, and break more. Start small.",
+  "addonUpnpIgd": "Allow UPnP",
+  "addonNatPmp": "Allow NAT-PMP",
+  "addonSecureMode": "Secure mode",
+  "addonSecureModeHelp": "Only let a device forward a port to itself",
+  "addonDomain": "Hostname",
+  "addonLookupHost": "Host to check",
+  "addonProvider": "Provider",
+  "addonUsername": "Username",
+  "addonPassword": "Password",
+  "addonNotConfigured": "Nothing configured yet",
+  "addons": "Add-ons",
+  "addonsSubtitle": "Extra packages installed on this router",
+  "addonNotInstalled": "Not installed",
+  "addonOutOfRange": "Enter a number between {min} and {max}",
+  "@addonOutOfRange": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "download": "Down",
+  "upload": "Up",
+  "trafficHistory": "Traffic history",
+  "trafficHistorySubtitle": "Which devices used the connection",
+  "trafficPeriod": "Period",
+  "trafficNoPeriods": "No accounting data yet",
+  "trafficNoRecords": "Nothing recorded for this period",
+  "wakeSection": "Power",
+  "wakeDevice": "Wake this device",
+  "wakeAction": "Wake",
+  "wakeDeviceDescription": "Sends a magic packet from the router. Nothing confirms it arrived.",
+  "wakeSent": "Wake packet sent",
+  "wakeFailed": "The router could not send it",
+  "wakeNeedsMac": "This device has no usable MAC address",
+  "notifications": "Notifications",
+  "notificationsHubSubtitle": "Get told when something changes while the app is closed",
+  "notifyInBackground": "Notify in the background",
+  "notifyInBackgroundHelp": "Checks the router periodically and tells you what changed",
+  "notifyPermissionDenied": "Android refused the notification permission. Grant it in system settings, then try again.",
+  "notifyAbout": "Tell me about",
+  "notifyWanDown": "Internet goes down",
+  "notifyWanUp": "Internet comes back",
+  "notifyRebooted": "The router restarts",
+  "notifyClientJoined": "A new device joins",
+  "notifyIntervalNote": "Android will not run background checks more often than every 15 minutes, and may delay them further to save battery.",
+  "notifyAwayNote": "Checks only work on the router’s network. Away from home they are skipped rather than reported as an outage."
 }

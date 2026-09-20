@@ -17,10 +17,14 @@ class InterfacesScreen extends ConsumerStatefulWidget {
   final String? scrollToInterface;
   final VoidCallback? onScrollComplete;
 
+  /// True when pushed as its own route rather than shown as a tab root.
+  final bool showBack;
+
   const InterfacesScreen({
     super.key,
     this.scrollToInterface,
     this.onScrollComplete,
+    this.showBack = false,
   });
 
   @override
@@ -413,7 +417,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     final appState = ref.read(appStateProvider);
 
     return Scaffold(
-      appBar: LuciAppBar(title: context.l10n.interfaces),
+      appBar: LuciAppBar(
+        title: context.l10n.interfaces,
+        showBack: widget.showBack,
+      ),
       body: SafeArea(
         top: true,
         bottom: false,
@@ -1427,26 +1434,6 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     } else {
       return '${iface.protocol} • $shown';
     }
-  }
-}
-
-class LuciSectionHeader extends StatelessWidget {
-  final String title;
-  const LuciSectionHeader(this.title, {super.key});
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-      child: Text(
-        title,
-        style: theme.textTheme.titleMedium?.copyWith(
-          color: theme.colorScheme.onSurface,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
-        ),
-      ),
-    );
   }
 }
 

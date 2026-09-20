@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
-import 'package:dio/io.dart';
 import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/services/router_service.dart';
 import 'package:luci_mobile/services/throughput_service.dart';
@@ -21,6 +19,9 @@ import 'package:luci_mobile/config/app_config.dart';
 import 'package:luci_mobile/utils/http_client_manager.dart';
 import 'package:luci_mobile/utils/logger.dart';
 import 'package:luci_mobile/models/wifi_scan_result.dart';
+import 'package:luci_mobile/navigation/luci_tab.dart';
+import 'package:luci_mobile/services/router_liveness_probe.dart';
+import 'package:luci_mobile/state/router_session.dart';
 
 class AppState extends ChangeNotifier {
   static AppState? _instance;
@@ -32,6 +33,7 @@ class AppState extends ChangeNotifier {
   RouterService? _routerService;
   ThroughputService? _throughputService;
   final HttpClientManager _httpClientManager = HttpClientManager();
+  final IRouterLivenessProbe _livenessProbe = const RouterLivenessProbe();
 
   // Reviewer mode state
   bool _reviewerModeEnabled = false;
@@ -72,6 +74,13 @@ class AppState extends ChangeNotifier {
   // Guards against overlapping throughput polls on slow links.
   bool _throughputUpdateInFlight = false;
 
+  // Set while a UCI apply is awaiting confirmation. rpcd binds a pending
+  // rollback to the session id that called uci.apply, so any re-login during
+  // the confirm window makes uci.confirm fail and the router revert. While
+  // this is set, the throughput poll and the dashboard fetch (whose fallback
+  // path can re-login) stand down.
+  bool _criticalSection = false;
+
   // Set when dispose() runs; suppresses late async notifications.
   bool _isDisposed = false;
 
@@ -108,12 +117,13 @@ class AppState extends ChangeNotifier {
 
   VoidCallback? onRouterBackOnline;
 
-  // Add requestedTab for programmatic tab switching
-  int? requestedTab;
+  // Programmatic tab switching, by name rather than index: the positions
+  // shifted when the shell grew a fifth destination.
+  LuciTab? requestedTab;
   String? requestedInterfaceToScroll;
 
-  void requestTab(int index, {String? interfaceToScroll}) {
-    requestedTab = index;
+  void requestTab(LuciTab tab, {String? interfaceToScroll}) {
+    requestedTab = tab;
     requestedInterfaceToScroll = interfaceToScroll;
     notifyListeners();
   }
@@ -316,6 +326,57 @@ class AppState extends ChangeNotifier {
   }
 
   String? get sysauth => _authService?.sysauth;
+
+  /// Monotonic counter bumped on login, router switch and logout. Async work
+  /// captures it before awaiting and discards its result if it no longer
+  /// matches.
+  int get sessionToken => _sessionToken;
+
+  /// The API service for the active mode (real or reviewer mock).
+  ///
+  /// Feature modules share this instance rather than building their own from
+  /// `ServiceContainer`, so that stateful mocks stay consistent with writes
+  /// made through `AppState`.
+  IApiService? get apiService => _apiService;
+
+  /// The current authenticated connection as a value object, or null when
+  /// there is no usable session.
+  ///
+  /// Feature modules watch this instead of reading the individual auth fields,
+  /// so that any change of router or credentials invalidates their state
+  /// automatically. See `RouterSession`.
+  RouterSession? get currentSession {
+    final router = _routerService?.selectedRouter;
+    final address = _authService?.ipAddress;
+    final token = _authService?.sysauth;
+
+    // Reviewer mode is served entirely by mocks and may have no saved router
+    // at all; synthesize a session so mock-backed screens still render.
+    if (reviewerModeEnabled) {
+      return RouterSession(
+        routerId: router?.id ?? RouterSession.reviewerRouterId,
+        ipAddress: address ?? router?.activeAddress ?? '192.168.1.1',
+        sysauth: token ?? RouterSession.reviewerRouterId,
+        useHttps: _authService?.useHttps ?? false,
+        token: _sessionToken,
+        reviewerMode: true,
+      );
+    }
+
+    if (token == null || token.isEmpty) return null;
+    if (address == null || address.isEmpty) return null;
+
+    return RouterSession(
+      routerId: router?.id ?? address,
+      ipAddress: address,
+      sysauth: token,
+      useHttps: _authService?.useHttps ?? false,
+      token: _sessionToken,
+      fallbackAddress: router?.inactiveAddress,
+      fallbackUseHttps: router?.inactiveUseHttps,
+    );
+  }
+
   bool get isAuthenticated => _authService?.isAuthenticated ?? false;
   bool get hasRouters =>
       _routerService != null && _routerService!.routers.isNotEmpty;
@@ -633,6 +694,13 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> fetchDashboardData({bool isRetryAfterFallback = false}) async {
+    // A UCI apply is awaiting confirmation. This fetch's fallback path can
+    // re-login, which would invalidate the session the pending rollback is
+    // bound to and make the router revert the change.
+    if (_criticalSection) {
+      return;
+    }
+
     if (_reviewerModeEnabled) {
       // For reviewer mode, return mock data immediately
       _isDashboardLoading = true;
@@ -1196,6 +1264,10 @@ class AppState extends ChangeNotifier {
     if (_isRebooting) {
       return;
     }
+    // Nor while a UCI apply is awaiting confirmation.
+    if (_criticalSection) {
+      return;
+    }
     _throughputTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
       _updateThroughputOnly();
     });
@@ -1205,6 +1277,12 @@ class AppState extends ChangeNotifier {
   Future<void> _updateThroughputOnly() async {
     // Don't try to update throughput during reboot
     if (_isRebooting) {
+      return;
+    }
+
+    // Nor while a UCI apply is awaiting confirmation - an extra request can
+    // cost the session that the pending rollback is bound to.
+    if (_criticalSection) {
       return;
     }
 
@@ -1345,6 +1423,32 @@ class AppState extends ChangeNotifier {
   void _cancelThroughputTimer() {
     _throughputTimer?.cancel();
     _throughputService?.clear();
+  }
+
+  /// Whether a session-bound operation (a UCI apply awaiting confirmation) is
+  /// in progress. While true, background polling and the dashboard's
+  /// re-login-on-failure path are suppressed.
+  bool get isInCriticalSection => _criticalSection;
+
+  /// Suspends background router traffic for the duration of a session-bound
+  /// operation. Always pair with [endCriticalSection].
+  void beginCriticalSection() {
+    if (_criticalSection) return;
+    _criticalSection = true;
+    _throughputTimer?.cancel();
+    notifyListeners();
+  }
+
+  /// Resumes background traffic. Pass `refresh: false` when the caller will
+  /// re-establish the session itself (for example after a rollback).
+  Future<void> endCriticalSection({bool refresh = true}) async {
+    if (!_criticalSection) return;
+    _criticalSection = false;
+    notifyListeners();
+    if (refresh) {
+      await fetchDashboardData();
+      _startThroughputTimer();
+    }
   }
 
   Future<bool> reboot({BuildContext? context}) async {
@@ -1537,98 +1641,13 @@ class AppState extends ChangeNotifier {
       _httpClientManager.disposeClient(targetIp, targetUseHttps);
     }
 
-    // Try multiple endpoints in order
-    final scheme = targetUseHttps ? 'https' : 'http';
-    final endpoints = [
-      '/', // Root
-      '/cgi-bin/luci/', // LuCI login page
-      '/cgi-bin/luci/admin', // Admin page
-    ];
-
-    for (final endpoint in endpoints) {
-      // Create a fresh Dio client for pinging to avoid certificate/connection
-      // issues; declared outside try so finally can always close it.
-      final dio = Dio(
-        BaseOptions(
-          connectTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 5),
-          sendTimeout: const Duration(seconds: 5),
-          followRedirects: false,
-          validateStatus: (code) => code != null && code >= 200 && code < 500,
-        ),
-      );
-      try {
-        // Build the URI structurally: string interpolation produces an
-        // invalid authority for IPv6 literals (missing brackets), while
-        // Uri host handling adds them automatically. Persisted addresses
-        // may hold unbracketed IPv6 literals (2+ colons) - bracket them
-        // first or the authority parse throws and every probe fails.
-        var authorityInput = targetIp;
-        if (!authorityInput.startsWith('[') &&
-            ':'.allMatches(authorityInput).length > 1) {
-          authorityInput = '[$authorityInput]';
-        }
-        final authority = Uri.parse('//$authorityInput');
-        final uri = Uri(
-          scheme: scheme,
-          host: authority.host,
-          port: authority.hasPort ? authority.port : null,
-          path: endpoint,
-        );
-
-        if (targetUseHttps) {
-          final adapter = IOHttpClientAdapter();
-          adapter.createHttpClient = () {
-            final httpClient = HttpClient();
-            httpClient.connectionTimeout = const Duration(seconds: 5);
-            // Liveness probe only - no credentials are sent, but still prefer
-            // an already-pinned certificate when we have one.
-            httpClient.badCertificateCallback = (cert, host, port) {
-              return HttpClientManager().isCertificatePinned(host, port, cert);
-            };
-            return httpClient;
-          };
-          dio.httpClientAdapter = adapter;
-        }
-
-        // print('[Ping] Attempt $_pollAttempts: Checking $url');
-        final response = await dio.getUri(uri);
-        // print('[Ping] Response from $endpoint: ${response.statusCode}');
-
-        // Accept various status codes as "alive"
-        final isAlive =
-            response.statusCode != null &&
-            response.statusCode! >= 200 &&
-            response.statusCode! < 500;
-
-        if (isAlive) {
-          if (_pollAttempts > 5) {
-            // If we've been polling for a while and get a response,
-            // wait a bit more to ensure services are fully started
-            await Future.delayed(const Duration(seconds: 5));
-          }
-          return true;
-        }
-      } catch (e) {
-        // Try next endpoint
-        if (endpoint == endpoints.last) {
-          // print('[Ping] All endpoints failed on attempt $_pollAttempts');
-          // print('[Ping] Last error: ${e.toString()}');
-
-          if (e is SocketException) {
-            // print('[Ping] Socket error: ${e.message}, OS Error: ${e.osError}');
-          } else if (e is HandshakeException) {
-            // print('[Ping] SSL handshake error - router may still be starting');
-          }
-        }
-      } finally {
-        // Each attempt uses its own throwaway client; close it so repeated
-        // polls don't retain adapters and sockets until process shutdown.
-        dio.close(force: true);
-      }
+    final alive = await _livenessProbe.isReachable(targetIp, targetUseHttps);
+    if (alive && _pollAttempts > 5) {
+      // If we've been polling for a while and get a response, wait a bit
+      // more to ensure services are fully started.
+      await Future.delayed(const Duration(seconds: 5));
     }
-
-    return false;
+    return alive;
   }
 
   Future<bool> checkRouterAvailability() async {
@@ -2920,6 +2939,21 @@ class AppState extends ChangeNotifier {
   }
 
   /// Returns clients for the currently selected router only
+  /// Stamps clients with the router they came from.
+  ///
+  /// Only the selected-router fetch can do this safely; the aggregated fetch
+  /// merges several routers and loses provenance for wireless-only entries,
+  /// which stay unstamped so the detail page refuses to write to them.
+  List<Client> _stampSelectedRouter(List<Client> clients) {
+    final router = _routerService?.selectedRouter;
+    final id = router?.id ?? currentSession?.routerId;
+    if (id == null) return clients;
+    final label = router?.lastKnownHostname ?? router?.activeAddress;
+    return [
+      for (final c in clients) c.copyWith(routerId: id, routerLabel: label),
+    ];
+  }
+
   Future<List<Client>> fetchClientsForSelectedRouter() async {
     try {
       if (_reviewerModeEnabled) {
@@ -2960,7 +2994,7 @@ class AppState extends ChangeNotifier {
             clientMap[mac] = Client.fromWirelessStation(mac);
           }
         }
-        final reviewerClients = clientMap.values.toList();
+        final reviewerClients = _stampSelectedRouter(clientMap.values.toList());
         _sortClients(reviewerClients);
         return reviewerClients;
       }
@@ -3065,7 +3099,7 @@ class AppState extends ChangeNotifier {
       // Enrich with GL.iNet data
       _enrichClientsWithGlInet(clientMap);
 
-      final clients = clientMap.values.toList();
+      final clients = _stampSelectedRouter(clientMap.values.toList());
       _sortClients(clients);
       return clients;
     } catch (e, stack) {
@@ -3229,7 +3263,13 @@ class AppState extends ChangeNotifier {
           final data = result[1] as Map<String, dynamic>;
           final leases = (data['dhcp_leases'] as List<dynamic>? ?? [])
               .cast<Map<String, dynamic>>();
-          return leases;
+          final routerId = currentSession?.routerId;
+          if (routerId == null) return leases;
+          return leases
+              .map(
+                (lease) => <String, dynamic>{...lease, '_routerId': routerId},
+              )
+              .toList();
         }
         return [];
       }
@@ -3266,7 +3306,18 @@ class AppState extends ChangeNotifier {
               final leases = (data['dhcp_leases'] as List<dynamic>? ?? [])
                   .cast<Map<String, dynamic>>();
               successfulRouters++;
-              return leases;
+              // Record which router answered. Dedup below keeps one entry per
+              // MAC+IP, so without this the detail page cannot tell which
+              // router to write a reservation or block rule to.
+              return leases
+                  .map(
+                    (lease) => <String, dynamic>{
+                      ...lease,
+                      '_routerId': r.id,
+                      '_routerLabel': r.lastKnownHostname ?? r.activeAddress,
+                    },
+                  )
+                  .toList();
             }
             throw const RpcException(
               object: 'luci-rpc',

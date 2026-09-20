@@ -1,0 +1,282 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:luci_mobile/models/uci_change.dart';
+import 'package:luci_mobile/models/wireless_config.dart';
+import 'package:luci_mobile/services/wireless_planner.dart';
+
+final _config = <String, dynamic>{
+  'radio0': {
+    '.type': 'wifi-device',
+    '.name': 'radio0',
+    'band': '2g',
+    'channel': '6',
+    'htmode': 'HT20',
+    'country': 'DE',
+    'disabled': '0',
+  },
+  'radio1': {
+    '.type': 'wifi-device',
+    '.name': 'radio1',
+    'hwmode': '11a', // pre-`band` config
+    'channel': 'auto',
+    'htmode': 'VHT80',
+    'disabled': '1',
+  },
+  'default_radio0': {
+    '.type': 'wifi-iface',
+    '.name': 'default_radio0',
+    'device': 'radio0',
+    'mode': 'ap',
+    'ssid': 'Home',
+    'encryption': 'psk2+ccmp',
+    'key': 'supersecret',
+    'network': ['lan'],
+  },
+  'guest': {
+    '.type': 'wifi-iface',
+    '.name': 'guest',
+    'device': 'radio0',
+    'mode': 'ap',
+    'ssid': 'Guests',
+    'encryption': 'none',
+    'network': 'guest',
+    'isolate': '1',
+    'hidden': '1',
+  },
+  'backhaul': {
+    '.type': 'wifi-iface',
+    '.name': 'backhaul',
+    'device': 'radio1',
+    'mode': 'sta',
+    'ssid': 'Upstream',
+    'encryption': 'sae',
+    'key': 'meshpass1',
+  },
+};
+
+void main() {
+  group('parsing', () {
+    test('groups SSIDs under the radio that hosts them', () {
+      final radios = WirelessPlanner.parse(_config);
+      expect(radios, hasLength(2));
+
+      final r0 = radios.firstWhere((r) => r.section == 'radio0');
+      expect(r0.band, '2g');
+      expect(r0.label, '2.4 GHz');
+      expect(r0.channel, '6');
+      expect(r0.disabled, isFalse);
+      expect(r0.networks.map((n) => n.ssid), ['Home', 'Guests']);
+
+      final r1 = radios.firstWhere((r) => r.section == 'radio1');
+      expect(r1.disabled, isTrue);
+      expect(r1.networks.single.mode, 'sta');
+    });
+
+    // Older configs predate the `band` option; falling back to `hwmode` keeps
+    // the channel and width pickers correct on them.
+    test('falls back to hwmode when band is absent', () {
+      final r1 = WirelessPlanner.parse(
+        _config,
+      ).firstWhere((r) => r.section == 'radio1');
+      expect(r1.band, '5g');
+      expect(r1.label, '5 GHz');
+    });
+
+    test('reads network membership as a list either way it is stored', () {
+      final radios = WirelessPlanner.parse(_config);
+      final home = radios[0].networks.firstWhere((n) => n.ssid == 'Home');
+      final guest = radios[0].networks.firstWhere((n) => n.ssid == 'Guests');
+      expect(home.network, ['lan']); // stored as a list
+      expect(guest.network, ['guest']); // stored as a string
+    });
+
+    test('recognises a guest network by isolation and membership', () {
+      final radios = WirelessPlanner.parse(_config);
+      final home = radios[0].networks.firstWhere((n) => n.ssid == 'Home');
+      final guest = radios[0].networks.firstWhere((n) => n.ssid == 'Guests');
+      expect(guest.looksLikeGuest, isTrue);
+      expect(guest.hidden, isTrue);
+      expect(home.looksLikeGuest, isFalse);
+    });
+  });
+
+  group('security mapping', () {
+    test('strips the cipher suffix UCI carries', () {
+      expect(WirelessSecurity.fromUci('psk2+ccmp'), WirelessSecurity.wpa2);
+      expect(WirelessSecurity.fromUci('sae'), WirelessSecurity.wpa3);
+      expect(WirelessSecurity.fromUci('sae-mixed'), WirelessSecurity.wpa2wpa3);
+      expect(WirelessSecurity.fromUci('none'), WirelessSecurity.none);
+      expect(WirelessSecurity.fromUci('owe'), WirelessSecurity.owe);
+    });
+
+    // Editing an EAP network here would silently drop its RADIUS settings,
+    // so enterprise must not map onto an offered choice.
+    test('enterprise modes are not offered as a choice', () {
+      expect(WirelessSecurity.fromUci('wpa2+ccmp'), isNull);
+      expect(WirelessSecurity.isEnterprise('wpa2+ccmp'), isTrue);
+      expect(WirelessSecurity.isEnterprise('wpa3'), isTrue);
+      expect(WirelessSecurity.isEnterprise('psk2+ccmp'), isFalse);
+    });
+
+    test('only PSK/SAE modes ask for a passphrase', () {
+      expect(WirelessSecurity.wpa2.needsPassphrase, isTrue);
+      expect(WirelessSecurity.wpa3.needsPassphrase, isTrue);
+      expect(WirelessSecurity.none.needsPassphrase, isFalse);
+      // OWE encrypts without a shared secret.
+      expect(WirelessSecurity.owe.needsPassphrase, isFalse);
+    });
+  });
+
+  group('validation', () {
+    // hostapd refuses anything outside 8-63 and the radio then fails to come
+    // up, which looks to the user like the app broke their Wi-Fi.
+    test('passphrase length is bounded the way hostapd bounds it', () {
+      expect(WirelessPlanner.isValidPassphrase('short'), isFalse);
+      expect(WirelessPlanner.isValidPassphrase('12345678'), isTrue);
+      expect(WirelessPlanner.isValidPassphrase('x' * 63), isTrue);
+      expect(WirelessPlanner.isValidPassphrase('x' * 64), isFalse);
+    });
+
+    test('SSID is bounded in bytes, not characters', () {
+      expect(WirelessPlanner.isValidSsid(''), isFalse);
+      expect(WirelessPlanner.isValidSsid('a' * 32), isTrue);
+      expect(WirelessPlanner.isValidSsid('a' * 33), isFalse);
+      // Eight 4-byte emoji are 32 bytes: right at the limit.
+      expect(WirelessPlanner.isValidSsid('😀' * 8), isTrue);
+      expect(WirelessPlanner.isValidSsid('😀' * 9), isFalse);
+    });
+  });
+
+  group('planning', () {
+    WirelessNetwork home() => WirelessPlanner.parse(
+      _config,
+    )[0].networks.firstWhere((n) => n.ssid == 'Home');
+
+    test('toggling an SSID touches only its disabled flag', () {
+      final ops = WirelessPlanner.planSetEnabled(
+        network: home(),
+        enabled: false,
+      );
+      final set = ops.single as UciSet;
+      expect(set.config, 'wireless');
+      expect(set.section, 'default_radio0');
+      expect(set.values, {'disabled': '1'});
+    });
+
+    test('an edit writes ssid, encryption and passphrase together', () {
+      final ops = WirelessPlanner.planUpdateNetwork(
+        existing: home(),
+        ssid: 'NewName',
+        security: WirelessSecurity.wpa3,
+        passphrase: 'newpassphrase',
+        hidden: true,
+      );
+      final set = ops.first as UciSet;
+      expect(set.values['ssid'], 'NewName');
+      expect(set.values['encryption'], 'sae');
+      expect(set.values['key'], 'newpassphrase');
+      expect(set.values['hidden'], '1');
+    });
+
+    // A stale passphrase left in the config is readable by anyone who can see
+    // the config and misleading to anyone reading it.
+    test('switching to open removes the old key', () {
+      final ops = WirelessPlanner.planUpdateNetwork(
+        existing: home(),
+        ssid: 'Home',
+        security: WirelessSecurity.none,
+      );
+      expect(ops, hasLength(2));
+      expect((ops[0] as UciSet).values['encryption'], 'none');
+      expect((ops[0] as UciSet).values.containsKey('key'), isFalse);
+      final remove = ops[1] as UciRemove;
+      expect(remove.section, 'default_radio0');
+      expect(remove.option, 'key');
+    });
+
+    test('switching to open on a network with no key needs no removal', () {
+      final guest = WirelessPlanner.parse(
+        _config,
+      )[0].networks.firstWhere((n) => n.ssid == 'Guests');
+      final ops = WirelessPlanner.planUpdateNetwork(
+        existing: guest,
+        ssid: 'Guests',
+        security: WirelessSecurity.none,
+      );
+      expect(ops, hasLength(1));
+    });
+
+    test('a new SSID is added to the chosen radio in AP mode', () {
+      final radio = WirelessPlanner.parse(
+        _config,
+      ).firstWhere((r) => r.section == 'radio0');
+      final ops = WirelessPlanner.planCreateNetwork(
+        radio: radio,
+        ssid: 'Visitors',
+        security: WirelessSecurity.wpa2,
+        passphrase: 'guestpass1',
+        network: const ['guest'],
+        isolate: true,
+      );
+      final add = ops.single as UciAdd;
+      expect(add.config, 'wireless');
+      expect(add.type, 'wifi-iface');
+      expect(add.values['device'], 'radio0');
+      expect(add.values['mode'], 'ap');
+      expect(add.values['ssid'], 'Visitors');
+      expect(add.values['key'], 'guestpass1');
+      expect(add.values['network'], 'guest');
+      expect(add.values['isolate'], '1');
+    });
+
+    test('an open new SSID carries no key at all', () {
+      final radio = WirelessPlanner.parse(_config).first;
+      final add =
+          WirelessPlanner.planCreateNetwork(
+                radio: radio,
+                ssid: 'Open',
+                security: WirelessSecurity.none,
+                passphrase: 'ignored',
+              ).single
+              as UciAdd;
+      expect(add.values.containsKey('key'), isFalse);
+    });
+
+    test('a radio edit writes only the fields that changed', () {
+      final radio = WirelessPlanner.parse(_config).first;
+      final ops = WirelessPlanner.planUpdateRadio(radio: radio, channel: '11');
+      final set = ops.single as UciSet;
+      expect(set.values, {'channel': '11'});
+      expect(WirelessPlanner.planUpdateRadio(radio: radio), isEmpty);
+    });
+
+    test('deleting an SSID removes its section', () {
+      final ops = WirelessPlanner.planDeleteNetwork(home());
+      expect((ops.single as UciRemove).section, 'default_radio0');
+      expect((ops.single as UciRemove).option, isNull);
+    });
+  });
+
+  group('band-specific options', () {
+    // Offering 2.4 GHz channels on a 5 GHz radio produces a config the radio
+    // silently refuses to come up on.
+    test('channels and widths match the band', () {
+      expect(WirelessPlanner.channelsFor('2g'), contains('11'));
+      expect(WirelessPlanner.channelsFor('2g'), isNot(contains('36')));
+      expect(WirelessPlanner.channelsFor('5g'), contains('36'));
+      expect(WirelessPlanner.channelsFor('5g'), isNot(contains('11')));
+      expect(WirelessPlanner.htmodesFor('2g'), isNot(contains('VHT80')));
+      expect(WirelessPlanner.htmodesFor('5g'), contains('VHT80'));
+    });
+
+    test('auto is always the first channel offered', () {
+      for (final band in ['2g', '5g', '6g', null]) {
+        expect(
+          WirelessPlanner.channelsFor(band).first,
+          'auto',
+          reason: '$band',
+        );
+      }
+    });
+  });
+}

@@ -1,0 +1,197 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:luci_mobile/models/router_event.dart';
+import 'package:luci_mobile/services/background_monitor.dart';
+import 'package:luci_mobile/services/event_log.dart';
+
+final _at = DateTime.utc(2026, 9, 20, 12);
+
+RouterObservation obs({
+  bool reachable = true,
+  bool wanUp = true,
+  Set<String> clients = const {'AA:BB:CC:11:22:33'},
+}) =>
+    RouterObservation(reachable: reachable, wanUp: wanUp, clientMacs: clients);
+
+List<RouterEvent> notifiable(
+  RouterObservation? prev,
+  RouterObservation now, {
+  Set<RouterEventKind>? kinds,
+}) => BackgroundMonitor.notifiable(
+  previous: prev,
+  current: now,
+  routerId: 'r1',
+  at: _at,
+  kinds: kinds ?? notifiableKinds,
+);
+
+void main() {
+  group('deciding what is worth a notification', () {
+    // The whole point of the feature.
+    test('losing the internet is notified', () {
+      final events = notifiable(obs(), obs(wanUp: false));
+      expect(events.single.kind, RouterEventKind.wanDown);
+    });
+
+    test('a new device joining is notified', () {
+      final events = notifiable(obs(clients: const {}), obs());
+      expect(events.single.kind, RouterEventKind.clientJoined);
+    });
+
+    // The single most important rule here. A background poll that cannot
+    // reach the router almost always means the phone left the network, so
+    // notifying would fire every time the user walks out the front door.
+    test('an unreachable router is never notified', () {
+      final events = notifiable(
+        obs(),
+        obs(reachable: false, clients: const {}),
+      );
+      expect(events, isEmpty);
+    });
+
+    test('routerUnreachable is not in the notifiable set at all', () {
+      expect(
+        notifiableKinds.contains(RouterEventKind.routerUnreachable),
+        isFalse,
+      );
+    });
+
+    // A device leaving is normal and constant; it belongs in the feed, not
+    // on the lock screen.
+    test('a device leaving is not notified', () {
+      final events = notifiable(obs(), obs(clients: const {}));
+      expect(events, isEmpty);
+    });
+
+    test('the first poll of a session notifies nothing', () {
+      expect(notifiable(null, obs()), isEmpty);
+    });
+
+    test('an unchanged router notifies nothing', () {
+      expect(notifiable(obs(), obs()), isEmpty);
+    });
+
+    test('the user can narrow what is notified', () {
+      final events = notifiable(
+        obs(clients: const {}),
+        obs(wanUp: false),
+        kinds: const {RouterEventKind.wanDown},
+      );
+      expect(events.single.kind, RouterEventKind.wanDown);
+    });
+
+    test('turning every kind off notifies nothing', () {
+      expect(notifiable(obs(), obs(wanUp: false), kinds: const {}), isEmpty);
+    });
+  });
+
+  group('capping one poll', () {
+    RouterEvent event(RouterEventKind kind, String? subject) =>
+        RouterEvent(kind: kind, at: _at, routerId: 'r1', subject: subject);
+
+    test('a few events pass through untouched', () {
+      final events = [
+        event(RouterEventKind.clientJoined, 'a'),
+        event(RouterEventKind.clientJoined, 'b'),
+      ];
+      expect(BackgroundMonitor.capped(events), hasLength(2));
+    });
+
+    // Coming home wakes every device at once; a dozen "joined"
+    // notifications is a shade nobody reads again.
+    test('a flood is trimmed', () {
+      final events = [
+        for (var i = 0; i < 12; i++)
+          event(RouterEventKind.clientJoined, 'device$i'),
+      ];
+      expect(
+        BackgroundMonitor.capped(events),
+        hasLength(BackgroundMonitor.maxPerPoll),
+      );
+    });
+
+    // If something is dropped it must not be the thing that matters.
+    test('problems survive the trim, chatter does not', () {
+      final events = [
+        for (var i = 0; i < 6; i++)
+          event(RouterEventKind.clientJoined, 'device$i'),
+        event(RouterEventKind.wanDown, null),
+      ];
+      final kept = BackgroundMonitor.capped(events);
+      expect(kept.map((e) => e.kind), contains(RouterEventKind.wanDown));
+    });
+  });
+
+  group('the stored baseline', () {
+    StoredObservation stored(DateTime at) =>
+        StoredObservation(observation: obs(), at: at);
+
+    test('round-trips through JSON', () {
+      final back = StoredObservation.fromJson(
+        StoredObservation(
+          observation: const RouterObservation(
+            reachable: true,
+            wanUp: false,
+            clientMacs: {'AA:BB:CC:11:22:33'},
+            names: {'AA:BB:CC:11:22:33': 'Laptop'},
+          ),
+          at: _at,
+        ).toJson(),
+      );
+      expect(back, isNotNull);
+      expect(back!.observation.wanUp, isFalse);
+      expect(back.observation.clientMacs, {'AA:BB:CC:11:22:33'});
+      expect(back.observation.names['AA:BB:CC:11:22:33'], 'Laptop');
+      expect(back.at.isAtSameMomentAs(_at), isTrue);
+    });
+
+    test('a malformed entry is dropped rather than crashing the poll', () {
+      expect(StoredObservation.fromJson(const {}), isNull);
+      expect(StoredObservation.fromJson(const {'at': 'nonsense'}), isNull);
+    });
+
+    // After a long gap the client list has churned for reasons nobody wants
+    // notified; a fresh start is quieter and more honest.
+    test('an old baseline is stale', () {
+      expect(stored(_at).isStale(_at.add(const Duration(hours: 7))), isTrue);
+      expect(stored(_at).isStale(_at.add(const Duration(hours: 1))), isFalse);
+    });
+  });
+
+  group('the monitored router', () {
+    test('round-trips through JSON', () {
+      const router = MonitoredRouter(
+        id: 'r1',
+        ipAddress: '192.168.1.1',
+        username: 'root',
+        password: 'secret',
+        useHttps: true,
+      );
+      final back = MonitoredRouter.fromJson(router.toJson());
+      expect(back, isNotNull);
+      expect(back!.ipAddress, '192.168.1.1');
+      expect(back.useHttps, isTrue);
+      expect(back.password, 'secret');
+    });
+
+    test('an entry with no address is dropped', () {
+      expect(MonitoredRouter.fromJson(const {'id': 'r1'}), isNull);
+    });
+
+    test('a missing username falls back to root', () {
+      final back = MonitoredRouter.fromJson(const {
+        'id': 'r1',
+        'ipAddress': '192.168.1.1',
+      });
+      expect(back!.username, 'root');
+    });
+  });
+
+  test('the interval respects the platform floor', () {
+    // Asking for less is a promise Android will not keep.
+    expect(
+      BackgroundMonitor.minimumInterval.inMinutes,
+      greaterThanOrEqualTo(15),
+    );
+  });
+}

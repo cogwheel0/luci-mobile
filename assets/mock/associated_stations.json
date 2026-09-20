@@ -2,9 +2,7 @@
   "wlan0": [
     "aa:bb:cc:11:22:33",
     "aa:bb:cc:44:55:66",
-    "aa:bb:cc:77:88:99",
     "aa:bb:cc:12:34:56",
-    "aa:bb:cc:98:76:54",
     "bb:cc:dd:11:22:33",
     "bb:cc:dd:77:88:99",
     "bb:cc:dd:12:34:56",
@@ -24,7 +22,6 @@
     "cc:dd:ee:11:22:33",
     "cc:dd:ee:77:88:99",
     "cc:dd:ee:aa:bb:cc",
-    "cc:dd:ee:dd:ee:ff",
     "cc:dd:ee:12:34:56"
   ]
 }

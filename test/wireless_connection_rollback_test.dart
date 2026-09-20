@@ -75,7 +75,7 @@ class _FailingRestartApiService extends MockApiService {
     bool useHttps, {
     required String config,
     required String section,
-    required Map<String, String> values,
+    required Map<String, Object> values,
     BuildContext? context,
   }) async {
     calls.add('set $config.$section $values');

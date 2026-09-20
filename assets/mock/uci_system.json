@@ -1,0 +1,30 @@
+{
+  "values": {
+    "cfg01e48a": {
+      ".anonymous": true,
+      ".type": "system",
+      ".name": "cfg01e48a",
+      ".index": 0,
+      "hostname": "LuCIMobile",
+      "description": "Demo router",
+      "notes": "",
+      "timezone": "UTC",
+      "zonename": "UTC",
+      "ttylogin": "0",
+      "log_size": "64",
+      "urandom_seed": "0"
+    },
+    "ntp": {
+      ".anonymous": false,
+      ".type": "timeserver",
+      ".name": "ntp",
+      ".index": 1,
+      "enabled": "1",
+      "enable_server": "0",
+      "server": [
+        "0.openwrt.pool.ntp.org",
+        "1.openwrt.pool.ntp.org"
+      ]
+    }
+  }
+}

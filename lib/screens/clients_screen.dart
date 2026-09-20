@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/models/client.dart';
+import 'package:luci_mobile/screens/client_detail_screen.dart';
+import 'package:luci_mobile/state/event_feed_notifier.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
@@ -27,6 +31,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
   bool _aggregateAllRouters = true;
   Future<List<Client>>? _clientsFuture;
   String? _lastSelectedRouterId;
+  int _lastRouterCount = 0;
 
   @override
   void initState() {
@@ -43,14 +48,54 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     final initState = ref.read(appStateProvider);
     _aggregateAllRouters = initState.clientsAggregateAllRouters;
     _lastSelectedRouterId = initState.selectedRouter?.id;
+    _lastRouterCount = initState.routers.length;
     _computeClientsFuture();
   }
 
+  /// Whether there is actually a choice to make.
+  ///
+  /// With one saved router "All" and "Selected" return the same clients, so
+  /// the control is a switch between a thing and itself.
+  bool get _canAggregate => ref.read(appStateProvider).routers.length > 1;
+
   void _computeClientsFuture() {
     final appState = ref.read(appStateProvider);
-    _clientsFuture = _aggregateAllRouters
+    // Falls back to the cheaper single-router path when there is nothing to
+    // aggregate. The stored preference is left alone, so adding a second
+    // router later restores the user's choice rather than resetting it.
+    final fetch = _aggregateAllRouters && appState.routers.length > 1
         ? appState.fetchAggregatedClients()
         : appState.fetchClientsForSelectedRouter();
+
+    // The activity feed is derived from this poll rather than one of its own:
+    // it should cost the router nothing extra to know what changed.
+    _clientsFuture = fetch
+        .then((clients) {
+          unawaited(
+            ref
+                .read(eventFeedProvider.notifier)
+                .observe(
+                  reachable: true,
+                  dashboardData: appState.dashboardData,
+                  clients: clients,
+                ),
+          );
+          return clients;
+        })
+        .onError<Object>((error, stack) {
+          // A failed fetch is itself information: the router is not
+          // answering, which is exactly what the feed exists to record.
+          unawaited(
+            ref
+                .read(eventFeedProvider.notifier)
+                .observe(
+                  reachable: false,
+                  dashboardData: appState.dashboardData,
+                  clients: const [],
+                ),
+          );
+          Error.throwWithStackTrace(error, stack);
+        });
   }
 
   @override
@@ -67,8 +112,10 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     // Recompute future only when selected router changes
     Future<List<Client>>? future = _clientsFuture;
     final currentId = watchedAppState.selectedRouter?.id;
-    if (currentId != _lastSelectedRouterId) {
+    final routerCount = watchedAppState.routers.length;
+    if (currentId != _lastSelectedRouterId || routerCount != _lastRouterCount) {
       _lastSelectedRouterId = currentId;
+      _lastRouterCount = routerCount;
       _computeClientsFuture();
       future = _clientsFuture;
     }
@@ -202,46 +249,47 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                             ),
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0,
-                            vertical: 4.0,
-                          ),
-                          child: SegmentedButton<bool>(
-                            segments: [
-                              ButtonSegment<bool>(
-                                value: true,
-                                label: Text(context.l10n.all),
-                                icon: const Icon(Icons.apartment),
-                              ),
-                              ButtonSegment<bool>(
-                                value: false,
-                                label: Text(context.l10n.selected),
-                                icon: const Icon(Icons.router),
-                              ),
-                            ],
-                            selected: {_aggregateAllRouters},
-                            showSelectedIcon: false,
-                            style: SegmentedButton.styleFrom(
-                              visualDensity: VisualDensity.compact,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
+                        if (_canAggregate)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16.0,
+                              vertical: 4.0,
                             ),
-                            onSelectionChanged: (s) {
-                              setState(() {
-                                _aggregateAllRouters = s.first;
-                                _computeClientsFuture();
-                              });
-                              // Persist selection
-                              ref
-                                  .read(appStateProvider)
-                                  .setClientsAggregateAllRouters(
-                                    _aggregateAllRouters,
-                                  );
-                            },
+                            child: SegmentedButton<bool>(
+                              segments: [
+                                ButtonSegment<bool>(
+                                  value: true,
+                                  label: Text(context.l10n.all),
+                                  icon: const Icon(Icons.apartment),
+                                ),
+                                ButtonSegment<bool>(
+                                  value: false,
+                                  label: Text(context.l10n.selected),
+                                  icon: const Icon(Icons.router),
+                                ),
+                              ],
+                              selected: {_aggregateAllRouters},
+                              showSelectedIcon: false,
+                              style: SegmentedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                              ),
+                              onSelectionChanged: (s) {
+                                setState(() {
+                                  _aggregateAllRouters = s.first;
+                                  _computeClientsFuture();
+                                });
+                                // Persist selection
+                                ref
+                                    .read(appStateProvider)
+                                    .setClientsAggregateAllRouters(
+                                      _aggregateAllRouters,
+                                    );
+                              },
+                            ),
                           ),
-                        ),
                         Expanded(
                           child: filteredClients.isEmpty
                               ? LuciEmptyState(
@@ -292,6 +340,15 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                                               }
                                             });
                                           },
+                                          onOpenDetails: () =>
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      ClientDetailScreen(
+                                                        client: client,
+                                                      ),
+                                                ),
+                                              ),
                                         ),
                                       ),
                                     );
@@ -317,11 +374,13 @@ class _UnifiedClientCard extends StatefulWidget {
   final Client client;
   final bool isExpanded;
   final VoidCallback onTap;
+  final VoidCallback onOpenDetails;
 
   const _UnifiedClientCard({
     required this.client,
     required this.isExpanded,
     required this.onTap,
+    required this.onOpenDetails,
   });
 
   @override
@@ -385,7 +444,7 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
         child: Column(
           children: [
             InkWell(
-              onTap: widget.onTap,
+              onTap: widget.onOpenDetails,
               borderRadius: BorderRadius.circular(18.0),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -496,11 +555,16 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
                     ),
                     _buildConnectionTypeChip(context, widget.client),
                     const SizedBox(width: 8),
-                    Icon(
-                      widget.isExpanded ? Icons.expand_less : Icons.expand_more,
-                      color: colorScheme.onSurfaceVariant,
-                      size: 26,
-                      semanticLabel: widget.isExpanded
+                    IconButton(
+                      onPressed: widget.onTap,
+                      icon: Icon(
+                        widget.isExpanded
+                            ? Icons.expand_less
+                            : Icons.expand_more,
+                        color: colorScheme.onSurfaceVariant,
+                        size: 26,
+                      ),
+                      tooltip: widget.isExpanded
                           ? context.l10n.collapseDetails
                           : context.l10n.expandDetails,
                     ),

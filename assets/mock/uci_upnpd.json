@@ -1,0 +1,9 @@
+{
+  "values": {
+    "config": {
+      ".anonymous": true, ".type": "upnpd", ".name": "cfg013e14", ".index": 0,
+      "enabled": "1", "enable_natpmp": "1", "enable_upnp": "1",
+      "secure_mode": "1", "internal_iface": "lan", "port": "5000"
+    }
+  }
+}

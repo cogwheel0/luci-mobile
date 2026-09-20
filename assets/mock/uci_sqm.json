@@ -1,0 +1,11 @@
+{
+  "values": {
+    "eth1": {
+      ".anonymous": false, ".type": "queue", ".name": "eth1", ".index": 0,
+      "enabled": "1", "interface": "eth1",
+      "download": "85000", "upload": "10000",
+      "qdisc": "cake", "script": "piece_of_cake.qos",
+      "linklayer": "none"
+    }
+  }
+}

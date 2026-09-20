@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/main.dart';
+import 'package:luci_mobile/navigation/luci_tab.dart';
 import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/utils/url_parser.dart';
@@ -118,7 +119,7 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                         .addPostFrameCallback((_) {
                                           ref
                                               .read(appStateProvider)
-                                              .requestTab(0);
+                                              .requestTab(LuciTab.dashboard);
                                         });
                                   } finally {
                                     if (mounted) {
