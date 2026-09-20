@@ -87,14 +87,21 @@ class _TestAppState extends AppState {
 
 /// An in-memory stand-in; the real one needs platform channels.
 class _FakeStorage implements SecureStorageService {
+  _FakeStorage({this.failWritesTo});
+
   final Map<String, String> values = {};
+
+  /// A key whose writes throw, so the failure path can be exercised.
+  final String? failWritesTo;
 
   @override
   Future<String?> readValue(String key) async => values[key];
 
   @override
-  Future<void> writeValue(String key, String value) async =>
-      values[key] = value;
+  Future<void> writeValue(String key, String value) async {
+    if (key == failWritesTo) throw Exception('storage is full');
+    values[key] = value;
+  }
 
   @override
   Future<void> deleteValue(String key) async => values.remove(key);
@@ -232,6 +239,32 @@ void main() {
       expect(stored!.id, 'other');
       expect(stored.ipAddress, '10.0.0.1');
       expect(stored.password, 'other-password');
+    });
+
+    // Monitoring cannot work with a credential the router no longer accepts.
+    // Leaving the switch reading "on" is the silent failure the whole
+    // rotation exists to prevent.
+    test('a failed rotation switches monitoring off', () async {
+      final storage = _FakeStorage(failWritesTo: BackgroundKeys.router)
+        ..values[BackgroundKeys.enabled] = 'true'
+        ..values[BackgroundKeys.router] = jsonEncode(
+          const MonitoredRouter(
+            id: 'r1',
+            ipAddress: '192.168.1.1',
+            username: 'root',
+            password: 'old-password',
+            useHttps: false,
+          ).toJson(),
+        );
+      final h = _harness(_RecordingApi(), storage: storage);
+
+      final error = await h.container
+          .read(passwordMutationsProvider)
+          .change('new-password');
+
+      // The password change itself succeeded; only the side effect failed.
+      expect(error, isNull);
+      expect(storage.values[BackgroundKeys.enabled], 'false');
     });
 
     test('a transport failure leaves the saved credential alone', () async {
