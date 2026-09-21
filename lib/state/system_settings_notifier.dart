@@ -8,6 +8,7 @@ import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/services/background_monitor.dart';
 import 'package:luci_mobile/services/background_worker.dart';
 import 'package:luci_mobile/services/secure_storage_service.dart';
+import 'package:luci_mobile/services/client_config_planner.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/state/notifications_notifier.dart';
@@ -59,7 +60,7 @@ final systemSettingsProvider = FutureProvider<SystemSettings?>((ref) async {
     session.useHttps,
     config: 'system',
   );
-  final values = _values(raw);
+  final values = uciValuesOf(raw);
 
   // The first `system`-typed section is the one LuCI edits; its name is
   // generated, so it has to be discovered rather than assumed.
@@ -96,16 +97,6 @@ final systemSettingsProvider = FutureProvider<SystemSettings?>((ref) async {
     timezones: zones,
   );
 }, retry: (_, _) => null);
-
-Map<String, dynamic> _values(dynamic raw) {
-  if (raw is! List || raw.length < 2) return const {};
-  final data = raw[1];
-  if (data is! Map) return const {};
-  final values = data['values'];
-  return values is Map
-      ? Map<String, dynamic>.from(values)
-      : Map<String, dynamic>.from(data);
-}
 
 String _string(dynamic value) => value is String ? value : '';
 
@@ -155,9 +146,10 @@ List<UciOperation> planSystemSettings({
 
 /// A hostname the router will accept. An invalid one is not cosmetic: it can
 /// stop dnsmasq resolving names while leaving the router reachable, so the
-/// rollback timer would never fire.
+/// rollback timer would never fire. Same rule as a DHCP host name, so the
+/// same pattern.
 bool isValidHostname(String value) =>
-    RegExp(r'^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$').hasMatch(value);
+    ClientConfigPlanner.isValidHostname(value);
 
 final systemSettingsMutationsProvider = Provider<SystemSettingsMutations>(
   SystemSettingsMutations.new,

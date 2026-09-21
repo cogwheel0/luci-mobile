@@ -498,6 +498,7 @@
   "notifyInBackground": "Oznamovat na pozadí",
   "notifyInBackgroundHelp": "Pravidelně kontroluje router a hlásí změny",
   "notifyPermissionDenied": "Android odmítl oprávnění k oznámením. Udělte ho v nastavení systému a zkuste to znovu.",
+  "notifySchedulingFailed": "Toto zařízení aplikaci nedovolí kontrolovat router na pozadí, takže oznámení zůstávají vypnutá.",
   "notifyAbout": "Upozornit na",
   "notifyWanDown": "Výpadek internetu",
   "notifyWanUp": "Návrat internetu",

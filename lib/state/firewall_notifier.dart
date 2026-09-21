@@ -35,6 +35,13 @@ class FirewallState {
   }
 
   List<String> get zoneNames => [for (final z in zones) z.name];
+
+  /// Every section name this state knows about, so a new one can avoid them.
+  Set<String> get sectionNames => {
+    for (final z in zones) z.section,
+    for (final f in forwards) f.section,
+    for (final r in rules) r.section,
+  };
 }
 
 Future<Map<String, dynamic>> _configValues(
@@ -48,13 +55,7 @@ Future<Map<String, dynamic>> _configValues(
     session.useHttps,
     config: config,
   );
-  if (raw is! List || raw.length < 2) return const {};
-  final data = raw[1];
-  if (data is! Map) return const {};
-  final values = data['values'];
-  return values is Map
-      ? Map<String, dynamic>.from(values)
-      : Map<String, dynamic>.from(data);
+  return uciValuesOf(raw);
 }
 
 final firewallProvider = FutureProvider<FirewallState>((ref) async {

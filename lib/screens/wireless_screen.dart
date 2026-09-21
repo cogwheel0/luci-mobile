@@ -367,7 +367,11 @@ class _NetworkSheetState extends State<_NetworkSheet> {
             ssid: ssid,
             security: _security,
             passphrase: key,
-            network: _isolate ? const ['guest'] : const ['lan'],
+            // Isolation is an option on the AP itself. Attaching an isolated
+            // SSID to a `guest` network instead would leave it with no
+            // bridge and no DHCP on the many routers that have no such
+            // interface; the editor for an existing SSID does not move it
+            // either.
             hidden: _hidden,
             isolate: _isolate,
           )

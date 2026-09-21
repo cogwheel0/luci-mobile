@@ -160,6 +160,10 @@ class FirewallPlanner {
 
   // -------------------------------------------------------------- planning
 
+  /// [takenSections] are the section names already in the firewall config.
+  /// The new section is derived from [name], but rpcd's `uci.add` with an
+  /// existing name silently re-sets that section instead of creating one, so
+  /// a second "Plex" forward would have overwritten the first.
   static List<UciOperation> planCreatePortForward({
     required String name,
     required String sourceZone,
@@ -168,11 +172,12 @@ class FirewallPlanner {
     required String destPort,
     required String protocol,
     String destZone = 'lan',
+    Set<String> takenSections = const {},
   }) => [
     UciAdd(
       'firewall',
       type: 'redirect',
-      name: '$ownedPrefix${_slug(name)}',
+      name: uniqueSectionName(name, takenSections),
       values: {
         'name': name,
         'target': 'DNAT',
@@ -272,6 +277,16 @@ class FirewallPlanner {
   static List<UciOperation> planDeleteRoute(StaticRoute route) => [
     UciRemove('network', section: route.section),
   ];
+
+  /// An owned section name derived from [name] that is not in [taken].
+  static String uniqueSectionName(String name, Set<String> taken) {
+    final base = '$ownedPrefix${_slug(name)}';
+    if (!taken.contains(base)) return base;
+    for (var i = 2; ; i++) {
+      final candidate = '${base}_$i';
+      if (!taken.contains(candidate)) return candidate;
+    }
+  }
 
   /// A UCI-safe section suffix derived from a user-supplied name.
   static String _slug(String name) {

@@ -2,6 +2,22 @@ import 'package:luci_mobile/models/client_config.dart';
 import 'package:luci_mobile/models/station_info.dart';
 import 'package:luci_mobile/models/uci_change.dart';
 
+/// One IPv4 address an interface holds, from `network.interface dump`.
+class InterfaceSubnet {
+  const InterfaceSubnet({
+    required this.name,
+    required this.address,
+    required this.base,
+    required this.prefix,
+  });
+
+  /// The logical interface (`lan`, `guest`, …).
+  final String name;
+  final String address;
+  final List<int> base;
+  final int prefix;
+}
+
 /// Turns "reserve this IP" / "block this client" into UCI operations.
 ///
 /// Everything here is a pure function of already-fetched config, so the rules
@@ -124,6 +140,75 @@ class ClientConfigPlanner {
       );
     }
     return null;
+  }
+
+  /// The logical network (`lan`, `guest`, …) a client sits on, or null.
+  ///
+  /// Decided by the client, not by the router's interface order: each of
+  /// [addresses] is matched against the subnets in `network.interface dump`
+  /// ([interfaceDump]). [wirelessNetworks] is the `network` option of the
+  /// AP the client is associated to, which is the most direct evidence there
+  /// is and also covers a station with no address yet.
+  ///
+  /// Null when nothing matches. Guessing `lan` there would put a guest-VLAN
+  /// client's block rule in the wrong zone, where it blocks nothing.
+  static String? networkForClient({
+    required Map? interfaceDump,
+    Iterable<String> addresses = const [],
+    Iterable<String> wirelessNetworks = const [],
+  }) {
+    final subnets = interfaceSubnets(interfaceDump);
+    final bySubnet = <String>[];
+    for (final subnet in subnets) {
+      for (final address in addresses) {
+        final octets = _parseIpv4(address);
+        if (octets == null) continue;
+        if (_sameSubnet(octets, subnet.base, subnet.prefix)) {
+          bySubnet.add(subnet.name);
+        }
+      }
+    }
+    final known = {for (final s in subnets) s.name};
+    for (final network in wirelessNetworks) {
+      if (known.contains(network)) return network;
+    }
+    if (bySubnet.isNotEmpty) return bySubnet.first;
+    for (final network in wirelessNetworks) {
+      if (network.isNotEmpty) return network;
+    }
+    return null;
+  }
+
+  /// Every IPv4 subnet in a `network.interface dump`, in the dump's order.
+  static List<InterfaceSubnet> interfaceSubnets(Map? interfaceDump) {
+    final interfaces = interfaceDump?['interface'];
+    if (interfaces is! List) return const [];
+    final out = <InterfaceSubnet>[];
+    for (final iface in interfaces) {
+      if (iface is! Map) continue;
+      final name = iface['interface']?.toString();
+      if (name == null || name.isEmpty || name == 'loopback') continue;
+      final addrs = iface['ipv4-address'];
+      if (addrs is! List) continue;
+      for (final addr in addrs) {
+        if (addr is! Map) continue;
+        final base = _parseIpv4(addr['address']?.toString() ?? '');
+        final mask = addr['mask'];
+        final prefix = mask is int
+            ? mask
+            : int.tryParse(mask?.toString() ?? '');
+        if (base == null || prefix == null) continue;
+        out.add(
+          InterfaceSubnet(
+            name: name,
+            address: addr['address'].toString(),
+            base: base,
+            prefix: prefix,
+          ),
+        );
+      }
+    }
+    return out;
   }
 
   /// The firewall zone whose `network` list contains [network].

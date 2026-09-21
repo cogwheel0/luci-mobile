@@ -498,6 +498,7 @@
   "notifyInBackground": "Notifica in background",
   "notifyInBackgroundHelp": "Controlla il router periodicamente e segnala i cambiamenti",
   "notifyPermissionDenied": "Android ha rifiutato il permesso per le notifiche. Concedilo nelle impostazioni di sistema e riprova.",
+  "notifySchedulingFailed": "Questo dispositivo non consente all’app di controllare il router in background, quindi le notifiche restano disattivate.",
   "notifyAbout": "Avvisami per",
   "notifyWanDown": "Internet cade",
   "notifyWanUp": "Internet torna",

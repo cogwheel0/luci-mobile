@@ -27,16 +27,7 @@ final addonProvider = FutureProvider.family<List<AddonSection>, AddonSpec>((
     session.useHttps,
     config: spec.config,
   );
-  if (raw is! List || raw.length < 2) return const [];
-  final data = raw[1];
-  if (data is! Map) return const [];
-  final values = data['values'];
-  return AddonPlanner.sections(
-    spec,
-    values is Map
-        ? Map<String, dynamic>.from(values)
-        : Map<String, dynamic>.from(data),
-  );
+  return AddonPlanner.sections(spec, uciValuesOf(raw));
 }, retry: (_, _) => null);
 
 final addonMutationsProvider = Provider<AddonMutations>(AddonMutations.new);

@@ -590,6 +590,7 @@ class _ForwardSheetState extends State<_ForwardSheet> {
             destIp: _destIp.text.trim(),
             destPort: _destPort.text.trim(),
             protocol: _protocol,
+            takenSections: widget.state.sectionNames,
           )
         : FirewallPlanner.planUpdatePortForward(
             existing: widget.existing!,

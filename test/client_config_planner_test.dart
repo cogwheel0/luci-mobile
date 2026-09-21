@@ -434,4 +434,111 @@ void main() {
       expect(ClientConfigPlanner.planDhcpName(mac: _mac, name: null), isEmpty);
     });
   });
+
+  group('which network a client is on', () {
+    // `lan` deliberately first: the old code returned the first interface
+    // with an address, which put every guest-VLAN client in the lan zone.
+    final dump = <String, dynamic>{
+      'interface': [
+        {
+          'interface': 'loopback',
+          'ipv4-address': [
+            {'address': '127.0.0.1', 'mask': 8},
+          ],
+        },
+        {
+          'interface': 'wan',
+          'proto': 'dhcp',
+          'ipv4-address': [
+            {'address': '10.0.0.7', 'mask': 24},
+          ],
+        },
+        {
+          'interface': 'lan',
+          'proto': 'static',
+          'ipv4-address': [
+            {'address': '192.168.1.1', 'mask': 24},
+          ],
+        },
+        {
+          'interface': 'guest',
+          'proto': 'static',
+          'ipv4-address': [
+            {'address': '192.168.2.1', 'mask': '24'},
+          ],
+        },
+      ],
+    };
+
+    test('a guest client resolves to guest, not the first interface', () {
+      expect(
+        ClientConfigPlanner.networkForClient(
+          interfaceDump: dump,
+          addresses: const ['192.168.2.50'],
+        ),
+        'guest',
+      );
+    });
+
+    test('a lan client resolves to lan even with wan listed first', () {
+      expect(
+        ClientConfigPlanner.networkForClient(
+          interfaceDump: dump,
+          addresses: const ['192.168.1.50'],
+        ),
+        'lan',
+      );
+    });
+
+    test('an address on no interface subnet is unknown, not lan', () {
+      expect(
+        ClientConfigPlanner.networkForClient(
+          interfaceDump: dump,
+          addresses: const ['172.16.0.9', 'garbage'],
+        ),
+        isNull,
+      );
+      expect(ClientConfigPlanner.networkForClient(interfaceDump: dump), isNull);
+      expect(
+        ClientConfigPlanner.networkForClient(
+          interfaceDump: null,
+          addresses: const ['192.168.1.50'],
+        ),
+        isNull,
+      );
+    });
+
+    test('the AP the client is on outranks an address match', () {
+      expect(
+        ClientConfigPlanner.networkForClient(
+          interfaceDump: dump,
+          addresses: const ['192.168.1.50'],
+          wirelessNetworks: const ['guest'],
+        ),
+        'guest',
+      );
+    });
+
+    test('an AP on an interface the dump does not list still names it', () {
+      expect(
+        ClientConfigPlanner.networkForClient(
+          interfaceDump: dump,
+          wirelessNetworks: const ['iot'],
+        ),
+        'iot',
+      );
+    });
+
+    test('the matching subnet is reported with its prefix', () {
+      final guest = ClientConfigPlanner.interfaceSubnets(
+        dump,
+      ).firstWhere((s) => s.name == 'guest');
+      expect(guest.address, '192.168.2.1');
+      expect(guest.prefix, 24);
+      expect(
+        ClientConfigPlanner.interfaceSubnets(dump).map((s) => s.name),
+        isNot(contains('loopback')),
+      );
+    });
+  });
 }

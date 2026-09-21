@@ -268,6 +268,33 @@ void main() {
       expect(add.name, isNot(contains('__')));
     });
 
+    // rpcd's `uci.add` with a name that already exists re-sets that section
+    // instead of creating one, so a second "Plex" forward silently replaced
+    // the first.
+    test('a second forward with the same name gets its own section', () {
+      List<UciOperation> plan(Set<String> taken) =>
+          FirewallPlanner.planCreatePortForward(
+            name: 'Plex',
+            sourceZone: 'wan',
+            sourcePort: '1900',
+            destIp: '192.168.1.10',
+            destPort: '1900',
+            protocol: 'udp',
+            takenSections: taken,
+          );
+      expect((plan(const {}).single as UciAdd).name, 'luci_mobile_plex');
+      expect(
+        (plan(const {'luci_mobile_plex'}).single as UciAdd).name,
+        'luci_mobile_plex_2',
+      );
+      expect(
+        (plan(const {'luci_mobile_plex', 'luci_mobile_plex_2'}).single
+                as UciAdd)
+            .name,
+        'luci_mobile_plex_3',
+      );
+    });
+
     test('toggling a forward touches only its enabled flag', () {
       final fwd = FirewallPlanner.portForwards(_firewall).first;
       final set =

@@ -133,7 +133,17 @@ class UciChangeSet {
   /// [baseline] captured just before staging. Without the baseline, a stray
   /// row in a config we happen to be editing would be treated as ours and
   /// committed along with it.
-  UciChangeSet foreignTo(Set<String> ours, {UciChangeSet? baseline}) {
+  ///
+  /// [restaged] holds the keys of the rows this operation wrote. A baseline
+  /// row with one of those keys has been overwritten by ours — `uci.changes`
+  /// keeps one row per option — so it is not foreign. Without this, retrying
+  /// an edit whose failed attempt could not be reverted (the stock ACL denies
+  /// `uci.revert`) would be refused forever from the app.
+  UciChangeSet foreignTo(
+    Set<String> ours, {
+    UciChangeSet? baseline,
+    Set<String> restaged = const {},
+  }) {
     final out = <String, List<UciChange>>{};
     for (final entry in byConfig.entries) {
       if (!ours.contains(entry.key)) {
@@ -144,7 +154,8 @@ class UciChangeSet {
       final before = {for (final c in baseline.forConfig(entry.key)) c.key};
       final stale = [
         for (final change in entry.value)
-          if (before.contains(change.key)) change,
+          if (before.contains(change.key) && !restaged.contains(change.key))
+            change,
       ];
       if (stale.isNotEmpty) out[entry.key] = stale;
     }
@@ -172,6 +183,14 @@ class UciChangeSet {
 sealed class UciOperation {
   const UciOperation(this.config);
   final String config;
+
+  /// The [UciChange.key]s this operation shows up as in `uci.changes` once
+  /// staged. An anonymous [UciAdd] only knows its section after the router
+  /// has named it, hence [section].
+  Set<String> changeKeys({String? section});
+
+  static String _key(UciOp op, String section, [String? option]) =>
+      '${op.name}|$section|${option ?? ""}';
 }
 
 /// Assigns options on an existing section.
@@ -179,6 +198,12 @@ final class UciSet extends UciOperation {
   const UciSet(super.config, {required this.section, required this.values});
   final String section;
   final Map<String, String> values;
+
+  @override
+  Set<String> changeKeys({String? section}) => {
+    for (final option in values.keys)
+      UciOperation._key(UciOp.set, section ?? this.section, option),
+  };
 }
 
 /// Replaces a UCI list option (`list foo 'a'`) wholesale.
@@ -195,6 +220,14 @@ final class UciSetList extends UciOperation {
   final String section;
   final String option;
   final List<String> values;
+
+  // rpcd stages a list assignment as a delete of the option followed by one
+  // `list-add` per entry.
+  @override
+  Set<String> changeKeys({String? section}) => {
+    UciOperation._key(UciOp.remove, section ?? this.section, option),
+    UciOperation._key(UciOp.listAdd, section ?? this.section, option),
+  };
 }
 
 /// Creates a section. When [name] is null the router generates an anonymous
@@ -210,6 +243,17 @@ final class UciAdd extends UciOperation {
   final String type;
   final Map<String, dynamic> values;
   final String? name;
+
+  @override
+  Set<String> changeKeys({String? section}) {
+    final id = section ?? name;
+    if (id == null) return const {};
+    return {
+      UciOperation._key(UciOp.add, id),
+      for (final option in values.keys)
+        UciOperation._key(UciOp.set, id, option),
+    };
+  }
 }
 
 /// Removes a whole section, or one [option] of it.
@@ -217,4 +261,9 @@ final class UciRemove extends UciOperation {
   const UciRemove(super.config, {required this.section, this.option});
   final String section;
   final String? option;
+
+  @override
+  Set<String> changeKeys({String? section}) => {
+    UciOperation._key(UciOp.remove, section ?? this.section, option),
+  };
 }

@@ -38,11 +38,16 @@ Future<void> ensureScheduled({SecureStorageService? storage}) async {
   await schedulePoll(keepExisting: true);
 }
 
-/// Registers the periodic poll.
+/// Registers the periodic poll. Returns false when the platform refused.
 ///
 /// [keepExisting] leaves an already-scheduled task alone, so a restart does
 /// not reset its timer; the settings toggle replaces it instead.
-Future<void> schedulePoll({bool keepExisting = false}) async {
+///
+/// The result matters: iOS has no periodic tasks, and an initialise that
+/// failed leaves nothing to register with. A switch that turns on over a
+/// registration that never happened is exactly the silent failure the
+/// notifications screen exists to avoid.
+Future<bool> schedulePoll({bool keepExisting = false}) async {
   try {
     await Workmanager().registerPeriodicTask(
       BackgroundMonitor.taskName,
@@ -57,8 +62,10 @@ Future<void> schedulePoll({bool keepExisting = false}) async {
         networkType: NetworkType.connected,
       ),
     );
+    return true;
   } catch (e, stack) {
     Logger.exception('Scheduling the background poll failed', e, stack);
+    return false;
   }
 }
 
@@ -132,7 +139,7 @@ Future<void> runBackgroundPoll({
     jsonEncode(StoredObservation(observation: current, at: now).toJson()),
   );
 
-  final kinds = await _readKinds(store);
+  final kinds = await readNotificationKinds(store);
   final events = BackgroundMonitor.capped(
     BackgroundMonitor.notifiable(
       previous: baseline,
@@ -248,7 +255,13 @@ Future<StoredObservation?> _readObservation(
   }
 }
 
-Future<Set<RouterEventKind>> _readKinds(SecureStorageService store) async {
+/// The event kinds the user wants notified about.
+///
+/// Shared with the settings screen: the background poll and the foreground
+/// toggle must agree on what is stored, or the switches lie.
+Future<Set<RouterEventKind>> readNotificationKinds(
+  SecureStorageService store,
+) async {
   try {
     final raw = await store.readValue(BackgroundKeys.kinds);
     if (raw == null || raw.isEmpty) return notifiableKinds;

@@ -498,6 +498,7 @@
   "notifyInBackground": "Im Hintergrund benachrichtigen",
   "notifyInBackgroundHelp": "Prüft den Router regelmäßig und meldet Änderungen",
   "notifyPermissionDenied": "Android hat die Benachrichtigungsberechtigung verweigert. Erteile sie in den Systemeinstellungen und versuche es erneut.",
+  "notifySchedulingFailed": "Dieses Gerät erlaubt der App nicht, den Router im Hintergrund zu prüfen. Benachrichtigungen bleiben daher aus.",
   "notifyAbout": "Benachrichtigen bei",
   "notifyWanDown": "Internet fällt aus",
   "notifyWanUp": "Internet ist zurück",

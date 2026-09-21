@@ -24,13 +24,7 @@ final wirelessConfigProvider = FutureProvider<List<WirelessRadio>>((ref) async {
     session.useHttps,
     config: 'wireless',
   );
-  if (raw is! List || raw.length < 2) return const [];
-  final data = raw[1];
-  if (data is! Map) return const [];
-  final values = data['values'] is Map
-      ? Map<String, dynamic>.from(data['values'] as Map)
-      : Map<String, dynamic>.from(data);
-  return WirelessPlanner.parse(values);
+  return WirelessPlanner.parse(uciValuesOf(raw));
 }, retry: (_, _) => null);
 
 /// Applies wireless edits.

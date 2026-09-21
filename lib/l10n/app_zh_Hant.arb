@@ -498,6 +498,7 @@
   "notifyInBackground": "背景通知",
   "notifyInBackgroundHelp": "定期檢查路由器並告知變動",
   "notifyPermissionDenied": "Android 拒絕了通知權限。請在系統設定中授予後重試。",
+  "notifySchedulingFailed": "此裝置不允許應用程式在背景檢查路由器，因此通知維持關閉。",
   "notifyAbout": "通知我",
   "notifyWanDown": "斷線時",
   "notifyWanUp": "網路恢復時",

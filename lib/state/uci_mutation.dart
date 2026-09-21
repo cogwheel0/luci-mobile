@@ -60,6 +60,7 @@ Future<ApplyOutcome?> applyUciOperations(
           mode: mode,
           ours: ours,
           baseline: staged.baseline,
+          restaged: staged.keys,
           onPhase: onPhase,
         );
       }, context: context?.mounted == true ? context : null);
@@ -95,12 +96,18 @@ Future<ApplyOutcome?> applyUciOperations(
 /// router will not perform — and counting down to it in the UI — promises a
 /// safety net that is not there, which is worse than admitting there is
 /// none.
+///
+/// Only a *measured* denial drops the protection. A probe that failed or never
+/// ran says nothing about the router, and treating it as "no rollback" would
+/// commit irreversibly over a blip in connectivity.
 Future<ApplyMode> _applyMode(Ref ref) async {
   try {
     final caps = await ref.read(capabilitiesProvider.future);
-    return caps.of(RouterFeature.uciApplyRollback).available
-        ? ApplyMode.checked
-        : ApplyMode.unchecked;
+    final rollback = caps.of(RouterFeature.uciApplyRollback);
+    if (rollback.available) return ApplyMode.checked;
+    return rollback.reason == UnavailableReason.noPermission
+        ? ApplyMode.unchecked
+        : ApplyMode.checked;
   } catch (e, stack) {
     Logger.exception('Could not read rollback capability', e, stack);
     // Unknown capabilities already read as "probably allowed" elsewhere;

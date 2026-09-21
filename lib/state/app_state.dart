@@ -7,6 +7,7 @@ import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/services/router_service.dart';
 import 'package:luci_mobile/services/throughput_service.dart';
 import 'package:luci_mobile/models/client.dart';
+import 'package:luci_mobile/models/station_info.dart';
 import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/models/dashboard_preferences.dart';
 import 'package:luci_mobile/models/glinet_data.dart';
@@ -2929,14 +2930,14 @@ class AppState extends ChangeNotifier {
       }
 
       final normalizedWireless = wirelessMacs
-          .map((m) => m.toUpperCase().replaceAll('-', ':'))
+          .map(StationInfo.normalizeMac)
           .toSet();
 
       // Convert to Client models with connection type
       final clients = <String, Client>{}; // key by normalized MAC
       for (final lease in leases) {
         final client = Client.fromLease(lease);
-        final macNorm = client.macAddress.toUpperCase().replaceAll('-', ':');
+        final macNorm = StationInfo.normalizeMac(client.macAddress);
         final isWireless = normalizedWireless.contains(macNorm);
         // If confirmed wireless by assoclist, mark wireless; otherwise keep heuristic
         final enriched = isWireless
@@ -3005,13 +3006,11 @@ class AppState extends ChangeNotifier {
           );
         }
         // Normalize wireless MACs for consistent lookup
-        final normalizedMacs = macs
-            .map((m) => m.toUpperCase().replaceAll('-', ':'))
-            .toSet();
+        final normalizedMacs = macs.map(StationInfo.normalizeMac).toSet();
         final clientMap = <String, Client>{};
         for (final l in leases) {
           final c = Client.fromLease(l);
-          final macNorm = c.macAddress.toUpperCase().replaceAll('-', ':');
+          final macNorm = StationInfo.normalizeMac(c.macAddress);
           final isWireless = normalizedMacs.contains(macNorm);
           clientMap[macNorm] = isWireless
               ? c.copyWith(connectionType: ConnectionType.wireless)
@@ -3104,14 +3103,12 @@ class AppState extends ChangeNotifier {
       }
 
       // Normalize wireless MACs for consistent lookup
-      final normalizedWireless = wireless
-          .map((m) => m.toUpperCase().replaceAll('-', ':'))
-          .toSet();
+      final normalizedWireless = wireless.map(StationInfo.normalizeMac).toSet();
 
       final clientMap = <String, Client>{};
       for (final l in leases) {
         final c = Client.fromLease(l);
-        final macNorm = c.macAddress.toUpperCase().replaceAll('-', ':');
+        final macNorm = StationInfo.normalizeMac(c.macAddress);
         final isWireless = normalizedWireless.contains(macNorm);
         clientMap[macNorm] = isWireless
             ? c.copyWith(connectionType: ConnectionType.wireless)

@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +16,7 @@ import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/state/client_detail_notifier.dart';
 import 'package:luci_mobile/state/feature_providers.dart';
+import 'package:luci_mobile/utils/format_bytes.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_feature_gate.dart';
 import 'package:luci_mobile/widgets/luci_apply_progress.dart';
@@ -329,7 +328,6 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     if (ops.isEmpty) return;
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
-    final l10n = context.l10n;
     final progress = ApplyProgress();
     try {
       // The dialog stays up for the whole rollback window, counting down. The
@@ -344,30 +342,11 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       );
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text(_outcomeMessage(l10n, outcome))),
+        SnackBar(content: Text(applyOutcomeMessage(context, outcome))),
       );
     } finally {
       progress.dispose();
       if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  String _outcomeMessage(dynamic l10n, ApplyOutcome? outcome) {
-    if (outcome == null) return l10n.changeFailed as String;
-    switch (outcome.phase) {
-      case ApplyPhase.confirmed:
-        return l10n.changeApplied as String;
-      case ApplyPhase.rolledBack:
-        // Only claim a revert when the router told us it was unreachable and
-        // the rollback window lapsed. A confirm that came back "no data" does
-        // NOT prove a revert happened - measured against stock OpenWrt 24.10,
-        // the change stayed committed in exactly that case - so say what we
-        // actually know and let the reloaded page show the truth.
-        return outcome.reason == RollbackReason.deadlineMissed
-            ? l10n.changeUnconfirmed as String
-            : l10n.changeRolledBack as String;
-      default:
-        return l10n.changeFailed as String;
     }
   }
 }
@@ -474,16 +453,6 @@ class _TrafficCard extends StatelessWidget {
         (context.l10n.uploaded, formatBytes(station.txBytes!)),
     ],
   );
-
-  static String formatBytes(int bytes) {
-    if (bytes <= 0) return '0 B';
-    const suffixes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    final i = (math.log(bytes) / math.log(1024)).floor().clamp(
-      0,
-      suffixes.length - 1,
-    );
-    return '${(bytes / math.pow(1024, i)).toStringAsFixed(1)} ${suffixes[i]}';
-  }
 }
 
 class _AddressesCard extends StatelessWidget {

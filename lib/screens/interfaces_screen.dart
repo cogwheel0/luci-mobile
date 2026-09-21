@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/main.dart';
@@ -5,13 +7,13 @@ import 'package:flutter/services.dart';
 import 'package:luci_mobile/models/glinet_data.dart';
 import 'package:luci_mobile/models/interface.dart';
 import 'package:luci_mobile/utils/wifi_utils.dart';
-import 'dart:math';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
 import 'package:luci_mobile/widgets/luci_refresh_components.dart';
 import 'package:luci_mobile/screens/wifi_scan_screen.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/utils/format_bytes.dart';
 
 class InterfacesScreen extends ConsumerStatefulWidget {
   final String? scrollToInterface;
@@ -1336,27 +1338,20 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
   }
 
   Widget _buildStatsRow(BuildContext context, Map<String, dynamic> stats) {
-    String formatBytes(int bytes) {
-      if (bytes <= 0) return '0 B';
-      const suffixes = ["B", "KB", "MB", "GB", "TB"];
-      var i = (log(bytes) / log(1024)).floor();
-      return '${(bytes / pow(1024, i)).toStringAsFixed(2)} ${suffixes[i]}';
-    }
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         _buildStatColumn(
           context,
           context.l10n.received,
-          formatBytes(stats['rx_bytes'] ?? 0),
+          formatBytes(stats['rx_bytes'] ?? 0, decimals: 2),
           Icons.arrow_downward,
           Colors.green,
         ),
         _buildStatColumn(
           context,
           context.l10n.transmitted,
-          formatBytes(stats['tx_bytes'] ?? 0),
+          formatBytes(stats['tx_bytes'] ?? 0, decimals: 2),
           Icons.arrow_upward,
           Colors.blue,
         ),

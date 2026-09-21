@@ -9,7 +9,6 @@ import 'package:luci_mobile/services/background_worker.dart';
 import 'package:luci_mobile/services/notification_service.dart';
 import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
-import 'package:luci_mobile/utils/logger.dart';
 
 @immutable
 class NotificationSettings {
@@ -17,6 +16,7 @@ class NotificationSettings {
     this.enabled = false,
     this.kinds = notifiableKinds,
     this.permissionDenied = false,
+    this.schedulingFailed = false,
   });
 
   final bool enabled;
@@ -26,14 +26,22 @@ class NotificationSettings {
   /// worth saying, because otherwise the switch is on and nothing arrives.
   final bool permissionDenied;
 
+  /// True when the permission was granted but the platform would not
+  /// register the background poll (iOS has no periodic tasks). Same reason
+  /// to say so: the switch would otherwise read "on" over a poll that never
+  /// runs.
+  final bool schedulingFailed;
+
   NotificationSettings copyWith({
     bool? enabled,
     Set<RouterEventKind>? kinds,
     bool? permissionDenied,
+    bool? schedulingFailed,
   }) => NotificationSettings(
     enabled: enabled ?? this.enabled,
     kinds: kinds ?? this.kinds,
     permissionDenied: permissionDenied ?? this.permissionDenied,
+    schedulingFailed: schedulingFailed ?? this.schedulingFailed,
   );
 }
 
@@ -53,24 +61,10 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
   @override
   Future<NotificationSettings> build() async {
     final enabled = await _store.readValue(BackgroundKeys.enabled) == 'true';
-    return NotificationSettings(enabled: enabled, kinds: await _readKinds());
-  }
-
-  Future<Set<RouterEventKind>> _readKinds() async {
-    try {
-      final raw = await _store.readValue(BackgroundKeys.kinds);
-      if (raw == null || raw.isEmpty) return notifiableKinds;
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return notifiableKinds;
-      final names = {for (final n in decoded) n.toString()};
-      return {
-        for (final kind in notifiableKinds)
-          if (names.contains(kind.name)) kind,
-      };
-    } catch (e, stack) {
-      Logger.exception('Reading notification kinds failed', e, stack);
-      return notifiableKinds;
-    }
+    return NotificationSettings(
+      enabled: enabled,
+      kinds: await readNotificationKinds(_store),
+    );
   }
 
   Future<void> setEnabled(bool enabled) async {
@@ -80,7 +74,11 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
       await _store.writeValue(BackgroundKeys.enabled, 'false');
       await _cancel();
       state = AsyncValue.data(
-        current.copyWith(enabled: false, permissionDenied: false),
+        current.copyWith(
+          enabled: false,
+          permissionDenied: false,
+          schedulingFailed: false,
+        ),
       );
       return;
     }
@@ -92,16 +90,36 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
         .requestPermission();
     if (!granted) {
       state = AsyncValue.data(
-        current.copyWith(enabled: false, permissionDenied: true),
+        current.copyWith(
+          enabled: false,
+          permissionDenied: true,
+          schedulingFailed: false,
+        ),
       );
       return;
     }
 
     await _saveRouter();
+    // Register first, persist second: a stored "enabled" that no task backs
+    // would come back on every launch as a switch that does nothing.
+    if (!await _schedule()) {
+      await _store.writeValue(BackgroundKeys.enabled, 'false');
+      state = AsyncValue.data(
+        current.copyWith(
+          enabled: false,
+          permissionDenied: false,
+          schedulingFailed: true,
+        ),
+      );
+      return;
+    }
     await _store.writeValue(BackgroundKeys.enabled, 'true');
-    await _schedule();
     state = AsyncValue.data(
-      current.copyWith(enabled: true, permissionDenied: false),
+      current.copyWith(
+        enabled: true,
+        permissionDenied: false,
+        schedulingFailed: false,
+      ),
     );
   }
 
@@ -142,7 +160,7 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
     await _store.deleteValue(BackgroundKeys.observation(router.id));
   }
 
-  Future<void> _schedule() => schedulePoll();
+  Future<bool> _schedule() => schedulePoll();
 
   Future<void> _cancel() => cancelPoll();
 }

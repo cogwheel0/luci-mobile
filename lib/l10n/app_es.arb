@@ -498,6 +498,7 @@
   "notifyInBackground": "Notificar en segundo plano",
   "notifyInBackgroundHelp": "Consulta el router periódicamente y avisa de los cambios",
   "notifyPermissionDenied": "Android denegó el permiso de notificaciones. Concédelo en los ajustes del sistema y vuelve a intentarlo.",
+  "notifySchedulingFailed": "Este dispositivo no permite que la app compruebe el router en segundo plano, así que las notificaciones siguen desactivadas.",
   "notifyAbout": "Avisarme de",
   "notifyWanDown": "Se cae Internet",
   "notifyWanUp": "Vuelve Internet",

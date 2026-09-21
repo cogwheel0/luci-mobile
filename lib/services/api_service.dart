@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -28,6 +29,14 @@ class RpcException implements Exception {
     this.detail,
   });
 
+  /// True when the router refused the call for lack of permission.
+  ///
+  /// rpcd reports this as ubus status 6, but LuCI's `/admin/ubus` proxy turns
+  /// a dead session into a JSON-RPC error whose only trace is the message
+  /// text, so both shapes have to count.
+  bool get isAccessDenied =>
+      status == 6 || detail?.toLowerCase().contains('access denied') == true;
+
   @override
   String toString() {
     final call = '$object.$method';
@@ -45,8 +54,7 @@ class RpcException implements Exception {
       return 'Wireless client support is missing: $call is unavailable. '
           'Install rpcd-mod-iwinfo, restart rpcd, then refresh.';
     }
-    if (status == 6 ||
-        detail?.toLowerCase().contains('access denied') == true) {
+    if (isAccessDenied) {
       return 'This account does not have permission for $call. Sign in with '
           'an administrator account or grant the required RPC access.';
     }
@@ -107,6 +115,14 @@ bool? rpcAccessAllowed(dynamic result) {
   }
   return null;
 }
+
+/// True when [error] says the router could not be reached at all, as opposed
+/// to reaching it and being refused. Only the former is evidence for the
+/// activity feed that the router went away.
+bool isRouterUnreachable(Object error) =>
+    error is SocketException ||
+    error is TimeoutException ||
+    (error is DioException && error.response == null);
 
 String userFacingApiError(Object error) {
   if (error is RpcException) return error.toString();

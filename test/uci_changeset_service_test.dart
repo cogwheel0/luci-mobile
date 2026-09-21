@@ -52,6 +52,7 @@ class _RecordingApi extends MockApiService {
   Object? applyError;
   Object? confirmError;
   Object? revertError;
+  Object? changesError;
   String addedSection = 'cfg0a1b2c';
 
   int get confirmCount => calls.where((c) => c == 'confirm').length;
@@ -113,6 +114,7 @@ class _RecordingApi extends MockApiService {
     BuildContext? context,
   }) async {
     calls.add('changes');
+    if (changesError != null) throw changesError!;
     return changes;
   }
 
@@ -313,6 +315,28 @@ void main() {
       expect(outcome.reason, RollbackReason.sessionLost);
       // It gives up immediately rather than retrying a hopeless confirm.
       expect(h.api.confirmCount, 1);
+    });
+
+    // LuCI's /admin/ubus proxy reports a dead session as a JSON-RPC error
+    // with no ubus status at all - only the message says "Access denied".
+    // Treating that as transient meant probing for the whole window and then
+    // reporting the router unreachable, which it was not.
+    test('an access-denied error without a status is a lost session', () async {
+      final h = _build();
+      const denied = RpcException(
+        object: 'uci',
+        method: 'confirm',
+        detail: 'Access denied',
+      );
+      h.api.changesError = denied;
+      h.api.confirmError = denied;
+
+      final outcome = await h.service.apply(_session);
+
+      expect(outcome.phase, ApplyPhase.rolledBack);
+      expect(outcome.reason, RollbackReason.sessionLost);
+      expect(h.api.confirmCount, 1);
+      expect(h.probe.calls, 1, reason: 'no point probing a dead session');
     });
 
     test('a no-data error on confirm means the timer already fired', () async {
@@ -574,6 +598,89 @@ void _foreignChangeRegressions() {
       );
 
       expect(outcome.phase, ApplyPhase.confirmed);
+    });
+
+    // The stock ACL denies `uci.revert`, so a failed apply can leave our own
+    // row staged. Retrying the same edit re-stages the same key; the row in
+    // the baseline is ours, overwritten, and must not block the retry forever.
+    test(
+      're-staging an edit left behind by a failed apply is not foreign',
+      () async {
+        final h = _build();
+        h.api.changes = {
+          'wireless': [
+            ['set', 'wifinet0', 'disabled', '1'],
+          ],
+        };
+
+        final staged = await h.service.stage(_session, const [
+          UciSet('wireless', section: 'wifinet0', values: {'disabled': '1'}),
+        ]);
+        expect(staged.keys, {'set|wifinet0|disabled'});
+
+        final outcome = await h.service.apply(
+          _session,
+          ours: const {'wireless'},
+          baseline: staged.baseline,
+          restaged: staged.keys,
+          mode: ApplyMode.unchecked,
+        );
+
+        expect(outcome.phase, ApplyPhase.confirmed);
+      },
+    );
+
+    test('a leftover row this retry did not touch is still foreign', () async {
+      final h = _build();
+      h.api.changes = {
+        'wireless': [
+          ['set', 'wifinet0', 'disabled', '1'],
+          ['set', 'wifinet1', 'ssid', 'Old'],
+        ],
+      };
+
+      final staged = await h.service.stage(_session, const [
+        UciSet('wireless', section: 'wifinet0', values: {'disabled': '1'}),
+      ]);
+      final outcome = await h.service.apply(
+        _session,
+        ours: const {'wireless'},
+        baseline: staged.baseline,
+        restaged: staged.keys,
+      );
+
+      expect(outcome.reason, RollbackReason.foreignChanges);
+      expect(outcome.foreign.forConfig('wireless').single.section, 'wifinet1');
+    });
+
+    test('every operation kind knows the rows it will stage', () async {
+      final h = _build();
+      h.api.addedSection = 'cfg0f00';
+
+      final staged = await h.service.stage(_session, const [
+        UciAdd('firewall', type: 'rule', values: {'name': 'x', 'src': 'lan'}),
+        UciAdd('firewall', type: 'rule', name: 'named', values: {'src': 'lan'}),
+        UciSetList(
+          'dhcp',
+          section: 'lan',
+          option: 'dhcp_option',
+          values: ['a'],
+        ),
+        UciRemove('dhcp', section: 'host1', option: 'ip'),
+        UciRemove('dhcp', section: 'host2'),
+      ]);
+
+      expect(staged.keys, {
+        'add|cfg0f00|',
+        'set|cfg0f00|name',
+        'set|cfg0f00|src',
+        'add|named|',
+        'set|named|src',
+        'remove|lan|dhcp_option',
+        'listAdd|lan|dhcp_option',
+        'remove|host1|ip',
+        'remove|host2|',
+      });
     });
 
     // Callers that do not say what they staged keep the old behaviour, so

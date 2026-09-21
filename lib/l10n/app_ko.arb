@@ -498,6 +498,7 @@
   "notifyInBackground": "백그라운드 알림",
   "notifyInBackgroundHelp": "주기적으로 라우터를 확인하고 변화를 알립니다",
   "notifyPermissionDenied": "Android가 알림 권한을 거부했습니다. 시스템 설정에서 허용한 뒤 다시 시도하세요.",
+  "notifySchedulingFailed": "이 기기에서는 앱이 백그라운드에서 라우터를 확인할 수 없어 알림이 꺼진 상태로 유지됩니다.",
   "notifyAbout": "알릴 항목",
   "notifyWanDown": "인터넷이 끊길 때",
   "notifyWanUp": "인터넷이 돌아올 때",

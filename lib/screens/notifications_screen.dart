@@ -36,7 +36,7 @@ class NotificationsScreen extends ConsumerWidget {
                 onChanged: notifier.setEnabled,
               ),
             ),
-            if (settings.permissionDenied) ...[
+            if (settings.permissionDenied || settings.schedulingFailed) ...[
               const SizedBox(height: LuciSpacing.md),
               LuciCardStyles.standardCardWrapper(
                 context: context,
@@ -50,7 +50,9 @@ class NotificationsScreen extends ConsumerWidget {
                     const SizedBox(width: LuciSpacing.md),
                     Expanded(
                       child: Text(
-                        l10n.notifyPermissionDenied,
+                        settings.permissionDenied
+                            ? l10n.notifyPermissionDenied
+                            : l10n.notifySchedulingFailed,
                         style: LuciTextStyles.cardSubtitle(context),
                       ),
                     ),

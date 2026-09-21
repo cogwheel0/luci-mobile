@@ -143,9 +143,12 @@ class ClientDetailLoader {
     }
 
     StationInfo? station;
+    var stationNetworks = const <String>[];
     var stationFailed = false;
     try {
-      station = await _findStation(session, api);
+      final found = await _findStation(session, api);
+      station = found?.station;
+      stationNetworks = found?.networks ?? const [];
     } catch (e, stack) {
       stationFailed = true;
       Logger.exception('Station details unavailable', e, stack);
@@ -163,8 +166,27 @@ class ClientDetailLoader {
     }
 
     final host = ClientConfigPlanner.findHost(dhcp, mac);
-    final network = _networkForClient(appState);
     final hint = hints[mac];
+
+    // Which network the client is on decides the firewall zone and the
+    // subnet a reservation is checked against, so it has to come from the
+    // client — its addresses, or the AP it is associated to — and not from
+    // whichever interface the router happens to list first.
+    final interfaceDump = appState.dashboardData?['interfaceDump'];
+    final network = ClientConfigPlanner.networkForClient(
+      interfaceDump: interfaceDump is Map ? interfaceDump : null,
+      addresses: {
+        ..._hintList(hint, 'ipaddrs'),
+        ?host?.ip,
+        ..._leaseAddresses(appState),
+      },
+      wirelessNetworks: stationNetworks,
+    );
+    final subnet = network == null
+        ? null
+        : ClientConfigPlanner.interfaceSubnets(
+            interfaceDump is Map ? interfaceDump : null,
+          ).where((s) => s.name == network).firstOrNull;
 
     return ClientDetail(
       alias: alias,
@@ -175,10 +197,10 @@ class ClientDetailLoader {
       host: host,
       blockRule: ClientConfigPlanner.findBlockRule(firewall, mac),
       zone: ClientConfigPlanner.zoneForNetwork(firewall, network),
-      subnetIp: _lanAddress(appState, network),
-      prefixLength: _lanPrefix(appState, network),
-      poolStart: _intOption(dhcp, network ?? 'lan', 'start'),
-      poolLimit: _intOption(dhcp, network ?? 'lan', 'limit'),
+      subnetIp: subnet?.address,
+      prefixLength: subnet?.prefix,
+      poolStart: network == null ? null : _intOption(dhcp, network, 'start'),
+      poolLimit: network == null ? null : _intOption(dhcp, network, 'limit'),
       reservedIps: ClientConfigPlanner.reservedIps(
         dhcp,
         exceptSection: host?.section,
@@ -190,7 +212,9 @@ class ClientDetailLoader {
 
   // ------------------------------------------------------------------ reads
 
-  Future<StationInfo?> _findStation(
+  /// The station entry for this client, plus the `network`s of the AP it is
+  /// associated to — the most direct evidence of which network it is on.
+  Future<({StationInfo station, List<String> networks})?> _findStation(
     RouterSession session,
     IApiService api,
   ) async {
@@ -213,29 +237,52 @@ class ClientDetailLoader {
           device: ifname,
         );
         final hit = stations[mac];
-        if (hit != null) return hit;
+        if (hit != null) {
+          return (
+            station: hit,
+            networks: _networksOf(config is Map ? config['network'] : null),
+          );
+        }
       }
     }
     return null;
+  }
+
+  /// A wifi-iface `network` option: a list, or a space-separated string.
+  static List<String> _networksOf(dynamic raw) {
+    if (raw is List) return [for (final n in raw) n.toString()];
+    if (raw is String) {
+      return raw.split(RegExp(r'\s+')).where((n) => n.isNotEmpty).toList();
+    }
+    return const [];
   }
 
   Future<Map<String, dynamic>> _configValues(
     RouterSession session,
     IApiService api,
     String config,
-  ) async {
-    final raw = await api.uciGetAll(
+  ) async => uciValuesOf(
+    await api.uciGetAll(
       session.ipAddress,
       session.sysauth,
       session.useHttps,
       config: config,
-    );
-    if (raw is! List || raw.length < 2) return const {};
-    final data = raw[1];
-    if (data is! Map) return const {};
-    final values = data['values'];
-    if (values is Map) return Map<String, dynamic>.from(values);
-    return Map<String, dynamic>.from(data);
+    ),
+  );
+
+  /// Addresses the dashboard's lease table holds for this client.
+  List<String> _leaseAddresses(dynamic appState) {
+    final leases = appState.dashboardData?['dhcpLeases'];
+    if (leases is! Map) return const [];
+    final rows = leases['dhcp_leases'];
+    if (rows is! List) return const [];
+    return [
+      for (final row in rows)
+        if (row is Map &&
+            StationInfo.normalizeMac(row['macaddr']?.toString() ?? '') == mac &&
+            row['ipaddr'] != null)
+          row['ipaddr'].toString(),
+    ];
   }
 
   static List<String> _hintList(dynamic hint, String key) {
@@ -243,48 +290,6 @@ class ClientDetailLoader {
     final raw = hint[key];
     if (raw is! List) return const [];
     return raw.map((e) => e.toString()).toList();
-  }
-
-  /// The logical network (`lan`, `guest`, …) the client's address sits on.
-  String? _networkForClient(dynamic appState) {
-    final dump = appState.dashboardData?['interfaceDump'];
-    if (dump is! Map) return null;
-    final interfaces = dump['interface'];
-    if (interfaces is! List) return null;
-    for (final iface in interfaces) {
-      if (iface is! Map) continue;
-      final name = iface['interface']?.toString();
-      if (name == null || name == 'loopback') continue;
-      if (iface['proto'] == 'static' || iface['proto'] == 'dhcp') {
-        final addrs = iface['ipv4-address'];
-        if (addrs is List && addrs.isNotEmpty) return name;
-      }
-    }
-    return null;
-  }
-
-  String? _lanAddress(dynamic appState, String? network) =>
-      _lanField(appState, network, 'address')?.toString();
-
-  int? _lanPrefix(dynamic appState, String? network) {
-    final v = _lanField(appState, network, 'mask');
-    return v is int ? v : int.tryParse(v?.toString() ?? '');
-  }
-
-  dynamic _lanField(dynamic appState, String? network, String field) {
-    final dump = appState.dashboardData?['interfaceDump'];
-    if (dump is! Map) return null;
-    final interfaces = dump['interface'];
-    if (interfaces is! List) return null;
-    for (final iface in interfaces) {
-      if (iface is! Map) continue;
-      if (network != null && iface['interface'] != network) continue;
-      final addrs = iface['ipv4-address'];
-      if (addrs is List && addrs.isNotEmpty && addrs.first is Map) {
-        return (addrs.first as Map)[field];
-      }
-    }
-    return null;
   }
 
   static int? _intOption(

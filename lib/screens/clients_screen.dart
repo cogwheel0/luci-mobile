@@ -63,13 +63,20 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     // Falls back to the cheaper single-router path when there is nothing to
     // aggregate. The stored preference is left alone, so adding a second
     // router later restores the user's choice rather than resetting it.
-    final fetch = _aggregateAllRouters && appState.routers.length > 1
-        ? appState.fetchAggregatedClients()
-        : appState.fetchClientsForSelectedRouter();
+    final aggregate = _aggregateAllRouters && appState.routers.length > 1;
+    if (aggregate) {
+      // The feed is per router, and the aggregated list mixes every router's
+      // clients (and loses provenance for wireless-only entries). A baseline
+      // built from it would report the other routers' clients as having left
+      // the moment the user switches back to "Selected", so it is not fed.
+      _clientsFuture = appState.fetchAggregatedClients();
+      return;
+    }
 
     // The activity feed is derived from this poll rather than one of its own:
     // it should cost the router nothing extra to know what changed.
-    _clientsFuture = fetch
+    _clientsFuture = appState
+        .fetchClientsForSelectedRouter()
         .then((clients) {
           unawaited(
             ref
@@ -83,17 +90,22 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
           return clients;
         })
         .onError<Object>((error, stack) {
-          // A failed fetch is itself information: the router is not
-          // answering, which is exactly what the feed exists to record.
-          unawaited(
-            ref
-                .read(eventFeedProvider.notifier)
-                .observe(
-                  reachable: false,
-                  dashboardData: appState.dashboardData,
-                  clients: const [],
-                ),
-          );
+          // A failed connection is itself information: the router is not
+          // answering, which is exactly what the feed exists to record. A
+          // router that answered and refused (a permission error, say) is
+          // reachable, and says nothing about its clients — so no
+          // observation at all rather than a false "unreachable".
+          if (isRouterUnreachable(error)) {
+            unawaited(
+              ref
+                  .read(eventFeedProvider.notifier)
+                  .observe(
+                    reachable: false,
+                    dashboardData: appState.dashboardData,
+                    clients: const [],
+                  ),
+            );
+          }
           Error.throwWithStackTrace(error, stack);
         });
   }
@@ -366,8 +378,6 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
       },
     );
   }
-
-  String normalizeMac(String mac) => mac.toUpperCase().replaceAll('-', ':');
 }
 
 class _UnifiedClientCard extends StatefulWidget {

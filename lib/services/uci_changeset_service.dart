@@ -182,13 +182,19 @@ class UciChangesetService {
   ///
   /// On failure every config touched so far is reverted and a
   /// [UciStagingException] is thrown.
-  Future<({Map<int, String> sections, UciChangeSet? baseline})> stage(
+  Future<
+    ({Map<int, String> sections, UciChangeSet? baseline, Set<String> keys})
+  >
+  stage(
     RouterSession session,
     List<UciOperation> ops, {
     BuildContext? context,
   }) async {
     final generatedSections = <int, String>{};
     final touched = <String>{};
+    // The change rows this batch will show up as in `uci.changes`, so that
+    // apply can tell a row we just (re-)staged from one left behind earlier.
+    final keys = <String>{};
 
     // `uci.revert` is config-wide, so cleaning up after a failed batch would
     // also discard anything already staged in the same config — typically
@@ -222,6 +228,7 @@ class UciChangesetService {
       final op = ops[i];
       try {
         touched.add(op.config);
+        if (op is! UciAdd) keys.addAll(op.changeKeys());
         switch (op) {
           case UciSet():
             await _api.uciSet(
@@ -263,6 +270,7 @@ class UciChangesetService {
               );
             }
             generatedSections[i] = section;
+            keys.addAll(op.changeKeys(section: section));
           case UciRemove():
             await _api.uciDelete(
               session.ipAddress,
@@ -313,7 +321,7 @@ class UciChangesetService {
       }
     }
 
-    return (sections: generatedSections, baseline: baseline);
+    return (sections: generatedSections, baseline: baseline, keys: keys);
   }
 
   /// Discards staged changes for [configs].
@@ -353,6 +361,7 @@ class UciChangesetService {
     Duration timeout = defaultTimeout,
     Set<String>? ours,
     UciChangeSet? baseline,
+    Set<String> restaged = const {},
     void Function(ApplyPhase phase, Duration remaining)? onPhase,
     BuildContext? context,
   }) async {
@@ -372,8 +381,17 @@ class UciChangesetService {
     // Measured on OpenWrt 24.10.4: staging is per rpcd session, so this
     // cannot pick up another client's work; `uci.changes` does not report it
     // and our apply leaves it pending.
+    //
+    // [restaged] names the rows this operation itself just wrote. A row that
+    // was already in the baseline but carries the same key as one of ours has
+    // been overwritten by ours — re-trying an edit whose earlier attempt was
+    // left staged must not be refused as somebody else's work.
     if (ours != null) {
-      final foreign = staged.foreignTo(ours, baseline: baseline);
+      final foreign = staged.foreignTo(
+        ours,
+        baseline: baseline,
+        restaged: restaged,
+      );
       if (foreign.isNotEmpty) {
         Logger.warning(
           'Refusing to apply: unrelated changes still staged in '
@@ -517,7 +535,7 @@ class UciChangesetService {
     } catch (e) {
       // A permission error here means the session is gone; let the confirm
       // attempt surface it with a precise reason rather than guessing.
-      return e is RpcException && e.status == 6;
+      return e is RpcException && e.isAccessDenied;
     }
   }
 
@@ -525,15 +543,24 @@ class UciChangesetService {
   /// looks transient and probing should continue.
   static RollbackReason? _classifyConfirmFailure(Object error) {
     if (error is! RpcException) return null;
-    switch (error.status) {
-      case 6:
-        return RollbackReason.sessionLost;
-      case 5:
-        return RollbackReason.deadlineMissed;
-      default:
-        return null;
-    }
+    if (error.isAccessDenied) return RollbackReason.sessionLost;
+    return error.status == 5 ? RollbackReason.deadlineMissed : null;
   }
+}
+
+/// The `values` map out of a `uci.get` envelope (`[status, {values: {...}}]`).
+///
+/// Some rpcd builds return the sections directly rather than under `values`;
+/// anything that is not a config at all reads as empty. One place, because
+/// every screen that reads a config had grown its own copy of this.
+Map<String, dynamic> uciValuesOf(dynamic envelope) {
+  if (envelope is! List || envelope.length < 2) return const {};
+  final data = envelope[1];
+  if (data is! Map) return const {};
+  final values = data['values'];
+  return values is Map
+      ? Map<String, dynamic>.from(values)
+      : Map<String, dynamic>.from(data);
 }
 
 /// Extracts the section id rpcd generated for an anonymous `uci.add`.

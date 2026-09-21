@@ -498,6 +498,7 @@
   "notifyInBackground": "Notifier en arrière-plan",
   "notifyInBackgroundHelp": "Vérifie le routeur régulièrement et signale les changements",
   "notifyPermissionDenied": "Android a refusé l’autorisation de notification. Accordez-la dans les réglages système puis réessayez.",
+  "notifySchedulingFailed": "Cet appareil n’autorise pas l’application à vérifier le routeur en arrière-plan ; les notifications restent donc désactivées.",
   "notifyAbout": "M’avertir pour",
   "notifyWanDown": "Perte d’Internet",
   "notifyWanUp": "Retour d’Internet",
