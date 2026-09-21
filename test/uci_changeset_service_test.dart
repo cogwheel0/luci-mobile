@@ -178,6 +178,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   _foreignChangeRegressions();
+  _applyFailureCleanupReporting();
 
   group('stage', () {
     test(
@@ -693,6 +694,49 @@ void _foreignChangeRegressions() {
         reason: 'no countdown may be shown when nothing will roll back',
       );
       expect(h.api.confirmCount, 0);
+    });
+  });
+}
+
+void _applyFailureCleanupReporting() {
+  // `uci.revert` is not granted by the stock ACL, so cleanup after a rejected
+  // apply can be refused. Whatever it could not clear is still on the router
+  // and the message has to be able to name it.
+  group('cleanup after a rejected apply', () {
+    test('names the configs it could not revert', () async {
+      final h = _build();
+      h.api.changes = {
+        'dhcp': [
+          ['set', 'lan', 'start', '100'],
+        ],
+        'firewall': [
+          ['set', 'cfg03', 'target', 'REJECT'],
+        ],
+      };
+      h.api.applyError = Exception('rejected');
+      h.api.revertError = Exception('revert denied');
+
+      final outcome = await h.service.apply(_session);
+
+      expect(outcome.phase, ApplyPhase.failed);
+      expect(outcome.reason, RollbackReason.routerRejected);
+      expect(outcome.stillStaged, {'dhcp', 'firewall'});
+    });
+
+    test('a successful cleanup reports nothing left staged', () async {
+      final h = _build();
+      h.api.changes = {
+        'dhcp': [
+          ['set', 'lan', 'start', '100'],
+        ],
+      };
+      h.api.applyError = Exception('rejected');
+
+      final outcome = await h.service.apply(_session);
+
+      expect(outcome.phase, ApplyPhase.failed);
+      expect(outcome.stillStaged, isEmpty);
+      expect(h.api.calls, contains('revert dhcp'));
     });
   });
 }

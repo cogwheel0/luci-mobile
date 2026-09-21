@@ -403,18 +403,30 @@ class UciChangesetService {
       );
     } catch (e, stack) {
       Logger.exception('uci.apply failed', e, stack);
-      try {
-        await revert(session, staged.configs, context: null);
-      } catch (revertError, revertStack) {
-        Logger.exception(
-          'Failed to revert after apply error',
-          revertError,
-          revertStack,
-        );
+      // `uci.revert` is not granted by the stock ACL and reverts one config
+      // at a time, so it can be refused outright or stop partway. Whatever
+      // it did not clear is still on the router, and the message has to be
+      // able to name it rather than just saying "failed".
+      // One at a time, because `revert` stops at the first refusal and
+      // reporting every config as still staged would over-report the ones it
+      // had already cleared.
+      final unreverted = <String>{};
+      for (final config in staged.configs) {
+        try {
+          await revert(session, {config}, context: null);
+        } catch (revertError, revertStack) {
+          unreverted.add(config);
+          Logger.exception(
+            'Failed to revert $config after apply error',
+            revertError,
+            revertStack,
+          );
+        }
       }
       return ApplyOutcome(
         phase: ApplyPhase.failed,
         applied: staged,
+        stillStaged: unreverted,
         reason: RollbackReason.routerRejected,
         error: e,
       );
