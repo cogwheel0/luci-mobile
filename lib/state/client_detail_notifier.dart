@@ -171,22 +171,20 @@ class ClientDetailLoader {
     // Which network the client is on decides the firewall zone and the
     // subnet a reservation is checked against, so it has to come from the
     // client — its addresses, or the AP it is associated to — and not from
-    // whichever interface the router happens to list first.
+    // whichever interface the router happens to list first. Live lease
+    // first: host hints remember addresses a client has since moved off.
     final interfaceDump = appState.dashboardData?['interfaceDump'];
-    final network = ClientConfigPlanner.networkForClient(
+    final located = ClientConfigPlanner.networkForClient(
       interfaceDump: interfaceDump is Map ? interfaceDump : null,
-      addresses: {
-        ..._hintList(hint, 'ipaddrs'),
-        ?host?.ip,
+      addresses: <String>{
         ..._leaseAddresses(appState),
+        ?host?.ip,
+        ..._hintList(hint, 'ipaddrs'),
       },
       wirelessNetworks: stationNetworks,
     );
-    final subnet = network == null
-        ? null
-        : ClientConfigPlanner.interfaceSubnets(
-            interfaceDump is Map ? interfaceDump : null,
-          ).where((s) => s.name == network).firstOrNull;
+    final network = located?.name;
+    final subnet = located?.subnet;
 
     return ClientDetail(
       alias: alias,

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'package:luci_mobile/models/uci_change.dart';
@@ -226,6 +227,23 @@ class UciChangesetService {
 
     for (var i = 0; i < ops.length; i++) {
       final op = ops[i];
+
+      // A failed apply whose cleanup revert was denied leaves our own rows
+      // staged. A retry simply overwrites a named row, but an anonymous add
+      // cannot be overwritten — the router names the section — so retrying
+      // would pile a duplicate on top and then be refused for the leftover.
+      // Staging is per session, so an add already staged with exactly this
+      // type and these values is ours: adopt it instead of adding again.
+      if (op is UciAdd && op.name == null && baseline != null) {
+        final adopted = _identicalStagedAdd(baseline, op);
+        if (adopted != null) {
+          Logger.info('Reusing staged ${op.config} section $adopted');
+          generatedSections[i] = adopted;
+          keys.addAll(op.changeKeys(section: adopted));
+          continue;
+        }
+      }
+
       try {
         touched.add(op.config);
         if (op is! UciAdd) keys.addAll(op.changeKeys());
@@ -322,6 +340,28 @@ class UciChangesetService {
     }
 
     return (sections: generatedSections, baseline: baseline, keys: keys);
+  }
+
+  /// The section of a staged anonymous add in [baseline] whose type and
+  /// values are exactly [op]'s, or null.
+  static String? _identicalStagedAdd(UciChangeSet baseline, UciAdd op) {
+    final rows = baseline.forConfig(op.config);
+    final wanted = {
+      for (final e in op.values.entries)
+        if (e.value is! List) e.key: e.value?.toString() ?? '',
+    };
+    // A list value stages as several rows; not worth modelling for a retry.
+    if (wanted.length != op.values.length) return null;
+    for (final add in rows) {
+      if (add.op != UciOp.add || add.option != op.type) continue;
+      final staged = {
+        for (final r in rows)
+          if (r.op == UciOp.set && r.section == add.section && r.option != null)
+            r.option!: r.value ?? '',
+      };
+      if (mapEquals(staged, wanted)) return add.section;
+    }
+    return null;
   }
 
   /// Discards staged changes for [configs].

@@ -18,6 +18,14 @@ class InterfaceSubnet {
   final int prefix;
 }
 
+/// Where a client sits: the logical network, and the interface subnet it was
+/// matched to (absent when only the AP's membership named the network).
+class ClientNetwork {
+  const ClientNetwork(this.name, this.subnet);
+  final String name;
+  final InterfaceSubnet? subnet;
+}
+
 /// Turns "reserve this IP" / "block this client" into UCI operations.
 ///
 /// Everything here is a pure function of already-fetched config, so the rules
@@ -144,37 +152,49 @@ class ClientConfigPlanner {
 
   /// The logical network (`lan`, `guest`, …) a client sits on, or null.
   ///
-  /// Decided by the client, not by the router's interface order: each of
-  /// [addresses] is matched against the subnets in `network.interface dump`
-  /// ([interfaceDump]). [wirelessNetworks] is the `network` option of the
-  /// AP the client is associated to, which is the most direct evidence there
-  /// is and also covers a station with no address yet.
+  /// Decided by the client, not by the router's interface order. The
+  /// [addresses] are tried in the order given — callers put the live lease
+  /// first and stale host hints last — against the subnets in
+  /// `network.interface dump` ([interfaceDump]). [wirelessNetworks] is the
+  /// `network` option of the AP the client is associated to, which is the
+  /// most direct evidence there is and also covers a station with no
+  /// address yet.
   ///
   /// Null when nothing matches. Guessing `lan` there would put a guest-VLAN
   /// client's block rule in the wrong zone, where it blocks nothing.
-  static String? networkForClient({
+  static ClientNetwork? networkForClient({
     required Map? interfaceDump,
     Iterable<String> addresses = const [],
     Iterable<String> wirelessNetworks = const [],
   }) {
     final subnets = interfaceSubnets(interfaceDump);
-    final bySubnet = <String>[];
-    for (final subnet in subnets) {
-      for (final address in addresses) {
-        final octets = _parseIpv4(address);
-        if (octets == null) continue;
-        if (_sameSubnet(octets, subnet.base, subnet.prefix)) {
-          bySubnet.add(subnet.name);
-        }
+
+    InterfaceSubnet? containing(String address, {String? onInterface}) {
+      final octets = _parseIpv4(address);
+      if (octets == null) return null;
+      for (final subnet in subnets) {
+        if (onInterface != null && subnet.name != onInterface) continue;
+        if (_sameSubnet(octets, subnet.base, subnet.prefix)) return subnet;
       }
+      return null;
     }
-    final known = {for (final s in subnets) s.name};
+
     for (final network in wirelessNetworks) {
-      if (known.contains(network)) return network;
+      final onInterface = subnets.where((s) => s.name == network).toList();
+      if (onInterface.isEmpty) continue;
+      // The AP says which interface; the address says which of its subnets.
+      for (final address in addresses) {
+        final hit = containing(address, onInterface: network);
+        if (hit != null) return ClientNetwork(network, hit);
+      }
+      return ClientNetwork(network, onInterface.first);
     }
-    if (bySubnet.isNotEmpty) return bySubnet.first;
+    for (final address in addresses) {
+      final hit = containing(address);
+      if (hit != null) return ClientNetwork(hit.name, hit);
+    }
     for (final network in wirelessNetworks) {
-      if (network.isNotEmpty) return network;
+      if (network.isNotEmpty) return ClientNetwork(network, null);
     }
     return null;
   }

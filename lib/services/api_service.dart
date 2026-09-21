@@ -119,10 +119,23 @@ bool? rpcAccessAllowed(dynamic result) {
 /// True when [error] says the router could not be reached at all, as opposed
 /// to reaching it and being refused. Only the former is evidence for the
 /// activity feed that the router went away.
-bool isRouterUnreachable(Object error) =>
-    error is SocketException ||
-    error is TimeoutException ||
-    (error is DioException && error.response == null);
+bool isRouterUnreachable(Object error) {
+  if (error is SocketException || error is TimeoutException) return true;
+  if (error is! DioException) return false;
+  return switch (error.type) {
+    DioExceptionType.connectionError ||
+    DioExceptionType.connectionTimeout ||
+    DioExceptionType.sendTimeout ||
+    DioExceptionType.receiveTimeout => true,
+    // A certificate the router did present, a cancelled request, or a body
+    // that would not parse all mean it answered.
+    DioExceptionType.badCertificate ||
+    DioExceptionType.badResponse ||
+    DioExceptionType.transformTimeout ||
+    DioExceptionType.cancel => false,
+    DioExceptionType.unknown => error.error is SocketException,
+  };
+}
 
 String userFacingApiError(Object error) {
   if (error is RpcException) return error.toString();

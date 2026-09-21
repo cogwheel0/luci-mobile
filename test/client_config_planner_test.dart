@@ -475,7 +475,7 @@ void main() {
         ClientConfigPlanner.networkForClient(
           interfaceDump: dump,
           addresses: const ['192.168.2.50'],
-        ),
+        )?.name,
         'guest',
       );
     });
@@ -485,7 +485,7 @@ void main() {
         ClientConfigPlanner.networkForClient(
           interfaceDump: dump,
           addresses: const ['192.168.1.50'],
-        ),
+        )?.name,
         'lan',
       );
     });
@@ -514,7 +514,7 @@ void main() {
           interfaceDump: dump,
           addresses: const ['192.168.1.50'],
           wirelessNetworks: const ['guest'],
-        ),
+        )?.name,
         'guest',
       );
     });
@@ -524,9 +524,64 @@ void main() {
         ClientConfigPlanner.networkForClient(
           interfaceDump: dump,
           wirelessNetworks: const ['iot'],
-        ),
+        )?.name,
         'iot',
       );
+    });
+
+    // getHostHints remembers addresses a client has since moved off, so the
+    // order the caller gives is the order of trust — not the dump's.
+    test('the first address that matches wins, whatever the dump order', () {
+      final guestFirst = <String, dynamic>{
+        'interface': [
+          {
+            'interface': 'guest',
+            'ipv4-address': [
+              {'address': '192.168.2.1', 'mask': 24},
+            ],
+          },
+          {
+            'interface': 'lan',
+            'ipv4-address': [
+              {'address': '192.168.1.1', 'mask': 24},
+            ],
+          },
+        ],
+      };
+      expect(
+        ClientConfigPlanner.networkForClient(
+          interfaceDump: guestFirst,
+          addresses: const ['192.168.1.5', '192.168.2.5'],
+        )?.name,
+        'lan',
+      );
+    });
+
+    test('the subnet reported is the one the address matched', () {
+      final twoSubnets = <String, dynamic>{
+        'interface': [
+          {
+            'interface': 'lan',
+            'ipv4-address': [
+              {'address': '10.0.0.1', 'mask': 24},
+              {'address': '192.168.1.1', 'mask': 24},
+            ],
+          },
+        ],
+      };
+      final located = ClientConfigPlanner.networkForClient(
+        interfaceDump: twoSubnets,
+        addresses: const ['192.168.1.20'],
+      );
+      expect(located?.name, 'lan');
+      expect(located?.subnet?.address, '192.168.1.1');
+
+      final viaAp = ClientConfigPlanner.networkForClient(
+        interfaceDump: twoSubnets,
+        addresses: const ['192.168.1.20'],
+        wirelessNetworks: const ['lan'],
+      );
+      expect(viaAp?.subnet?.address, '192.168.1.1');
     });
 
     test('the matching subnet is reported with its prefix', () {

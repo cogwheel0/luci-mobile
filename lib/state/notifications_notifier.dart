@@ -99,11 +99,15 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
       return;
     }
 
+    // The router goes in before registering, because WorkManager may run a
+    // freshly registered periodic task straight away. Register, then persist
+    // "enabled": a stored flag that no task backs would come back on every
+    // launch as a switch that does nothing.
     await _saveRouter();
-    // Register first, persist second: a stored "enabled" that no task backs
-    // would come back on every launch as a switch that does nothing.
     if (!await _schedule()) {
       await _store.writeValue(BackgroundKeys.enabled, 'false');
+      // No poll will ever read them, so the credentials do not stay.
+      await _store.deleteValue(BackgroundKeys.router);
       state = AsyncValue.data(
         current.copyWith(
           enabled: false,

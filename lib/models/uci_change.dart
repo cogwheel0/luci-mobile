@@ -59,8 +59,10 @@ class UciChange {
   ///
   /// Ownership has to be decided per row, not per config: a change left
   /// staged in `dhcp` by an earlier failed operation is not ours just
-  /// because this operation also touches `dhcp`.
-  String get key => '${op.name}|$section|${option ?? ""}';
+  /// because this operation also touches `dhcp`. The config is part of the
+  /// key for the same reason: `network.lan.ipaddr` and `dhcp.lan.ipaddr`
+  /// are different rows.
+  String get key => '$config|${op.name}|$section|${option ?? ""}';
 
   /// Parses one wire row, or returns null when the row is malformed or uses an
   /// operation this version does not model.
@@ -189,8 +191,8 @@ sealed class UciOperation {
   /// has named it, hence [section].
   Set<String> changeKeys({String? section});
 
-  static String _key(UciOp op, String section, [String? option]) =>
-      '${op.name}|$section|${option ?? ""}';
+  String _key(UciOp op, String section, [String? option]) =>
+      '$config|${op.name}|$section|${option ?? ""}';
 }
 
 /// Assigns options on an existing section.
@@ -202,7 +204,7 @@ final class UciSet extends UciOperation {
   @override
   Set<String> changeKeys({String? section}) => {
     for (final option in values.keys)
-      UciOperation._key(UciOp.set, section ?? this.section, option),
+      _key(UciOp.set, section ?? this.section, option),
   };
 }
 
@@ -225,8 +227,8 @@ final class UciSetList extends UciOperation {
   // `list-add` per entry.
   @override
   Set<String> changeKeys({String? section}) => {
-    UciOperation._key(UciOp.remove, section ?? this.section, option),
-    UciOperation._key(UciOp.listAdd, section ?? this.section, option),
+    _key(UciOp.remove, section ?? this.section, option),
+    _key(UciOp.listAdd, section ?? this.section, option),
   };
 }
 
@@ -248,10 +250,11 @@ final class UciAdd extends UciOperation {
   Set<String> changeKeys({String? section}) {
     final id = section ?? name;
     if (id == null) return const {};
+    // rpcd reports the add row as `["add", section, type]`, so the type
+    // sits where an option would.
     return {
-      UciOperation._key(UciOp.add, id),
-      for (final option in values.keys)
-        UciOperation._key(UciOp.set, id, option),
+      _key(UciOp.add, id, type),
+      for (final option in values.keys) _key(UciOp.set, id, option),
     };
   }
 }
@@ -264,6 +267,6 @@ final class UciRemove extends UciOperation {
 
   @override
   Set<String> changeKeys({String? section}) => {
-    UciOperation._key(UciOp.remove, section ?? this.section, option),
+    _key(UciOp.remove, section ?? this.section, option),
   };
 }

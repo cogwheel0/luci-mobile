@@ -616,7 +616,7 @@ void _foreignChangeRegressions() {
         final staged = await h.service.stage(_session, const [
           UciSet('wireless', section: 'wifinet0', values: {'disabled': '1'}),
         ]);
-        expect(staged.keys, {'set|wifinet0|disabled'});
+        expect(staged.keys, {'wireless|set|wifinet0|disabled'});
 
         final outcome = await h.service.apply(
           _session,
@@ -671,16 +671,102 @@ void _foreignChangeRegressions() {
       ]);
 
       expect(staged.keys, {
-        'add|cfg0f00|',
-        'set|cfg0f00|name',
-        'set|cfg0f00|src',
-        'add|named|',
-        'set|named|src',
-        'remove|lan|dhcp_option',
-        'listAdd|lan|dhcp_option',
-        'remove|host1|ip',
-        'remove|host2|',
+        'firewall|add|cfg0f00|rule',
+        'firewall|set|cfg0f00|name',
+        'firewall|set|cfg0f00|src',
+        'firewall|add|named|rule',
+        'firewall|set|named|src',
+        'dhcp|remove|lan|dhcp_option',
+        'dhcp|listAdd|lan|dhcp_option',
+        'dhcp|remove|host1|ip',
+        'dhcp|remove|host2|',
       });
+    });
+
+    // `network.lan.ipaddr` and `dhcp.lan.ipaddr` are different rows; a key
+    // without the config would let the one we wrote vouch for the other.
+    test(
+      'a leftover in another config with the same section is foreign',
+      () async {
+        final h = _build();
+        h.api.changes = {
+          'network': [
+            ['set', 'lan', 'ipaddr', '192.168.1.1'],
+          ],
+          'dhcp': [
+            ['set', 'lan', 'ipaddr', 'stale'],
+          ],
+        };
+
+        final staged = await h.service.stage(_session, const [
+          UciSet('network', section: 'lan', values: {'ipaddr': '192.168.1.1'}),
+        ]);
+        final outcome = await h.service.apply(
+          _session,
+          ours: const {'network', 'dhcp'},
+          baseline: staged.baseline,
+          restaged: staged.keys,
+        );
+
+        expect(outcome.reason, RollbackReason.foreignChanges);
+        expect(outcome.foreign.configs, {'dhcp'});
+      },
+    );
+
+    // An anonymous add cannot be re-staged onto the same row: the router
+    // names the section. Retrying must reuse the leftover, not stack a
+    // duplicate on it and then be refused for the leftover.
+    test('retrying an anonymous add adopts the identical leftover', () async {
+      final h = _build();
+      h.api.changes = {
+        'dhcp': [
+          ['add', 'cfg0a', 'host'],
+          ['set', 'cfg0a', 'mac', 'AA:BB:CC:11:22:33'],
+          ['set', 'cfg0a', 'ip', '192.168.1.50'],
+        ],
+      };
+
+      final staged = await h.service.stage(_session, const [
+        UciAdd(
+          'dhcp',
+          type: 'host',
+          values: {'mac': 'AA:BB:CC:11:22:33', 'ip': '192.168.1.50'},
+        ),
+      ]);
+
+      expect(staged.sections, {0: 'cfg0a'});
+      expect(h.api.calls.where((c) => c.startsWith('add')), isEmpty);
+
+      final outcome = await h.service.apply(
+        _session,
+        ours: const {'dhcp'},
+        baseline: staged.baseline,
+        restaged: staged.keys,
+        mode: ApplyMode.unchecked,
+      );
+      expect(outcome.phase, ApplyPhase.confirmed);
+    });
+
+    test('a leftover add with different values is not adopted', () async {
+      final h = _build();
+      h.api.changes = {
+        'dhcp': [
+          ['add', 'cfg0a', 'host'],
+          ['set', 'cfg0a', 'mac', 'AA:BB:CC:11:22:33'],
+          ['set', 'cfg0a', 'ip', '192.168.1.50'],
+        ],
+      };
+
+      final staged = await h.service.stage(_session, const [
+        UciAdd(
+          'dhcp',
+          type: 'host',
+          values: {'mac': 'AA:BB:CC:11:22:33', 'ip': '192.168.1.60'},
+        ),
+      ]);
+
+      expect(staged.sections, {0: 'cfg0a1b2c'});
+      expect(h.api.calls, contains('add dhcp host'));
     });
 
     // Callers that do not say what they staged keep the old behaviour, so

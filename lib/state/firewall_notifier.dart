@@ -19,12 +19,18 @@ class FirewallState {
     this.forwards = const [],
     this.rules = const [],
     this.routes = const [],
+    this.sectionNames = const {},
   });
 
   final List<FirewallZone> zones;
   final List<PortForward> forwards;
   final List<TrafficRule> rules;
   final List<StaticRoute> routes;
+
+  /// Every section in the firewall config, of any type — a new section has
+  /// to avoid all of them, not just the ones this screen parses, because
+  /// `uci.add` with an existing name silently re-sets that section.
+  final Set<String> sectionNames;
 
   /// The zone a port forward should arrive on, if one is obvious.
   String? get wanZone {
@@ -35,13 +41,6 @@ class FirewallState {
   }
 
   List<String> get zoneNames => [for (final z in zones) z.name];
-
-  /// Every section name this state knows about, so a new one can avoid them.
-  Set<String> get sectionNames => {
-    for (final z in zones) z.section,
-    for (final f in forwards) f.section,
-    for (final r in rules) r.section,
-  };
 }
 
 Future<Map<String, dynamic>> _configValues(
@@ -78,6 +77,7 @@ final firewallProvider = FutureProvider<FirewallState>((ref) async {
     forwards: FirewallPlanner.portForwards(firewall),
     rules: FirewallPlanner.trafficRules(firewall),
     routes: FirewallPlanner.routes(network),
+    sectionNames: firewall.keys.toSet(),
   );
 }, retry: (_, _) => null);
 
