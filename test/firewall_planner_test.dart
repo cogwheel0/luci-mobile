@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:luci_mobile/models/uci_change.dart';
+import 'package:luci_mobile/models/firewall_config.dart';
 import 'package:luci_mobile/services/firewall_planner.dart';
 
 final _firewall = <String, dynamic>{
@@ -77,6 +78,8 @@ final _network = <String, dynamic>{
 };
 
 void main() {
+  _portForwardZoneRegression();
+
   group('reading zones', () {
     test('parses policies and network membership', () {
       final zones = FirewallPlanner.zones(_firewall);
@@ -299,6 +302,35 @@ void main() {
       expect(routes.single.target, '10.0.0.0');
       expect(routes.single.gateway, '192.168.1.254');
       expect(routes.single.interface, 'lan');
+    });
+  });
+}
+
+void _portForwardZoneRegression() {
+  // The edit sheet offers a source-zone dropdown. Leaving `src` out of the
+  // update meant changing it reported success and did nothing.
+  group('editing a port forward', () {
+    test('writes the source zone', () {
+      final ops = FirewallPlanner.planUpdatePortForward(
+        existing: const PortForward(
+          section: 'cfg05',
+          name: 'web',
+          sourceZone: 'wan',
+          sourcePort: '8080',
+          destIp: '192.168.1.10',
+          destPort: '80',
+          protocol: 'tcp',
+        ),
+        name: 'web',
+        sourceZone: 'guest',
+        sourcePort: '8080',
+        destIp: '192.168.1.10',
+        destPort: '80',
+        protocol: 'tcp',
+      );
+      final values = ops.whereType<UciSet>().first.values;
+      expect(values['src'], 'guest');
+      expect(values['src_dport'], '8080');
     });
   });
 }

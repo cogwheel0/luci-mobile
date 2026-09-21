@@ -55,6 +55,8 @@ final _config = <String, dynamic>{
 };
 
 void main() {
+  _encryptionPreservation();
+
   group('parsing', () {
     test('groups SSIDs under the radio that hosts them', () {
       final radios = WirelessPlanner.parse(_config);
@@ -277,6 +279,67 @@ void main() {
           reason: '$band',
         );
       }
+    });
+  });
+}
+
+void _encryptionPreservation() {
+  // `psk-mixed` and `psk` both read back as wpa2 for display, but wpa2's
+  // uciValue is `psk2`. Writing that on an unrelated edit silently narrows
+  // the network and drops every WPA/TKIP client off it.
+  group('editing a network leaves its encryption alone', () {
+    WirelessNetwork network(String encryption) => WirelessNetwork(
+      section: 'cfg01',
+      device: 'radio0',
+      ssid: 'Home',
+      mode: 'ap',
+      encryption: encryption,
+      key: 'supersecret',
+    );
+
+    Map<String, String> valuesOf(List<UciOperation> ops) =>
+        (ops.whereType<UciSet>().first).values;
+
+    test('an SSID rename on psk-mixed does not rewrite encryption', () {
+      final ops = WirelessPlanner.planUpdateNetwork(
+        existing: network('psk-mixed'),
+        ssid: 'Home-2',
+        security: WirelessSecurity.wpa2,
+        passphrase: 'supersecret',
+      );
+      expect(valuesOf(ops)['ssid'], 'Home-2');
+      expect(valuesOf(ops).containsKey('encryption'), isFalse);
+    });
+
+    test('the same holds for plain psk', () {
+      final ops = WirelessPlanner.planUpdateNetwork(
+        existing: network('psk'),
+        ssid: 'Home-2',
+        security: WirelessSecurity.wpa2,
+        passphrase: 'supersecret',
+      );
+      expect(valuesOf(ops).containsKey('encryption'), isFalse);
+    });
+
+    // ...but a deliberate change still has to be written.
+    test('choosing a different mode does write encryption', () {
+      final ops = WirelessPlanner.planUpdateNetwork(
+        existing: network('psk-mixed'),
+        ssid: 'Home',
+        security: WirelessSecurity.wpa3,
+        passphrase: 'supersecret',
+      );
+      expect(valuesOf(ops)['encryption'], WirelessSecurity.wpa3.uciValue);
+    });
+
+    test('an already-psk2 network is untouched by a rename', () {
+      final ops = WirelessPlanner.planUpdateNetwork(
+        existing: network('psk2'),
+        ssid: 'Home-2',
+        security: WirelessSecurity.wpa2,
+        passphrase: 'supersecret',
+      );
+      expect(valuesOf(ops).containsKey('encryption'), isFalse);
     });
   });
 }

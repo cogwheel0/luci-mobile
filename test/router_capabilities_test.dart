@@ -25,6 +25,8 @@ RouterCapabilities _stock({
 ).copyWith(probedAt: DateTime.utc(2026, 1, 1));
 
 void main() {
+  _iwinfoDecoupling();
+
   group('probe lifecycle', () {
     test('an unprobed router reports notProbed, not unsupported', () {
       for (final f in RouterFeature.values) {
@@ -195,6 +197,42 @@ void main() {
     test('usesApk distinguishes apk from opkg builds', () {
       expect(_stock(features: const {'apk': true}).usesApk, isTrue);
       expect(_stock(features: const {'opkg': true}).usesApk, isFalse);
+    });
+  });
+}
+
+void _iwinfoDecoupling() {
+  // Station details and scanning are separately authorised RPCs. Gating both
+  // on both meant an account granted one lost the feature it was allowed to
+  // use.
+  group('wireless permissions are independent', () {
+    RouterCapabilities withIwinfo(Set<String> granted) => RouterCapabilities(
+      ubusAcl: {'iwinfo': granted},
+      probedAt: DateTime(2026),
+    );
+
+    test('assoclist alone still unlocks station details', () {
+      final caps = withIwinfo({'assoclist'});
+      expect(caps.of(RouterFeature.wirelessStations).available, isTrue);
+      expect(
+        caps.of(RouterFeature.wirelessScan).reason,
+        UnavailableReason.noPermission,
+      );
+    });
+
+    test('scan alone still unlocks scanning', () {
+      final caps = withIwinfo({'scan'});
+      expect(caps.of(RouterFeature.wirelessScan).available, isTrue);
+      expect(
+        caps.of(RouterFeature.wirelessStations).reason,
+        UnavailableReason.noPermission,
+      );
+    });
+
+    test('neither granted leaves both unavailable', () {
+      final caps = withIwinfo(const {});
+      expect(caps.of(RouterFeature.wirelessScan).available, isFalse);
+      expect(caps.of(RouterFeature.wirelessStations).available, isFalse);
     });
   });
 }

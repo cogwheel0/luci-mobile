@@ -1447,8 +1447,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     if (refresh) {
       await fetchDashboardData();
-      _startThroughputTimer();
     }
+    // Both paths: `beginCriticalSection` cancelled the timer, and four of the
+    // five write flows end with `refresh: false`. Restarting only in the
+    // refresh branch left live throughput frozen after any firewall,
+    // wireless, add-on or client change. `_startThroughputTimer` already
+    // returns early while rebooting or inside a critical section.
+    _startThroughputTimer();
   }
 
   Future<bool> reboot({BuildContext? context}) async {

@@ -144,11 +144,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             TextButton(
               child: Text(context.l10n.reboot),
               onPressed: () async {
-                Navigator.of(context).pop();
-                // Show persistent warning snackbar
+                // Captured before the pop: afterwards this dialog's context
+                // is unmounted, so every `context.mounted` guard below the
+                // await fails and the result snackbar never appears.
                 final theme = Theme.of(context);
                 final colorScheme = theme.colorScheme;
-                ScaffoldMessenger.of(context).showSnackBar(
+                final messenger = ScaffoldMessenger.of(context);
+                final l10n = context.l10n;
+                Navigator.of(context).pop();
+                // Show persistent warning snackbar
+                messenger.showSnackBar(
                   SnackBar(
                     content: Row(
                       children: [
@@ -181,13 +186,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 );
                 final success = await appState.reboot();
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   SnackBar(
                     content: Text(
                       success
-                          ? context.l10n.rebootCommandSent
-                          : context.l10n.rebootCommandFailed,
+                          ? l10n.rebootCommandSent
+                          : l10n.rebootCommandFailed,
                     ),
                   ),
                 );

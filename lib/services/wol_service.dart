@@ -1,4 +1,6 @@
+import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
+import 'package:luci_mobile/utils/logger.dart';
 import 'package:luci_mobile/state/router_session.dart';
 
 /// Sends a wake-on-LAN packet from the router.
@@ -39,17 +41,27 @@ class WolService {
     final normalised = normaliseMac(mac);
     if (normalised == null) return false;
 
-    final result = await _api.call(
-      session.ipAddress,
-      session.sysauth,
-      session.useHttps,
-      object: 'file',
-      method: 'exec',
-      params: {
-        'command': etherwake,
-        'params': argsFor(normalised, device: device),
-      },
-    );
+    // `call` throws RpcException for an RPC-level refusal — most often the
+    // ACL not granting exec on this path — so catching it here is what makes
+    // the documented `false` reachable instead of an exception escaping past
+    // it.
+    final dynamic result;
+    try {
+      result = await _api.call(
+        session.ipAddress,
+        session.sysauth,
+        session.useHttps,
+        object: 'file',
+        method: 'exec',
+        params: {
+          'command': etherwake,
+          'params': argsFor(normalised, device: device),
+        },
+      );
+    } on RpcException catch (e, stack) {
+      Logger.exception('etherwake was refused', e, stack);
+      return false;
+    }
     if (result is! List || result.isEmpty || result.first != 0) return false;
     final data = result.length > 1 ? result[1] : null;
     return data is! Map || data['code'] == 0;

@@ -192,6 +192,9 @@ class RouterCapabilities {
         }
         return _requireUbus('uci', const ['set']);
 
+      // Station details and scanning are separately authorised RPCs. Gating
+      // both on both meant an account granted just one lost the feature it
+      // was actually allowed to use.
       case RouterFeature.wirelessStations:
       case RouterFeature.wirelessScan:
         if (feature('wifi') == false) {
@@ -200,7 +203,9 @@ class RouterCapabilities {
             requiredPackage: 'wpad',
           );
         }
-        return _requireUbus('iwinfo', const ['assoclist', 'scan']);
+        return _requireUbus('iwinfo', [
+          target == RouterFeature.wirelessScan ? 'scan' : 'assoclist',
+        ]);
 
       case RouterFeature.hostHints:
         return _requireUbus('luci-rpc', const ['getHostHints']);

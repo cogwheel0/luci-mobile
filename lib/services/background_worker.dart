@@ -185,7 +185,7 @@ Future<RouterObservation?> _observe(
 
     return EventDeriver.observe(
       reachable: true,
-      dashboardData: {'wan': _wanFrom(dump)},
+      dashboardData: {'wan': wanStateFrom(dump)},
       clients: clientsFromLeases(leases is List ? leases : const []),
     );
   } catch (e, stack) {
@@ -199,17 +199,22 @@ dynamic _payload(dynamic result) =>
     result is List && result.length > 1 && result[0] == 0 ? result[1] : null;
 
 /// The WAN block in the shape `EventDeriver.observe` expects.
-Map<String, dynamic> _wanFrom(dynamic dump) {
+@visibleForTesting
+Map<String, dynamic> wanStateFrom(dynamic dump) {
   final interfaces = dump is Map ? dump['interface'] : null;
   if (interfaces is! List) return const {'up': false};
+  // Any WAN-like interface being up means there is internet. Returning on
+  // the first match let a down `wan6` mask an up `wan`, which the deriver
+  // then reported as "Internet connection lost" — a push notification about
+  // an outage that never happened.
+  var up = false;
   for (final entry in interfaces) {
     if (entry is! Map) continue;
     final name = entry['interface']?.toString() ?? '';
-    if (name == 'wan' || name == 'wwan' || name.startsWith('wan')) {
-      return {'up': entry['up'] == true};
-    }
+    if (name != 'wan' && name != 'wwan' && !name.startsWith('wan')) continue;
+    up = up || entry['up'] == true;
   }
-  return const {'up': false};
+  return {'up': up};
 }
 
 Future<MonitoredRouter?> _readRouter(SecureStorageService store) async {

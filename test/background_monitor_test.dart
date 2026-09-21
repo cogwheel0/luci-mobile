@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:luci_mobile/models/router_event.dart';
 import 'package:luci_mobile/services/background_monitor.dart';
+import 'package:luci_mobile/services/background_worker.dart';
 import 'package:luci_mobile/services/event_log.dart';
 
 final _at = DateTime.utc(2026, 9, 20, 12);
@@ -26,6 +27,8 @@ List<RouterEvent> notifiable(
 );
 
 void main() {
+  _wanDetection();
+
   group('deciding what is worth a notification', () {
     // The whole point of the feature.
     test('losing the internet is notified', () {
@@ -193,5 +196,60 @@ void main() {
       BackgroundMonitor.minimumInterval.inMinutes,
       greaterThanOrEqualTo(15),
     );
+  });
+}
+
+void _wanDetection() {
+  // A background poll that misreads the WAN raises a push notification about
+  // an outage that never happened — the exact false alarm this feature is
+  // built to avoid.
+  group('reading the WAN from an interface dump', () {
+    Map<String, dynamic> dump(List<Map<String, Object>> interfaces) => {
+      'interface': interfaces,
+    };
+
+    test('a down wan6 does not mask an up wan', () {
+      final wan = wanStateFrom(
+        dump([
+          {'interface': 'wan6', 'up': false},
+          {'interface': 'wan', 'up': true},
+        ]),
+      );
+      expect(wan['up'], isTrue);
+    });
+
+    test('every WAN-like interface down reads as down', () {
+      final wan = wanStateFrom(
+        dump([
+          {'interface': 'wan', 'up': false},
+          {'interface': 'wan6', 'up': false},
+        ]),
+      );
+      expect(wan['up'], isFalse);
+    });
+
+    test('a LAN-only router reads as down rather than throwing', () {
+      expect(
+        wanStateFrom(
+          dump([
+            {'interface': 'lan', 'up': true},
+          ]),
+        )['up'],
+        isFalse,
+      );
+      expect(wanStateFrom(const {})['up'], isFalse);
+      expect(wanStateFrom(null)['up'], isFalse);
+    });
+
+    test('wwan counts', () {
+      expect(
+        wanStateFrom(
+          dump([
+            {'interface': 'wwan', 'up': true},
+          ]),
+        )['up'],
+        isTrue,
+      );
+    });
   });
 }

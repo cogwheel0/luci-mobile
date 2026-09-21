@@ -190,6 +190,7 @@ class FirewallPlanner {
   static List<UciOperation> planUpdatePortForward({
     required PortForward existing,
     required String name,
+    required String sourceZone,
     required String sourcePort,
     required String destIp,
     required String destPort,
@@ -200,6 +201,9 @@ class FirewallPlanner {
       section: existing.section,
       values: {
         'name': name,
+        // The edit sheet offers a zone dropdown; leaving `src` out meant
+        // changing it reported success and did nothing.
+        'src': sourceZone,
         'src_dport': sourcePort,
         'dest_ip': destIp,
         'dest_port': destPort,

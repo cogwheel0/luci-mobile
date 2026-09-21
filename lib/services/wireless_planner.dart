@@ -147,9 +147,16 @@ class WirelessPlanner {
     bool? hidden,
     bool? isolate,
   }) {
+    // `psk-mixed` and `psk` both read back as wpa2 for display, but their
+    // uciValue is `psk2`. Writing that on an SSID rename would silently
+    // narrow the network and drop every WPA/TKIP client off it, so the
+    // option is only touched when the user actually picked something else.
+    final securityChanged =
+        WirelessSecurity.fromUci(existing.encryption) != security;
+
     final values = <String, String>{
       'ssid': ssid,
-      'encryption': security.uciValue,
+      if (securityChanged) 'encryption': security.uciValue,
       if (hidden != null) 'hidden': hidden ? '1' : '0',
       if (isolate != null) 'isolate': isolate ? '1' : '0',
     };

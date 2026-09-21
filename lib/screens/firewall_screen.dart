@@ -594,6 +594,7 @@ class _ForwardSheetState extends State<_ForwardSheet> {
         : FirewallPlanner.planUpdatePortForward(
             existing: widget.existing!,
             name: _name.text.trim(),
+            sourceZone: _srcZone,
             sourcePort: _srcPort.text.trim(),
             destIp: _destIp.text.trim(),
             destPort: _destPort.text.trim(),

@@ -98,7 +98,13 @@ class CapabilityService {
 
     // `uci.configs` is not granted to a stock LuCI session, so falling back to
     // reading each interesting config is the normal path, not the exception.
-    configs ??= await _probeConfigsIndividually(session);
+    // An empty list is not an answer either: the RPC layer returns one for an
+    // unrecognised payload shape, and a router with zero configs does not
+    // exist. Treating it as authoritative tells the user to install packages
+    // they already have.
+    if (configs == null || configs.isEmpty) {
+      configs = await _probeConfigsIndividually(session);
+    }
 
     // Both routes failing means we genuinely learned nothing: reporting every
     // package-gated feature as missing would be worse than admitting that.
