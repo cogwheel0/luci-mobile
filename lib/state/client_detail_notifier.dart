@@ -129,41 +129,23 @@ class ClientDetailLoader {
         .read(clientAliasStoreProvider)
         .aliasFor(session.routerId, mac);
 
-    // Host hints and the assoclist are enrichment: a failure degrades one
-    // card, it does not blank the page.
-    Map<String, dynamic> hints = const {};
-    try {
-      hints = await api.fetchHostHints(
-        session.ipAddress,
-        session.sysauth,
-        session.useHttps,
-      );
-    } catch (e, stack) {
-      Logger.exception('Host hints unavailable', e, stack);
-    }
+    // None of these reads depends on another, so they go out together: a
+    // router with several APs would otherwise make the page wait a round
+    // trip per interface before showing anything. Each catches its own
+    // failure - host hints and the assoclist are enrichment, a failure
+    // degrades one card rather than blanking the page.
+    final (hints, found, configs) = await (
+      _fetchHints(session, api),
+      _findStation(session, api),
+      _fetchConfigs(session, api),
+    ).wait;
 
-    StationInfo? station;
-    var stationNetworks = const <String>[];
-    var stationFailed = false;
-    try {
-      final found = await _findStation(session, api);
-      station = found?.station;
-      stationNetworks = found?.networks ?? const [];
-    } catch (e, stack) {
-      stationFailed = true;
-      Logger.exception('Station details unavailable', e, stack);
-    }
-
-    Map<String, dynamic> dhcp = const {};
-    Map<String, dynamic> firewall = const {};
-    var configFailed = false;
-    try {
-      dhcp = await _configValues(session, api, 'dhcp');
-      firewall = await _configValues(session, api, 'firewall');
-    } catch (e, stack) {
-      configFailed = true;
-      Logger.exception('Client config unavailable', e, stack);
-    }
+    final station = found.station;
+    final stationNetworks = found.networks;
+    final stationFailed = found.failed;
+    final dhcp = configs.dhcp;
+    final firewall = configs.firewall;
+    final configFailed = configs.failed;
 
     final host = ClientConfigPlanner.findHost(dhcp, mac);
     final hint = hints[mac];
@@ -216,14 +198,55 @@ class ClientDetailLoader {
 
   // ------------------------------------------------------------------ reads
 
-  /// The station entry for this client, plus the `network`s of the AP it is
-  /// associated to — the most direct evidence of which network it is on.
-  Future<({StationInfo station, List<String> networks})?> _findStation(
+  Future<Map<String, dynamic>> _fetchHints(
     RouterSession session,
     IApiService api,
   ) async {
+    try {
+      return await api.fetchHostHints(
+        session.ipAddress,
+        session.sysauth,
+        session.useHttps,
+      );
+    } catch (e, stack) {
+      Logger.exception('Host hints unavailable', e, stack);
+      return const {};
+    }
+  }
+
+  Future<
+    ({Map<String, dynamic> dhcp, Map<String, dynamic> firewall, bool failed})
+  >
+  _fetchConfigs(RouterSession session, IApiService api) async {
+    try {
+      final (dhcp, firewall) = await (
+        _configValues(session, api, 'dhcp'),
+        _configValues(session, api, 'firewall'),
+      ).wait;
+      return (dhcp: dhcp, firewall: firewall, failed: false);
+    } catch (e, stack) {
+      Logger.exception('Client config unavailable', e, stack);
+      return (
+        dhcp: const <String, dynamic>{},
+        firewall: const <String, dynamic>{},
+        failed: true,
+      );
+    }
+  }
+
+  /// The station entry for this client, plus the `network`s of the AP it is
+  /// associated to — the most direct evidence of which network it is on.
+  ///
+  /// Every AP interface is asked at once. [failed] is true when the client
+  /// was not found and at least one interface could not be read, because
+  /// then "not associated" is not something this router has said.
+  Future<({StationInfo? station, List<String> networks, bool failed})>
+  _findStation(RouterSession session, IApiService api) async {
+    const none = (station: null, networks: <String>[], failed: false);
     final wireless = ref.read(appStateProvider).dashboardData?['wireless'];
-    if (wireless is! Map) return null;
+    if (wireless is! Map) return none;
+
+    final aps = <({String ifname, List<String> networks})>[];
     for (final radio in wireless.values) {
       if (radio is! Map) continue;
       final interfaces = radio['interfaces'];
@@ -234,22 +257,40 @@ class ClientDetailLoader {
         if (config is Map && config['mode'] == 'sta') continue;
         final ifname = iface['ifname']?.toString();
         if (ifname == null) continue;
-        final stations = await api.fetchStationDetails(
-          session.ipAddress,
-          session.sysauth,
-          session.useHttps,
-          device: ifname,
-        );
-        final hit = stations[mac];
-        if (hit != null) {
-          return (
-            station: hit,
-            networks: _networksOf(config is Map ? config['network'] : null),
-          );
-        }
+        aps.add((
+          ifname: ifname,
+          networks: _networksOf(config is Map ? config['network'] : null),
+        ));
       }
     }
-    return null;
+    if (aps.isEmpty) return none;
+
+    var anyFailed = false;
+    final lookups = await Future.wait([
+      for (final ap in aps)
+        () async {
+          try {
+            final stations = await api.fetchStationDetails(
+              session.ipAddress,
+              session.sysauth,
+              session.useHttps,
+              device: ap.ifname,
+            );
+            return stations[mac];
+          } catch (e, stack) {
+            anyFailed = true;
+            Logger.exception('Stations on ${ap.ifname} unavailable', e, stack);
+            return null;
+          }
+        }(),
+    ]);
+    for (var i = 0; i < aps.length; i++) {
+      final hit = lookups[i];
+      if (hit != null) {
+        return (station: hit, networks: aps[i].networks, failed: false);
+      }
+    }
+    return (station: null, networks: const <String>[], failed: anyFailed);
   }
 
   /// A wifi-iface `network` option: a list, or a space-separated string.

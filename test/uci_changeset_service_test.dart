@@ -53,6 +53,10 @@ class _RecordingApi extends MockApiService {
   Object? confirmError;
   Object? revertError;
   Object? changesError;
+
+  /// Like [changesError], but only once `apply` has been called - the read
+  /// before apply succeeds, the session-liveness probes after it fail.
+  Object? changesErrorAfterApply;
   String addedSection = 'cfg0a1b2c';
 
   int get confirmCount => calls.where((c) => c == 'confirm').length;
@@ -115,6 +119,10 @@ class _RecordingApi extends MockApiService {
   }) async {
     calls.add('changes');
     if (changesError != null) throw changesError!;
+    if (changesErrorAfterApply != null &&
+        calls.any((c) => c.startsWith('apply'))) {
+      throw changesErrorAfterApply!;
+    }
     return changes;
   }
 
@@ -328,7 +336,7 @@ void main() {
         method: 'confirm',
         detail: 'Access denied',
       );
-      h.api.changesError = denied;
+      h.api.changesErrorAfterApply = denied;
       h.api.confirmError = denied;
 
       final outcome = await h.service.apply(_session);
@@ -411,6 +419,54 @@ void main() {
   });
 
   group('apply - failures and unchecked mode', () {
+    // Applying blind would commit whatever is staged, including the rows the
+    // foreign-change guard exists to refuse; and a failure after that would
+    // have nothing to revert or report.
+    test('an unreadable staging state refuses and backs out', () async {
+      final h = _build();
+      h.api.changesError = const RpcException(
+        object: 'uci',
+        method: 'changes',
+        detail: 'timeout',
+      );
+
+      final outcome = await h.service.apply(
+        _session,
+        ours: const {'dhcp', 'network'},
+        baseline: const UciChangeSet(
+          byConfig: {
+            'network': [
+              UciChange(op: UciOp.set, config: 'network', section: 'lan'),
+            ],
+          },
+          fetchedAt: null,
+        ),
+      );
+
+      expect(outcome.phase, ApplyPhase.failed);
+      expect(outcome.reason, RollbackReason.stateUnknown);
+      expect(h.api.calls.where((c) => c.startsWith('apply')), isEmpty);
+      // Only the config we alone dirtied is backed out.
+      expect(h.api.calls, contains('revert dhcp'));
+      expect(h.api.calls, isNot(contains('revert network')));
+      expect(outcome.stillStaged, isEmpty);
+    });
+
+    test('an unreadable staging state names what it could not clear', () async {
+      final h = _build();
+      h.api.changesError = Exception('timeout');
+      h.api.revertError = const RpcException(
+        object: 'uci',
+        method: 'revert',
+        status: 6,
+      );
+
+      final outcome = await h.service.apply(_session, ours: const {'dhcp'});
+
+      expect(outcome.reason, RollbackReason.stateUnknown);
+      expect(outcome.stillStaged, {'dhcp'});
+    });
+
     test('a rejected apply reverts and reports routerRejected', () async {
       final h = _build();
       h.api.changes = {

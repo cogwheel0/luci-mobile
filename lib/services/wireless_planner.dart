@@ -275,8 +275,31 @@ class WirelessPlanner {
 
   /// Channel widths a band can actually use.
   static List<String> htmodesFor(String? band) => switch (band) {
-    '5g' => const ['HT20', 'HT40', 'VHT20', 'VHT40', 'VHT80', 'VHT160', 'HE80'],
-    '6g' => const ['HE20', 'HE40', 'HE80', 'HE160'],
-    _ => const ['HT20', 'HT40'],
+    '5g' => const [
+      'HT20',
+      'HT40',
+      'VHT20',
+      'VHT40',
+      'VHT80',
+      'VHT160',
+      'HE20',
+      'HE40',
+      'HE80',
+      'HE160',
+      'EHT20',
+      'EHT40',
+      'EHT80',
+      'EHT160',
+    ],
+    '6g' => const [
+      'HE20',
+      'HE40',
+      'HE80',
+      'HE160',
+      'EHT80',
+      'EHT160',
+      'EHT320',
+    ],
+    _ => const ['HT20', 'HT40', 'HE20', 'HE40', 'EHT20', 'EHT40'],
   };
 }

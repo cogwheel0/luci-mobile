@@ -537,13 +537,24 @@ class _RadioSheet extends StatefulWidget {
 }
 
 class _RadioSheetState extends State<_RadioSheet> {
+  // Only what the user changes is written. Seeding an unset option with the
+  // dropdown's first entry would, say, drop a radio running the driver's
+  // default 80 MHz to HT20 because someone edited the country code.
   late String _channel = widget.radio.channel ?? 'auto';
-  late String _htmode =
-      widget.radio.htmode ??
-      WirelessPlanner.htmodesFor(widget.radio.band).first;
+  late String? _htmode = widget.radio.htmode;
   late final TextEditingController _country = TextEditingController(
     text: widget.radio.country ?? '',
   );
+
+  /// The widths to offer: the band's list, plus whatever the radio is set to
+  /// now if that is not in it, so the dropdown never shows a width the radio
+  /// is not using.
+  List<String> get _htmodes {
+    final known = WirelessPlanner.htmodesFor(widget.radio.band);
+    final current = widget.radio.htmode;
+    if (current == null || known.contains(current)) return known;
+    return [current, ...known];
+  }
 
   @override
   void dispose() {
@@ -555,7 +566,7 @@ class _RadioSheetState extends State<_RadioSheet> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final channels = WirelessPlanner.channelsFor(widget.radio.band);
-    final htmodes = WirelessPlanner.htmodesFor(widget.radio.band);
+    final htmodes = _htmodes;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -596,14 +607,20 @@ class _RadioSheetState extends State<_RadioSheet> {
             ),
             const SizedBox(height: LuciSpacing.md),
 
-            DropdownButtonFormField<String>(
-              initialValue: htmodes.contains(_htmode) ? _htmode : htmodes.first,
+            DropdownButtonFormField<String?>(
+              initialValue: _htmode,
               decoration: InputDecoration(labelText: l10n.channelWidth),
               items: [
+                // An unset width is the driver's own choice; keep it so.
+                if (widget.radio.htmode == null)
+                  DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text(l10n.channelAuto),
+                  ),
                 for (final m in htmodes)
-                  DropdownMenuItem(value: m, child: Text(m)),
+                  DropdownMenuItem<String?>(value: m, child: Text(m)),
               ],
-              onChanged: (v) => setState(() => _htmode = v ?? _htmode),
+              onChanged: (v) => setState(() => _htmode = v),
             ),
             const SizedBox(height: LuciSpacing.md),
 
@@ -628,13 +645,21 @@ class _RadioSheetState extends State<_RadioSheet> {
                 const SizedBox(width: LuciSpacing.sm),
                 FilledButton(
                   onPressed: () {
+                    final radio = widget.radio;
                     final country = _country.text.trim().toUpperCase();
+                    final htmode = _htmode;
                     Navigator.of(context).pop(
                       WirelessPlanner.planUpdateRadio(
-                        radio: widget.radio,
-                        channel: _channel,
-                        htmode: _htmode,
-                        country: country.isEmpty ? null : country,
+                        radio: radio,
+                        channel: _channel != (radio.channel ?? 'auto')
+                            ? _channel
+                            : null,
+                        htmode: htmode != null && htmode != radio.htmode
+                            ? htmode
+                            : null,
+                        country: country.isNotEmpty && country != radio.country
+                            ? country
+                            : null,
                       ),
                     );
                   },

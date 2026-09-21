@@ -53,8 +53,8 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
       final result = await service.run(session, _tool, target);
       if (!mounted) return;
       setState(() {
-        // A non-zero exit is a *result* here, not a failure: "host
-        // unreachable" is exactly what the user ran the tool to find out.
+        // A non-zero exit is a *result* here, not a failure: "100% packet
+        // loss" is exactly what the user ran the tool to find out.
         _output = result.output.isEmpty ? (result.stderr ?? '') : result.output;
       });
     } catch (e) {

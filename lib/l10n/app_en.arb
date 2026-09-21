@@ -777,6 +777,7 @@
   "notifyInBackgroundHelp": "Checks the router periodically and tells you what changed",
   "notifyPermissionDenied": "Android refused the notification permission. Grant it in system settings, then try again.",
   "notifySchedulingFailed": "This device would not let the app check the router in the background, so notifications stay off.",
+  "notifyNeedsRouter": "Background checks need a saved router. Add one first.",
   "notifyAbout": "Tell me about",
   "notifyWanDown": "Internet goes down",
   "notifyWanUp": "Internet comes back",

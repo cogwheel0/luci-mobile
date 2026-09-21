@@ -28,19 +28,19 @@ Future<ApplyOutcome?> applyUciOperations(
   final service = ref.read(uciChangesetServiceProvider);
   if (service == null) return null;
 
+  // Captured before the first await, not after. These operations were
+  // planned against this router's config — section names and all — so if
+  // the user switches routers while the capability probe or the apply lock
+  // is awaited, they must not land on whichever router is selected by then.
+  final queuedFor = ref.read(sessionProvider);
+  if (queuedFor == null) return null;
+
   final mode = await _applyMode(ref);
   // `uci.apply` is global, so the service needs to know which configs are
   // ours to tell somebody else's staged work apart from our own.
   final ours = {for (final op in ops) op.config};
 
   final appState = ref.read(appStateProvider);
-
-  // Captured before queuing, not after. These operations were planned
-  // against this router's config — section names and all — so if the user
-  // switches routers while the apply waits its turn, they must not land on
-  // whichever router happens to be selected when the lock frees up.
-  final queuedFor = ref.read(sessionProvider);
-  if (queuedFor == null) return null;
 
   // Queue behind any apply already in flight: staging is shared per session,
   // so interleaving would let one operation commit the other's half-built

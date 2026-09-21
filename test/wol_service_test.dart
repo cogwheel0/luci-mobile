@@ -1,8 +1,76 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:luci_mobile/services/mock_api_service.dart';
 import 'package:luci_mobile/services/wol_service.dart';
+import 'package:luci_mobile/state/router_session.dart';
+
+class _ConfigApi extends MockApiService {
+  Map<String, dynamic>? etherwake;
+  List<String>? sentParams;
+
+  @override
+  Future<dynamic> uciGetAll(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String config,
+    BuildContext? context,
+  }) async {
+    if (etherwake == null) throw Exception('no such config');
+    return [
+      0,
+      {'values': etherwake},
+    ];
+  }
+
+  @override
+  Future<dynamic> call(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String object,
+    required String method,
+    Map<String, dynamic>? params,
+    BuildContext? context,
+  }) async {
+    sentParams = (params?['params'] as List).cast<String>();
+    return [
+      0,
+      {'code': 0, 'stdout': 'sent'},
+    ];
+  }
+}
 
 void main() {
+  const session = RouterSession(
+    routerId: 'r1',
+    ipAddress: '192.168.1.1',
+    sysauth: 'sid',
+    useHttps: false,
+    token: 1,
+  );
+
+  // Without `-i`, etherwake sends on eth0 - the switch conduit on a DSA
+  // router, where the frame never reaches a LAN port. luci-app-wol's own
+  // config says which interface to use.
+  test('wake sends on the interface etherwake is configured for', () async {
+    final api = _ConfigApi()
+      ..etherwake = {
+        'setup': {'.type': 'etherwake', 'interface': 'br-lan'},
+      };
+
+    expect(await WolService(api).wake(session, 'aa:bb:cc:dd:ee:ff'), isTrue);
+    expect(api.sentParams, ['-D', '-i', 'br-lan', 'aa:bb:cc:dd:ee:ff']);
+  });
+
+  test('an unreadable etherwake config falls back to no interface', () async {
+    final api = _ConfigApi();
+
+    expect(await WolService(api).wake(session, 'aa:bb:cc:dd:ee:ff'), isTrue);
+    expect(api.sentParams, ['-D', 'aa:bb:cc:dd:ee:ff']);
+  });
+
   group('normalising a MAC for etherwake', () {
     test('accepts the forms the app already holds', () {
       expect(WolService.normaliseMac('AA:BB:CC:11:22:33'), 'aa:bb:cc:11:22:33');

@@ -499,6 +499,7 @@
   "notifyInBackgroundHelp": "定期的にルーターを確認して変化を知らせます",
   "notifyPermissionDenied": "Android が通知の許可を拒否しました。システム設定で許可してからもう一度お試しください。",
   "notifySchedulingFailed": "この端末ではアプリがバックグラウンドでルーターを確認できないため、通知はオフのままです。",
+  "notifyNeedsRouter": "バックグラウンド確認には保存済みのルーターが必要です。先にルーターを追加してください。",
   "notifyAbout": "知らせる項目",
   "notifyWanDown": "インターネットが切れたとき",
   "notifyWanUp": "インターネットが戻ったとき",

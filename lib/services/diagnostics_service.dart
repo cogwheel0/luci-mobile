@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
 import 'package:luci_mobile/state/router_session.dart';
 
@@ -62,25 +63,12 @@ class DiagnosticsService {
     DiagnosticTool tool,
     String target,
   ) async {
-    final result = await _api.systemExec(
-      session.ipAddress,
-      session.sysauth,
-      session.useHttps,
-      command: tool.path,
-      params: argsFor(tool, target),
-    );
-    return _parseExec(result);
+    return _exec(session, tool.path, argsFor(tool, target));
   }
 
   /// Reads the kernel ring buffer.
   Future<DiagnosticResult> kernelLog(RouterSession session) async {
-    final result = await _api.systemExec(
-      session.ipAddress,
-      session.sysauth,
-      session.useHttps,
-      command: '/bin/dmesg',
-    );
-    return _parseExec(result);
+    return _exec(session, '/bin/dmesg', const []);
   }
 
   /// Reads the system log.
@@ -93,20 +81,45 @@ class DiagnosticsService {
     RouterSession session, {
     int lines = 200,
   }) async {
-    final result = await _api.systemExec(
+    return _exec(session, '/sbin/logread', ['-l', '$lines']);
+  }
+
+  /// Runs [command] and returns whatever it printed, whatever it exited with.
+  ///
+  /// Deliberately not `systemExec`, which throws on a non-zero exit: here a
+  /// non-zero exit *is* the result. `ping` exits 1 for "100% packet loss"
+  /// and `nslookup` for NXDOMAIN, and that output is exactly what the user
+  /// ran the tool to see.
+  Future<DiagnosticResult> _exec(
+    RouterSession session,
+    String command,
+    List<String> params,
+  ) async {
+    final raw = await _api.call(
       session.ipAddress,
       session.sysauth,
       session.useHttps,
-      command: '/sbin/logread',
-      params: ['-l', '$lines'],
+      object: 'file',
+      method: 'exec',
+      params: {'command': command, 'params': params},
     );
-    return _parseExec(result);
+    if (raw is! List || raw.isEmpty) {
+      throw const RpcException(
+        object: 'file',
+        method: 'exec',
+        detail: 'invalid response',
+      );
+    }
+    final status = raw.first;
+    if (status is int && status != 0) {
+      throw RpcException(object: 'file', method: 'exec', status: status);
+    }
+    return _parseExec(raw);
   }
 
-  static DiagnosticResult _parseExec(dynamic raw) {
-    // systemExec already throws on a non-zero exit, so anything arriving here
-    // ran; still parse defensively because the envelope shape varies.
-    if (raw is! List || raw.length < 2 || raw[1] is! Map) {
+  static DiagnosticResult _parseExec(List<dynamic> raw) {
+    // The envelope shape varies between rpcd builds; parse defensively.
+    if (raw.length < 2 || raw[1] is! Map) {
       return const DiagnosticResult(output: '', exitCode: -1);
     }
     final data = raw[1] as Map;

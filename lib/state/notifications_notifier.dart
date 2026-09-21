@@ -18,6 +18,7 @@ class NotificationSettings {
     this.kinds = notifiableKinds,
     this.permissionDenied = false,
     this.schedulingFailed = false,
+    this.needsRouter = false,
   });
 
   final bool enabled;
@@ -33,16 +34,22 @@ class NotificationSettings {
   /// runs.
   final bool schedulingFailed;
 
+  /// True when there was no saved router to poll. The background isolate
+  /// reads the router from storage, so without one every run returns early.
+  final bool needsRouter;
+
   NotificationSettings copyWith({
     bool? enabled,
     Set<RouterEventKind>? kinds,
     bool? permissionDenied,
     bool? schedulingFailed,
+    bool? needsRouter,
   }) => NotificationSettings(
     enabled: enabled ?? this.enabled,
     kinds: kinds ?? this.kinds,
     permissionDenied: permissionDenied ?? this.permissionDenied,
     schedulingFailed: schedulingFailed ?? this.schedulingFailed,
+    needsRouter: needsRouter ?? this.needsRouter,
   );
 }
 
@@ -82,6 +89,7 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
           enabled: false,
           permissionDenied: false,
           schedulingFailed: false,
+          needsRouter: false,
         ),
       );
       return;
@@ -98,6 +106,7 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
           enabled: false,
           permissionDenied: true,
           schedulingFailed: false,
+          needsRouter: false,
         ),
       );
       return;
@@ -107,7 +116,19 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
     // freshly registered periodic task straight away. Register, then persist
     // "enabled": a stored flag that no task backs would come back on every
     // launch as a switch that does nothing.
-    await _saveRouter();
+    if (!await _saveRouter()) {
+      // Nothing to poll: the switch stays off and says why, rather than
+      // reading "on" over a poll that returns early every run.
+      state = AsyncValue.data(
+        current.copyWith(
+          enabled: false,
+          permissionDenied: false,
+          schedulingFailed: false,
+          needsRouter: true,
+        ),
+      );
+      return;
+    }
     if (!await _schedule()) {
       // No poll will ever read the credentials, so they do not stay.
       await disableBackgroundPoll(_store, failed: true);
@@ -116,6 +137,7 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
           enabled: false,
           permissionDenied: false,
           schedulingFailed: true,
+          needsRouter: false,
         ),
       );
       return;
@@ -134,6 +156,7 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
           enabled: false,
           permissionDenied: false,
           schedulingFailed: true,
+          needsRouter: false,
         ),
       );
       return;
@@ -143,6 +166,7 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
         enabled: true,
         permissionDenied: false,
         schedulingFailed: false,
+        needsRouter: false,
       ),
     );
   }
@@ -163,10 +187,11 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
   }
 
   /// Copies the selected router's credentials where the background isolate
-  /// can read them. It shares no memory with the app.
-  Future<void> _saveRouter() async {
+  /// can read them. It shares no memory with the app. False when there is
+  /// no saved router to copy.
+  Future<bool> _saveRouter() async {
     final router = ref.read(appStateProvider).selectedRouter;
-    if (router == null) return;
+    if (router == null) return false;
     await _store.writeValue(
       BackgroundKeys.router,
       jsonEncode(
@@ -182,6 +207,7 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
     // A different router means a different baseline; diffing across the
     // switch would report the other one's clients as having left.
     await _store.deleteValue(BackgroundKeys.observation(router.id));
+    return true;
   }
 
   Future<bool> _schedule() => schedulePoll();

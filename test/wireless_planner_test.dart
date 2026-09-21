@@ -269,6 +269,10 @@ void main() {
       expect(WirelessPlanner.channelsFor('5g'), isNot(contains('11')));
       expect(WirelessPlanner.htmodesFor('2g'), isNot(contains('VHT80')));
       expect(WirelessPlanner.htmodesFor('5g'), contains('VHT80'));
+      // A Wi-Fi 6 radio's real width must be offerable, or the sheet would
+      // show HT20 for a radio running HE80.
+      expect(WirelessPlanner.htmodesFor('5g'), contains('HE80'));
+      expect(WirelessPlanner.htmodesFor('2g'), contains('HE40'));
     });
 
     test('auto is always the first channel offered', () {
