@@ -505,6 +505,6 @@
   "notifyClientJoined": "새 기기가 접속할 때",
   "notifyIntervalNote": "Android는 백그라운드 확인을 15분보다 자주 실행하지 않으며, 배터리 절약을 위해 더 늦출 수 있습니다.",
   "notifyAwayNote": "확인은 라우터 네트워크에서만 동작합니다. 외출 중에는 건너뛰며 장애로 보고하지 않습니다.",
-  "changeBlockedByOthers": "라우터의 {configs}에 저장하지 않은 변경 사항이 남아 있습니다. 지금 적용하면 그것도 함께 반영됩니다. 먼저 취소하거나 적용하세요.",
-  "changeLeftStaged": "변경에 실패했고 라우터의 {configs}에 저장하지 않은 변경 사항이 남아 있습니다. LuCI에서 취소하거나 적용하세요."
+  "changeBlockedByOthers": "라우터의 {configs}에 저장하지 않은 변경 사항이 남아 있습니다. 지금 적용하면 그것도 함께 반영됩니다. 먼저 되돌리거나 적용하세요.",
+  "changeLeftStaged": "변경에 실패했고 라우터의 {configs}에 저장하지 않은 변경 사항이 남아 있습니다. LuCI에서 되돌리거나 적용하세요."
 }

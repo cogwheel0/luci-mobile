@@ -5,6 +5,7 @@ import 'package:luci_mobile/models/router_capabilities.dart';
 import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
+import 'package:luci_mobile/state/apply_lock.dart';
 import 'package:luci_mobile/state/feature_notifier.dart';
 import 'package:luci_mobile/state/feature_providers.dart';
 import 'package:luci_mobile/utils/logger.dart';
@@ -33,35 +34,40 @@ Future<ApplyOutcome?> applyUciOperations(
   final ours = {for (final op in ops) op.config};
 
   final appState = ref.read(appStateProvider);
-  appState.beginCriticalSection();
-  try {
-    return await ref.read(sessionGuardProvider).run<ApplyOutcome>((
-      session,
-      ctx,
-    ) async {
-      final staged = await service.stage(session, ops, context: ctx);
-      return service.apply(
+  // Queue behind any apply already in flight: staging is shared per session,
+  // so interleaving would let one operation commit the other's half-built
+  // change set.
+  return ref.read(applyLockProvider).run<ApplyOutcome?>(() async {
+    appState.beginCriticalSection();
+    try {
+      return await ref.read(sessionGuardProvider).run<ApplyOutcome>((
         session,
-        mode: mode,
-        ours: ours,
-        baseline: staged.baseline,
-        onPhase: onPhase,
+        ctx,
+      ) async {
+        final staged = await service.stage(session, ops, context: ctx);
+        return service.apply(
+          session,
+          mode: mode,
+          ours: ours,
+          baseline: staged.baseline,
+          onPhase: onPhase,
+        );
+      }, context: context?.mounted == true ? context : null);
+    } on UciStagingException catch (e, stack) {
+      Logger.exception('Staging $describe failed', e, stack);
+      return ApplyOutcome(
+        phase: ApplyPhase.failed,
+        applied: const UciChangeSet.empty(),
+        stillStaged: e.stillStaged,
+        error: e.cause,
       );
-    }, context: context?.mounted == true ? context : null);
-  } on UciStagingException catch (e, stack) {
-    Logger.exception('Staging $describe failed', e, stack);
-    return ApplyOutcome(
-      phase: ApplyPhase.failed,
-      applied: const UciChangeSet.empty(),
-      stillStaged: e.stillStaged,
-      error: e.cause,
-    );
-  } finally {
-    // Most changes only affect the screen that made them. A few — the
-    // hostname is the obvious one — are shown on the dashboard too, and
-    // invalidating the feature provider alone would leave it stale.
-    await appState.endCriticalSection(refresh: refreshDashboard);
-  }
+    } finally {
+      // Most changes only affect the screen that made them. A few — the
+      // hostname is the obvious one — are shown on the dashboard too, and
+      // invalidating the feature provider alone would leave it stale.
+      await appState.endCriticalSection(refresh: refreshDashboard);
+    }
+  });
 }
 
 /// Whether to ask the router for rollback protection.
