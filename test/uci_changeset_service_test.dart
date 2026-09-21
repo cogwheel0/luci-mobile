@@ -186,7 +186,7 @@ void main() {
         final h = _build();
         h.api.addedSection = 'cfg09ab12';
 
-        final sections = await h.service.stage(_session, const [
+        final staged = await h.service.stage(_session, const [
           UciAdd('dhcp', type: 'host', values: {'mac': 'AA:BB:CC:DD:EE:FF'}),
           UciSet('dhcp', section: 'lan', values: {'start': '100'}),
           UciRemove('firewall', section: 'cfg03', option: 'src_mac'),
@@ -200,14 +200,14 @@ void main() {
           'set dhcp.lan start',
           'delete firewall.cfg03.src_mac',
         ]);
-        expect(sections, {0: 'cfg09ab12'});
+        expect(staged.sections, {0: 'cfg09ab12'});
       },
     );
 
     test('a named add reports the name the caller chose', () async {
       final h = _build();
 
-      final sections = await h.service.stage(_session, const [
+      final staged = await h.service.stage(_session, const [
         UciAdd(
           'firewall',
           type: 'rule',
@@ -216,7 +216,7 @@ void main() {
         ),
       ]);
 
-      expect(sections[0], 'luci_mobile_block_aabb');
+      expect(staged.sections[0], 'luci_mobile_block_aabb');
     });
 
     test('reverts every touched config when an operation fails', () async {
@@ -513,6 +513,62 @@ void _foreignChangeRegressions() {
       final outcome = await h.service.apply(
         _session,
         ours: const {'dhcp'},
+        mode: ApplyMode.unchecked,
+      );
+
+      expect(outcome.phase, ApplyPhase.confirmed);
+    });
+
+    // The hole a config-name-only check leaves: a row already staged in a
+    // config this operation also touches is not ours just because the config
+    // is. Applying would commit an edit the user had backed out of.
+    test('a stale row inside an owned config is still foreign', () async {
+      final h = _build();
+      const baseline = UciChangeSet(
+        byConfig: {
+          'dhcp': [
+            UciChange(
+              op: UciOp.set,
+              config: 'dhcp',
+              section: 'oldhost',
+              option: 'ip',
+              value: '192.168.1.9',
+            ),
+          ],
+        },
+        fetchedAt: null,
+      );
+      h.api.changes = {
+        'dhcp': [
+          // Still there from before, plus the row this operation staged.
+          ['set', 'oldhost', 'ip', '192.168.1.9'],
+          ['set', 'lan', 'start', '100'],
+        ],
+      };
+
+      final outcome = await h.service.apply(
+        _session,
+        ours: const {'dhcp'},
+        baseline: baseline,
+      );
+
+      expect(outcome.reason, RollbackReason.foreignChanges);
+      expect(outcome.foreign.configs, {'dhcp'});
+      expect(h.api.calls.where((c) => c.startsWith('apply')), isEmpty);
+    });
+
+    test('rows this operation staged are not mistaken for stale', () async {
+      final h = _build();
+      h.api.changes = {
+        'dhcp': [
+          ['set', 'lan', 'start', '100'],
+        ],
+      };
+
+      final outcome = await h.service.apply(
+        _session,
+        ours: const {'dhcp'},
+        baseline: const UciChangeSet(byConfig: {}, fetchedAt: null),
         mode: ApplyMode.unchecked,
       );
 

@@ -81,6 +81,15 @@ class AppState extends ChangeNotifier {
   // path can re-login) stand down.
   bool _criticalSection = false;
 
+  /// How many applies are in flight.
+  ///
+  /// Two screens can each have an apply running — they take up to 90 seconds
+  /// and the user can navigate away mid-flight. Without a depth count the
+  /// first one to finish resumes polling during the second's rollback
+  /// window, and that traffic can invalidate the session its confirm needs.
+  int _criticalDepth = 0;
+  bool _pendingRefresh = false;
+
   // Set when dispose() runs; suppresses late async notifications.
   bool _isDisposed = false;
 
@@ -1433,6 +1442,7 @@ class AppState extends ChangeNotifier {
   /// Suspends background router traffic for the duration of a session-bound
   /// operation. Always pair with [endCriticalSection].
   void beginCriticalSection() {
+    _criticalDepth++;
     if (_criticalSection) return;
     _criticalSection = true;
     _throughputTimer?.cancel();
@@ -1443,6 +1453,13 @@ class AppState extends ChangeNotifier {
   /// re-establish the session itself (for example after a rollback).
   Future<void> endCriticalSection({bool refresh = true}) async {
     if (!_criticalSection) return;
+    // A nested `refresh: false` must not cancel an outer `refresh: true`.
+    _pendingRefresh = _pendingRefresh || refresh;
+    if (_criticalDepth > 0) _criticalDepth--;
+    if (_criticalDepth > 0) return;
+
+    refresh = _pendingRefresh;
+    _pendingRefresh = false;
     _criticalSection = false;
     notifyListeners();
     if (refresh) {

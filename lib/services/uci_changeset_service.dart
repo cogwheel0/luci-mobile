@@ -171,7 +171,7 @@ class UciChangesetService {
   ///
   /// On failure every config touched so far is reverted and a
   /// [UciStagingException] is thrown.
-  Future<Map<int, String>> stage(
+  Future<({Map<int, String> sections, UciChangeSet? baseline})> stage(
     RouterSession session,
     List<UciOperation> ops, {
     BuildContext? context,
@@ -188,9 +188,11 @@ class UciChangesetService {
     // Measured on OpenWrt 24.10.4: rpcd keeps staging *per session*, so this
     // is not about another admin's work — a second rpcd session's edits and
     // CLI-staged edits are both invisible here, and unaffected by our apply.
+    UciChangeSet? baseline;
     Set<String>? preExisting;
     try {
-      preExisting = (await pending(session, context: context)).configs;
+      baseline = await pending(session, context: context);
+      preExisting = baseline.configs;
     } catch (e, stack) {
       Logger.exception(
         'Could not read pending changes before staging',
@@ -201,6 +203,7 @@ class UciChangesetService {
       // reverts nothing: leaving our own half-staged change behind is
       // recoverable — it shows up as unsaved and can be discarded — whereas
       // silently dropping an edit the user still wanted is not.
+      baseline = null;
       preExisting = null;
     }
 
@@ -298,7 +301,7 @@ class UciChangesetService {
       }
     }
 
-    return generatedSections;
+    return (sections: generatedSections, baseline: baseline);
   }
 
   /// Discards staged changes for [configs].
@@ -337,6 +340,7 @@ class UciChangesetService {
     ApplyMode mode = ApplyMode.checked,
     Duration timeout = defaultTimeout,
     Set<String>? ours,
+    UciChangeSet? baseline,
     void Function(ApplyPhase phase, Duration remaining)? onPhase,
     BuildContext? context,
   }) async {
@@ -357,7 +361,7 @@ class UciChangesetService {
     // cannot pick up another client's work; `uci.changes` does not report it
     // and our apply leaves it pending.
     if (ours != null) {
-      final foreign = staged.foreignTo(ours);
+      final foreign = staged.foreignTo(ours, baseline: baseline);
       if (foreign.isNotEmpty) {
         Logger.warning(
           'Refusing to apply: unrelated changes still staged in '

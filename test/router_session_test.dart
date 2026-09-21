@@ -149,7 +149,7 @@ void main() {
       },
     );
 
-    test('begin is idempotent and end without begin is a no-op', () async {
+    test('end without begin is a no-op', () async {
       final state = AppState.forTesting(
         apiService: MockApiService(),
         authService: MockAuthService(),
@@ -158,10 +158,29 @@ void main() {
 
       await state.endCriticalSection();
       expect(state.isInCriticalSection, isFalse);
+    });
+
+    // Two screens can each have an apply in flight; they take up to 90
+    // seconds. The first to finish must not resume polling during the
+    // second's rollback window, because that traffic can invalidate the
+    // session its confirm depends on.
+    test('the section survives until every apply has ended', () async {
+      final state = AppState.forTesting(
+        apiService: MockApiService(),
+        authService: MockAuthService(),
+      );
+      addTearDown(state.dispose);
 
       state.beginCriticalSection();
       state.beginCriticalSection();
       expect(state.isInCriticalSection, isTrue);
+
+      await state.endCriticalSection(refresh: false);
+      expect(
+        state.isInCriticalSection,
+        isTrue,
+        reason: 'one apply is still running',
+      );
 
       await state.endCriticalSection(refresh: false);
       expect(state.isInCriticalSection, isFalse);

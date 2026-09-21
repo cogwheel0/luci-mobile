@@ -39,8 +39,14 @@ Future<ApplyOutcome?> applyUciOperations(
       session,
       ctx,
     ) async {
-      await service.stage(session, ops, context: ctx);
-      return service.apply(session, mode: mode, ours: ours, onPhase: onPhase);
+      final staged = await service.stage(session, ops, context: ctx);
+      return service.apply(
+        session,
+        mode: mode,
+        ours: ours,
+        baseline: staged.baseline,
+        onPhase: onPhase,
+      );
     }, context: context?.mounted == true ? context : null);
   } on UciStagingException catch (e, stack) {
     Logger.exception('Staging $describe failed', e, stack);

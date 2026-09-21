@@ -55,6 +55,13 @@ class UciChange {
   final String? option;
   final String? value;
 
+  /// Identifies the row independently of the value it carries.
+  ///
+  /// Ownership has to be decided per row, not per config: a change left
+  /// staged in `dhcp` by an earlier failed operation is not ours just
+  /// because this operation also touches `dhcp`.
+  String get key => '${op.name}|$section|${option ?? ""}';
+
   /// Parses one wire row, or returns null when the row is malformed or uses an
   /// operation this version does not model.
   static UciChange? fromWire(String config, List<String> row) {
@@ -119,17 +126,30 @@ class UciChangeSet {
   List<UciChange> forConfig(String config) =>
       byConfig[config] ?? const <UciChange>[];
 
-  /// The subset of this changeset that was *not* staged by [ours].
+  /// The subset of this changeset that this operation did not stage.
   ///
-  /// Used to warn before an apply that would also commit somebody else's
-  /// half-finished edit.
-  UciChangeSet foreignTo(Set<String> ours) => UciChangeSet(
-    byConfig: {
-      for (final entry in byConfig.entries)
-        if (!ours.contains(entry.key)) entry.key: entry.value,
-    },
-    fetchedAt: fetchedAt,
-  );
+  /// A row counts as foreign when it is in a config the operation never
+  /// touched, or when it was already staged before the operation began —
+  /// [baseline] captured just before staging. Without the baseline, a stray
+  /// row in a config we happen to be editing would be treated as ours and
+  /// committed along with it.
+  UciChangeSet foreignTo(Set<String> ours, {UciChangeSet? baseline}) {
+    final out = <String, List<UciChange>>{};
+    for (final entry in byConfig.entries) {
+      if (!ours.contains(entry.key)) {
+        if (entry.value.isNotEmpty) out[entry.key] = entry.value;
+        continue;
+      }
+      if (baseline == null) continue;
+      final before = {for (final c in baseline.forConfig(entry.key)) c.key};
+      final stale = [
+        for (final change in entry.value)
+          if (before.contains(change.key)) change,
+      ];
+      if (stale.isNotEmpty) out[entry.key] = stale;
+    }
+    return UciChangeSet(byConfig: out, fetchedAt: fetchedAt);
+  }
 
   static UciChangeSet fromWire(
     Map<String, List<List<String>>> raw, {
