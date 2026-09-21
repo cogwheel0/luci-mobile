@@ -34,10 +34,20 @@ Future<ApplyOutcome?> applyUciOperations(
   final ours = {for (final op in ops) op.config};
 
   final appState = ref.read(appStateProvider);
+
+  // Captured before queuing, not after. These operations were planned
+  // against this router's config — section names and all — so if the user
+  // switches routers while the apply waits its turn, they must not land on
+  // whichever router happens to be selected when the lock frees up.
+  final queuedFor = ref.read(sessionProvider);
+  if (queuedFor == null) return null;
+
   // Queue behind any apply already in flight: staging is shared per session,
   // so interleaving would let one operation commit the other's half-built
   // change set.
   return ref.read(applyLockProvider).run<ApplyOutcome?>(() async {
+    if (!ref.mounted || ref.read(sessionProvider) != queuedFor) return null;
+
     appState.beginCriticalSection();
     try {
       return await ref.read(sessionGuardProvider).run<ApplyOutcome>((
@@ -65,7 +75,15 @@ Future<ApplyOutcome?> applyUciOperations(
       // Most changes only affect the screen that made them. A few — the
       // hostname is the obvious one — are shown on the dashboard too, and
       // invalidating the feature provider alone would leave it stale.
-      await appState.endCriticalSection(refresh: refreshDashboard);
+      //
+      // Guarded, because this runs in a `finally`: a refresh that throws
+      // would replace the outcome the caller is waiting for with the cleanup
+      // error, turning a successful apply into a reported failure.
+      try {
+        await appState.endCriticalSection(refresh: refreshDashboard);
+      } catch (e, stack) {
+        Logger.exception('Resuming after $describe failed', e, stack);
+      }
     }
   });
 }

@@ -35,8 +35,24 @@ void main() {
       expect(order, ['a-start', 'a-end', 'b-start']);
     });
 
-    // A failed apply must not wedge every apply after it.
-    test('a failure does not block the queue', () async {
+    // A failed apply must not wedge every apply after it — including one
+    // that was already waiting behind it when it failed.
+    test('a successor already queued behind a failure still runs', () async {
+      final lock = ApplyLock();
+      final gate = Completer<void>();
+
+      final failing = lock.run<String>(() async {
+        await gate.future;
+        throw StateError('nope');
+      });
+      final queued = lock.run(() async => 'after');
+
+      gate.complete();
+      await expectLater(failing, throwsStateError);
+      expect(await queued, 'after');
+    });
+
+    test('a failure does not block a later run', () async {
       final lock = ApplyLock();
 
       final failing = lock.run<String>(() async => throw StateError('nope'));
@@ -51,6 +67,30 @@ void main() {
       await expectLater(
         lock.run<String>(() async => throw StateError('mine')),
         throwsStateError,
+      );
+    });
+
+    // The guard that matters most is in applyUciOperations, not here: a
+    // queued apply must abandon if the user switched routers while it
+    // waited. This pins the lock behaviour that makes such a wait possible.
+    test('a run can observe state that changed while it waited', () async {
+      final lock = ApplyLock();
+      final gate = Completer<void>();
+      var selected = 'router-a';
+
+      final first = lock.run(() async {
+        await gate.future;
+        return 'first';
+      });
+      final second = lock.run(() async => selected);
+
+      selected = 'router-b';
+      gate.complete();
+      await first;
+      expect(
+        await second,
+        'router-b',
+        reason: 'the queued body runs after the switch, so it must re-check',
       );
     });
 
