@@ -9,6 +9,7 @@ class InterfaceSubnet {
     required this.address,
     required this.base,
     required this.prefix,
+    this.upstream = false,
   });
 
   /// The logical interface (`lan`, `guest`, …).
@@ -16,6 +17,13 @@ class InterfaceSubnet {
   final String address;
   final List<int> base;
   final int prefix;
+
+  /// True for the interface the default route leaves by (or one named like
+  /// it). Clients do not sit there, however wide its subnet.
+  final bool upstream;
+
+  bool contains(List<int> octets) =>
+      ClientConfigPlanner._sameSubnet(octets, base, prefix);
 }
 
 /// Where a client sits: the logical network, and the interface subnet it was
@@ -169,34 +177,59 @@ class ClientConfigPlanner {
   }) {
     final subnets = interfaceSubnets(interfaceDump);
 
-    InterfaceSubnet? containing(String address, {String? onInterface}) {
-      final octets = _parseIpv4(address);
-      if (octets == null) return null;
-      for (final subnet in subnets) {
-        if (onInterface != null && subnet.name != onInterface) continue;
-        if (_sameSubnet(octets, subnet.base, subnet.prefix)) return subnet;
-      }
-      return null;
-    }
-
     for (final network in wirelessNetworks) {
       final onInterface = subnets.where((s) => s.name == network).toList();
       if (onInterface.isEmpty) continue;
       // The AP says which interface; the address says which of its subnets.
       for (final address in addresses) {
-        final hit = containing(address, onInterface: network);
+        final hit = subnetContaining(address, onInterface);
         if (hit != null) return ClientNetwork(network, hit);
       }
       return ClientNetwork(network, onInterface.first);
     }
+    final lanSide = subnets.where((s) => !s.upstream).toList();
     for (final address in addresses) {
-      final hit = containing(address);
+      final hit = subnetContaining(address, lanSide);
       if (hit != null) return ClientNetwork(hit.name, hit);
     }
     for (final network in wirelessNetworks) {
       if (network.isNotEmpty) return ClientNetwork(network, null);
     }
     return null;
+  }
+
+  /// The most specific of [subnets] that holds [address], or null.
+  ///
+  /// Longest prefix, not first listed: a /16 upstream or a wide transit
+  /// network must not swallow a client that a /24 describes exactly.
+  static InterfaceSubnet? subnetContaining(
+    String address,
+    Iterable<InterfaceSubnet> subnets,
+  ) {
+    final octets = _parseIpv4(address);
+    if (octets == null) return null;
+    InterfaceSubnet? best;
+    for (final subnet in subnets) {
+      if (!subnet.contains(octets)) continue;
+      if (best == null || subnet.prefix > best.prefix) best = subnet;
+    }
+    return best;
+  }
+
+  /// The dynamic pool of every `config dhcp` section, keyed by the network
+  /// it serves — the `interface` option, which need not match the section
+  /// name (`config dhcp 'guest_pool'` with `option interface 'guest'`).
+  static Map<String, DhcpPool> dhcpPools(Map<String, dynamic> dhcpValues) {
+    final out = <String, DhcpPool>{};
+    for (final entry in sectionsOfType(dhcpValues, 'dhcp')) {
+      if (_str(entry.value['ignore']) == '1') continue;
+      final network = _str(entry.value['interface']) ?? entry.key;
+      final start = int.tryParse(_str(entry.value['start']) ?? '');
+      final limit = int.tryParse(_str(entry.value['limit']) ?? '');
+      if (start == null || limit == null) continue;
+      out[network] = DhcpPool(start: start, limit: limit);
+    }
+    return out;
   }
 
   /// Every IPv4 subnet in a `network.interface dump`, in the dump's order.
@@ -210,6 +243,8 @@ class ClientConfigPlanner {
       if (name == null || name.isEmpty || name == 'loopback') continue;
       final addrs = iface['ipv4-address'];
       if (addrs is! List) continue;
+      final upstream =
+          _hasDefaultRoute(iface['route']) || name.startsWith('wan');
       for (final addr in addrs) {
         if (addr is! Map) continue;
         final base = _parseIpv4(addr['address']?.toString() ?? '');
@@ -224,11 +259,19 @@ class ClientConfigPlanner {
             address: addr['address'].toString(),
             base: base,
             prefix: prefix,
+            upstream: upstream,
           ),
         );
       }
     }
     return out;
+  }
+
+  static bool _hasDefaultRoute(dynamic routes) {
+    if (routes is! List) return false;
+    return routes.any(
+      (r) => r is Map && r['target'] == '0.0.0.0' && r['mask'] == 0,
+    );
   }
 
   /// The firewall zone whose `network` list contains [network].
@@ -253,31 +296,31 @@ class ClientConfigPlanner {
 
   // ------------------------------------------------------------- validation
 
-  /// Checks a proposed reservation IP against the interface subnet, the DHCP
-  /// pool and the other reservations.
+  /// Checks a proposed reservation IP against the subnets it may sit on,
+  /// the DHCP pool of the one it lands in, and the other reservations.
+  ///
+  /// [subnets] is the client's own subnet when that is known, or every
+  /// LAN-side subnet when it is not — an address on none of them would
+  /// never be handed out. Empty means the router's interfaces could not be
+  /// read, and the subnet check is skipped rather than refusing everything.
   static IpCheckResult checkReservationIp(
     String ip, {
-    required String? interfaceIp,
-    required int? prefixLength,
+    required Iterable<InterfaceSubnet> subnets,
     required Set<String> alreadyReserved,
-    int? poolStart,
-    int? poolLimit,
+    Map<String, DhcpPool> pools = const {},
   }) {
     final octets = _parseIpv4(ip);
     if (octets == null) return IpCheckResult.malformed;
     if (alreadyReserved.contains(ip)) return IpCheckResult.duplicate;
+    if (subnets.isEmpty) return IpCheckResult.ok;
 
-    final base = interfaceIp == null ? null : _parseIpv4(interfaceIp);
-    if (base != null && prefixLength != null) {
-      if (!_sameSubnet(octets, base, prefixLength)) {
-        return IpCheckResult.outsideSubnet;
-      }
-      if (poolStart != null && poolLimit != null && prefixLength >= 24) {
-        final host = octets[3];
-        if (host >= poolStart && host < poolStart + poolLimit) {
-          return IpCheckResult.insidePool;
-        }
-      }
+    final subnet = subnetContaining(ip, subnets);
+    if (subnet == null) return IpCheckResult.outsideSubnet;
+    // `start`/`limit` count hosts within the last octet; on anything wider
+    // than a /24 dnsmasq's arithmetic is not this simple, so do not guess.
+    final pool = pools[subnet.name];
+    if (pool != null && subnet.prefix >= 24 && pool.coversHost(octets[3])) {
+      return IpCheckResult.insidePool;
     }
     return IpCheckResult.ok;
   }

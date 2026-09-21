@@ -23,6 +23,10 @@ class BackgroundKeys {
   static const enabled = 'bg:enabled';
   static const router = 'bg:router';
   static const kinds = 'bg:kinds';
+
+  /// Set when a registration was refused, so the settings screen can say
+  /// why the switch is off even when that happened at startup.
+  static const schedulingFailed = 'bg:schedulingFailed';
   static String observation(String routerId) => 'bg:last:$routerId';
 }
 
@@ -35,7 +39,25 @@ class BackgroundKeys {
 Future<void> ensureScheduled({SecureStorageService? storage}) async {
   final store = storage ?? SecureStorageService();
   if (await store.readValue(BackgroundKeys.enabled) != 'true') return;
-  await schedulePoll(keepExisting: true);
+  if (await schedulePoll(keepExisting: true)) return;
+  // Refused: the switch must not keep reading "on" over a poll that will
+  // never run, and the credentials it would have used have no reader.
+  await disableBackgroundPoll(store, failed: true);
+}
+
+/// Turns the poll off in storage. With [failed], records that it was the
+/// platform's refusal rather than the user's choice.
+Future<void> disableBackgroundPoll(
+  SecureStorageService store, {
+  bool failed = false,
+}) async {
+  await store.writeValue(BackgroundKeys.enabled, 'false');
+  await store.deleteValue(BackgroundKeys.router);
+  if (failed) {
+    await store.writeValue(BackgroundKeys.schedulingFailed, 'true');
+  } else {
+    await store.deleteValue(BackgroundKeys.schedulingFailed);
+  }
 }
 
 /// Registers the periodic poll. Returns false when the platform refused.

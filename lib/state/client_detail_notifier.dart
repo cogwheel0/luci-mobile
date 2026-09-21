@@ -30,10 +30,8 @@ class ClientDetail {
     this.host,
     this.blockRule,
     this.zone,
-    this.subnetIp,
-    this.prefixLength,
-    this.poolStart,
-    this.poolLimit,
+    this.subnets = const [],
+    this.pools = const {},
     this.reservedIps = const {},
     this.stationUnavailable = false,
     this.configUnavailable = false,
@@ -56,10 +54,14 @@ class ClientDetail {
   /// cannot be offered, because guessing `lan` breaks guest VLANs.
   final String? zone;
 
-  final String? subnetIp;
-  final int? prefixLength;
-  final int? poolStart;
-  final int? poolLimit;
+  /// Where a reservation may land: the client's own subnet when known, or
+  /// every LAN-side subnet when it is not. Empty when the interfaces could
+  /// not be read.
+  final List<InterfaceSubnet> subnets;
+
+  /// DHCP pools by network, for the in-pool warning.
+  final Map<String, DhcpPool> pools;
+
   final Set<String> reservedIps;
 
   /// The assoclist read failed; the signal card degrades on its own rather
@@ -89,10 +91,8 @@ class ClientDetail {
     host: clearHost ? null : (host ?? this.host),
     blockRule: clearBlockRule ? null : (blockRule ?? this.blockRule),
     zone: zone,
-    subnetIp: subnetIp,
-    prefixLength: prefixLength,
-    poolStart: poolStart,
-    poolLimit: poolLimit,
+    subnets: subnets,
+    pools: pools,
     reservedIps: reservedIps,
     stationUnavailable: stationUnavailable,
     configUnavailable: configUnavailable,
@@ -173,9 +173,10 @@ class ClientDetailLoader {
     // client — its addresses, or the AP it is associated to — and not from
     // whichever interface the router happens to list first. Live lease
     // first: host hints remember addresses a client has since moved off.
-    final interfaceDump = appState.dashboardData?['interfaceDump'];
+    final rawDump = appState.dashboardData?['interfaceDump'];
+    final interfaceDump = rawDump is Map ? rawDump : null;
     final located = ClientConfigPlanner.networkForClient(
-      interfaceDump: interfaceDump is Map ? interfaceDump : null,
+      interfaceDump: interfaceDump,
       addresses: <String>{
         ..._leaseAddresses(appState),
         ?host?.ip,
@@ -184,7 +185,14 @@ class ClientDetailLoader {
       wirelessNetworks: stationNetworks,
     );
     final network = located?.name;
-    final subnet = located?.subnet;
+    // A reservation is checked against the client's own subnet when it is
+    // known; otherwise against every LAN-side one, so an address that no
+    // interface would ever serve is still refused.
+    final subnets = located?.subnet != null
+        ? [located!.subnet!]
+        : ClientConfigPlanner.interfaceSubnets(
+            interfaceDump,
+          ).where((s) => !s.upstream).toList();
 
     return ClientDetail(
       alias: alias,
@@ -195,10 +203,8 @@ class ClientDetailLoader {
       host: host,
       blockRule: ClientConfigPlanner.findBlockRule(firewall, mac),
       zone: ClientConfigPlanner.zoneForNetwork(firewall, network),
-      subnetIp: subnet?.address,
-      prefixLength: subnet?.prefix,
-      poolStart: network == null ? null : _intOption(dhcp, network, 'start'),
-      poolLimit: network == null ? null : _intOption(dhcp, network, 'limit'),
+      subnets: subnets,
+      pools: ClientConfigPlanner.dhcpPools(dhcp),
       reservedIps: ClientConfigPlanner.reservedIps(
         dhcp,
         exceptSection: host?.section,
@@ -288,16 +294,6 @@ class ClientDetailLoader {
     final raw = hint[key];
     if (raw is! List) return const [];
     return raw.map((e) => e.toString()).toList();
-  }
-
-  static int? _intOption(
-    Map<String, dynamic> values,
-    String section,
-    String option,
-  ) {
-    final s = values[section];
-    if (s is! Map) return null;
-    return int.tryParse(s[option]?.toString() ?? '');
   }
 }
 

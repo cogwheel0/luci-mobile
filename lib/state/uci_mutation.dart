@@ -60,7 +60,7 @@ Future<ApplyOutcome?> applyUciOperations(
           mode: mode,
           ours: ours,
           baseline: staged.baseline,
-          restaged: staged.keys,
+          writtenSections: staged.written,
           onPhase: onPhase,
         );
       }, context: context?.mounted == true ? context : null);

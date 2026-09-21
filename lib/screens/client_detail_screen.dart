@@ -657,11 +657,9 @@ class _ReservationDialogState extends State<_ReservationDialog> {
     setState(() {
       _check = ClientConfigPlanner.checkReservationIp(
         value,
-        interfaceIp: widget.detail.subnetIp,
-        prefixLength: widget.detail.prefixLength,
+        subnets: widget.detail.subnets,
         alreadyReserved: widget.detail.reservedIps,
-        poolStart: widget.detail.poolStart,
-        poolLimit: widget.detail.poolLimit,
+        pools: widget.detail.pools,
       );
     });
   }

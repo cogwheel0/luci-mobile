@@ -150,6 +150,15 @@ void main() {
   });
 
   group('reservation IP checks', () {
+    const lan = [
+      InterfaceSubnet(
+        name: 'lan',
+        address: '192.168.1.1',
+        base: [192, 168, 1, 1],
+        prefix: 24,
+      ),
+    ];
+    const pools = {'lan': DhcpPool(start: 100, limit: 150)};
     Set<String> reserved({String? except}) =>
         ClientConfigPlanner.reservedIps(_dhcp, exceptSection: except);
 
@@ -157,11 +166,9 @@ void main() {
       expect(
         ClientConfigPlanner.checkReservationIp(
           '192.168.1.40',
-          interfaceIp: '192.168.1.1',
-          prefixLength: 24,
+          subnets: lan,
           alreadyReserved: reserved(),
-          poolStart: 100,
-          poolLimit: 150,
+          pools: pools,
         ),
         IpCheckResult.ok,
       );
@@ -171,8 +178,7 @@ void main() {
       expect(
         ClientConfigPlanner.checkReservationIp(
           '10.0.0.5',
-          interfaceIp: '192.168.1.1',
-          prefixLength: 24,
+          subnets: lan,
           alreadyReserved: reserved(),
         ),
         IpCheckResult.outsideSubnet,
@@ -184,11 +190,9 @@ void main() {
     test('an address inside the DHCP pool warns but does not block', () {
       final result = ClientConfigPlanner.checkReservationIp(
         '192.168.1.120',
-        interfaceIp: '192.168.1.1',
-        prefixLength: 24,
+        subnets: lan,
         alreadyReserved: reserved(),
-        poolStart: 100,
-        poolLimit: 150,
+        pools: pools,
       );
       expect(result, IpCheckResult.insidePool);
       expect(result.isBlocking, isFalse);
@@ -198,8 +202,7 @@ void main() {
     test('a duplicate of another reservation is blocking', () {
       final result = ClientConfigPlanner.checkReservationIp(
         '192.168.1.51',
-        interfaceIp: '192.168.1.1',
-        prefixLength: 24,
+        subnets: lan,
         alreadyReserved: reserved(),
       );
       expect(result, IpCheckResult.duplicate);
@@ -210,8 +213,7 @@ void main() {
       expect(
         ClientConfigPlanner.checkReservationIp(
           '192.168.1.50',
-          interfaceIp: '192.168.1.1',
-          prefixLength: 24,
+          subnets: lan,
           alreadyReserved: reserved(except: 'cfg01'),
         ),
         IpCheckResult.ok,
@@ -223,8 +225,7 @@ void main() {
         expect(
           ClientConfigPlanner.checkReservationIp(
             bad,
-            interfaceIp: '192.168.1.1',
-            prefixLength: 24,
+            subnets: lan,
             alreadyReserved: const {},
           ),
           IpCheckResult.malformed,
@@ -233,16 +234,68 @@ void main() {
       }
     });
 
-    test('an unknown subnet skips the subnet check rather than blocking', () {
+    test('unreadable interfaces skip the subnet check rather than block', () {
       expect(
         ClientConfigPlanner.checkReservationIp(
           '10.0.0.5',
-          interfaceIp: null,
-          prefixLength: null,
+          subnets: const [],
           alreadyReserved: const {},
         ),
         IpCheckResult.ok,
       );
+    });
+
+    // With the client's own network unknown, any LAN-side subnet will do -
+    // but an address on none of them would still never be served.
+    test('an unknown client is checked against every LAN-side subnet', () {
+      const all = [
+        InterfaceSubnet(
+          name: 'lan',
+          address: '192.168.1.1',
+          base: [192, 168, 1, 1],
+          prefix: 24,
+        ),
+        InterfaceSubnet(
+          name: 'guest',
+          address: '192.168.2.1',
+          base: [192, 168, 2, 1],
+          prefix: 24,
+        ),
+      ];
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          '192.168.2.9',
+          subnets: all,
+          alreadyReserved: const {},
+          pools: const {'guest': DhcpPool(start: 2, limit: 50)},
+        ),
+        IpCheckResult.insidePool,
+      );
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          '10.0.0.5',
+          subnets: all,
+          alreadyReserved: const {},
+        ),
+        IpCheckResult.outsideSubnet,
+      );
+    });
+
+    test('pools are keyed by the network a dhcp section serves', () {
+      final pools = ClientConfigPlanner.dhcpPools({
+        'guest_pool': {
+          '.type': 'dhcp',
+          'interface': 'guest',
+          'start': '20',
+          'limit': '30',
+        },
+        'lan': {'.type': 'dhcp', 'start': '100', 'limit': '150'},
+        'wan': {'.type': 'dhcp', 'interface': 'wan', 'ignore': '1'},
+      });
+      expect(pools.keys, {'guest', 'lan'});
+      expect(pools['guest']!.start, 20);
+      expect(pools['guest']!.coversHost(49), isTrue);
+      expect(pools['guest']!.coversHost(50), isFalse);
     });
   });
 
@@ -552,6 +605,71 @@ void main() {
         ClientConfigPlanner.networkForClient(
           interfaceDump: guestFirst,
           addresses: const ['192.168.1.5', '192.168.2.5'],
+        )?.name,
+        'lan',
+      );
+    });
+
+    // Double NAT: the upstream box hands the router a /16 that swallows the
+    // lan /24. The dump lists it first; the client is still on lan.
+    test('a wide upstream subnet never claims a lan client', () {
+      final doubleNat = <String, dynamic>{
+        'interface': [
+          {
+            'interface': 'transit',
+            'ipv4-address': [
+              {'address': '192.168.0.7', 'mask': 16},
+            ],
+            'route': [
+              {'target': '0.0.0.0', 'mask': 0, 'nexthop': '192.168.0.1'},
+            ],
+          },
+          {
+            'interface': 'lan',
+            'ipv4-address': [
+              {'address': '192.168.1.1', 'mask': 24},
+            ],
+          },
+        ],
+      };
+      expect(
+        ClientConfigPlanner.networkForClient(
+          interfaceDump: doubleNat,
+          addresses: const ['192.168.1.50'],
+        )?.name,
+        'lan',
+      );
+      // An address only the upstream holds is not a client of this router.
+      expect(
+        ClientConfigPlanner.networkForClient(
+          interfaceDump: doubleNat,
+          addresses: const ['192.168.7.7'],
+        ),
+        isNull,
+      );
+    });
+
+    test('overlapping LAN-side subnets resolve to the most specific', () {
+      final nested = <String, dynamic>{
+        'interface': [
+          {
+            'interface': 'iot',
+            'ipv4-address': [
+              {'address': '10.0.0.1', 'mask': 8},
+            ],
+          },
+          {
+            'interface': 'lan',
+            'ipv4-address': [
+              {'address': '10.0.1.1', 'mask': 24},
+            ],
+          },
+        ],
+      };
+      expect(
+        ClientConfigPlanner.networkForClient(
+          interfaceDump: nested,
+          addresses: const ['10.0.1.50'],
         )?.name,
         'lan',
       );

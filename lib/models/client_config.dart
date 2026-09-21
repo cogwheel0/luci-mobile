@@ -52,6 +52,17 @@ class ClientBlockRule {
 }
 
 /// Why a proposed reservation IP was rejected or flagged.
+/// The dynamic range a `config dhcp` section hands out: [start] hosts from
+/// the interface address, [limit] of them.
+@immutable
+class DhcpPool {
+  const DhcpPool({required this.start, required this.limit});
+  final int start;
+  final int limit;
+
+  bool coversHost(int host) => host >= start && host < start + limit;
+}
+
 enum IpCheckResult {
   ok,
 

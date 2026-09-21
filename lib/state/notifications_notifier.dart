@@ -9,6 +9,7 @@ import 'package:luci_mobile/services/background_worker.dart';
 import 'package:luci_mobile/services/notification_service.dart';
 import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
+import 'package:luci_mobile/utils/logger.dart';
 
 @immutable
 class NotificationSettings {
@@ -61,9 +62,12 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
   @override
   Future<NotificationSettings> build() async {
     final enabled = await _store.readValue(BackgroundKeys.enabled) == 'true';
+    final failed =
+        await _store.readValue(BackgroundKeys.schedulingFailed) == 'true';
     return NotificationSettings(
       enabled: enabled,
       kinds: await readNotificationKinds(_store),
+      schedulingFailed: !enabled && failed,
     );
   }
 
@@ -71,7 +75,7 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
     final current = state.value ?? const NotificationSettings();
 
     if (!enabled) {
-      await _store.writeValue(BackgroundKeys.enabled, 'false');
+      await disableBackgroundPoll(_store);
       await _cancel();
       state = AsyncValue.data(
         current.copyWith(
@@ -105,9 +109,8 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
     // launch as a switch that does nothing.
     await _saveRouter();
     if (!await _schedule()) {
-      await _store.writeValue(BackgroundKeys.enabled, 'false');
-      // No poll will ever read them, so the credentials do not stay.
-      await _store.deleteValue(BackgroundKeys.router);
+      // No poll will ever read the credentials, so they do not stay.
+      await disableBackgroundPoll(_store, failed: true);
       state = AsyncValue.data(
         current.copyWith(
           enabled: false,
@@ -117,7 +120,24 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
       );
       return;
     }
-    await _store.writeValue(BackgroundKeys.enabled, 'true');
+    try {
+      await _store.writeValue(BackgroundKeys.enabled, 'true');
+      await _store.deleteValue(BackgroundKeys.schedulingFailed);
+    } catch (e, stack) {
+      // The task is registered and would poll with stored credentials while
+      // the switch reads off and nothing ever cancels it. Undo both.
+      Logger.exception('Persisting the notification switch failed', e, stack);
+      await _cancel();
+      await disableBackgroundPoll(_store, failed: true);
+      state = AsyncValue.data(
+        current.copyWith(
+          enabled: false,
+          permissionDenied: false,
+          schedulingFailed: true,
+        ),
+      );
+      return;
+    }
     state = AsyncValue.data(
       current.copyWith(
         enabled: true,

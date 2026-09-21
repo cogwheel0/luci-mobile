@@ -64,6 +64,9 @@ class UciChange {
   /// are different rows.
   String get key => '$config|${op.name}|$section|${option ?? ""}';
 
+  /// The section this row belongs to, qualified by config.
+  String get sectionId => '$config|$section';
+
   /// Parses one wire row, or returns null when the row is malformed or uses an
   /// operation this version does not model.
   static UciChange? fromWire(String config, List<String> row) {
@@ -136,15 +139,18 @@ class UciChangeSet {
   /// row in a config we happen to be editing would be treated as ours and
   /// committed along with it.
   ///
-  /// [restaged] holds the keys of the rows this operation wrote. A baseline
-  /// row with one of those keys has been overwritten by ours — `uci.changes`
-  /// keeps one row per option — so it is not foreign. Without this, retrying
-  /// an edit whose failed attempt could not be reverted (the stock ACL denies
-  /// `uci.revert`) would be refused forever from the app.
+  /// [writtenSections] holds the [UciChange.sectionId]s this operation wrote
+  /// to. Staging is per rpcd session, so a baseline row on a section we are
+  /// writing again is our own earlier attempt at the same edit — one whose
+  /// failed apply could not be reverted, because the stock ACL denies
+  /// `uci.revert`. Refusing it would leave that edit impossible to retry
+  /// from the app. Ownership is per section rather than per option because
+  /// the retry does not always repeat the same rows: once the router shows
+  /// the staged section, the planner edits it instead of adding it again.
   UciChangeSet foreignTo(
     Set<String> ours, {
     UciChangeSet? baseline,
-    Set<String> restaged = const {},
+    Set<String> writtenSections = const {},
   }) {
     final out = <String, List<UciChange>>{};
     for (final entry in byConfig.entries) {
@@ -156,7 +162,8 @@ class UciChangeSet {
       final before = {for (final c in baseline.forConfig(entry.key)) c.key};
       final stale = [
         for (final change in entry.value)
-          if (before.contains(change.key) && !restaged.contains(change.key))
+          if (before.contains(change.key) &&
+              !writtenSections.contains(change.sectionId))
             change,
       ];
       if (stale.isNotEmpty) out[entry.key] = stale;
@@ -185,14 +192,6 @@ class UciChangeSet {
 sealed class UciOperation {
   const UciOperation(this.config);
   final String config;
-
-  /// The [UciChange.key]s this operation shows up as in `uci.changes` once
-  /// staged. An anonymous [UciAdd] only knows its section after the router
-  /// has named it, hence [section].
-  Set<String> changeKeys({String? section});
-
-  String _key(UciOp op, String section, [String? option]) =>
-      '$config|${op.name}|$section|${option ?? ""}';
 }
 
 /// Assigns options on an existing section.
@@ -200,12 +199,6 @@ final class UciSet extends UciOperation {
   const UciSet(super.config, {required this.section, required this.values});
   final String section;
   final Map<String, String> values;
-
-  @override
-  Set<String> changeKeys({String? section}) => {
-    for (final option in values.keys)
-      _key(UciOp.set, section ?? this.section, option),
-  };
 }
 
 /// Replaces a UCI list option (`list foo 'a'`) wholesale.
@@ -222,14 +215,6 @@ final class UciSetList extends UciOperation {
   final String section;
   final String option;
   final List<String> values;
-
-  // rpcd stages a list assignment as a delete of the option followed by one
-  // `list-add` per entry.
-  @override
-  Set<String> changeKeys({String? section}) => {
-    _key(UciOp.remove, section ?? this.section, option),
-    _key(UciOp.listAdd, section ?? this.section, option),
-  };
 }
 
 /// Creates a section. When [name] is null the router generates an anonymous
@@ -245,18 +230,6 @@ final class UciAdd extends UciOperation {
   final String type;
   final Map<String, dynamic> values;
   final String? name;
-
-  @override
-  Set<String> changeKeys({String? section}) {
-    final id = section ?? name;
-    if (id == null) return const {};
-    // rpcd reports the add row as `["add", section, type]`, so the type
-    // sits where an option would.
-    return {
-      _key(UciOp.add, id, type),
-      for (final option in values.keys) _key(UciOp.set, id, option),
-    };
-  }
 }
 
 /// Removes a whole section, or one [option] of it.
@@ -264,9 +237,4 @@ final class UciRemove extends UciOperation {
   const UciRemove(super.config, {required this.section, this.option});
   final String section;
   final String? option;
-
-  @override
-  Set<String> changeKeys({String? section}) => {
-    _key(UciOp.remove, section ?? this.section, option),
-  };
 }

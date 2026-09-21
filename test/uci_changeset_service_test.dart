@@ -616,13 +616,13 @@ void _foreignChangeRegressions() {
         final staged = await h.service.stage(_session, const [
           UciSet('wireless', section: 'wifinet0', values: {'disabled': '1'}),
         ]);
-        expect(staged.keys, {'wireless|set|wifinet0|disabled'});
+        expect(staged.written, {'wireless|wifinet0'});
 
         final outcome = await h.service.apply(
           _session,
           ours: const {'wireless'},
           baseline: staged.baseline,
-          restaged: staged.keys,
+          writtenSections: staged.written,
           mode: ApplyMode.unchecked,
         );
 
@@ -646,14 +646,14 @@ void _foreignChangeRegressions() {
         _session,
         ours: const {'wireless'},
         baseline: staged.baseline,
-        restaged: staged.keys,
+        writtenSections: staged.written,
       );
 
       expect(outcome.reason, RollbackReason.foreignChanges);
       expect(outcome.foreign.forConfig('wireless').single.section, 'wifinet1');
     });
 
-    test('every operation kind knows the rows it will stage', () async {
+    test('every operation kind reports the section it wrote', () async {
       final h = _build();
       h.api.addedSection = 'cfg0f00';
 
@@ -670,18 +670,76 @@ void _foreignChangeRegressions() {
         UciRemove('dhcp', section: 'host2'),
       ]);
 
-      expect(staged.keys, {
-        'firewall|add|cfg0f00|rule',
-        'firewall|set|cfg0f00|name',
-        'firewall|set|cfg0f00|src',
-        'firewall|add|named|rule',
-        'firewall|set|named|src',
-        'dhcp|remove|lan|dhcp_option',
-        'dhcp|listAdd|lan|dhcp_option',
-        'dhcp|remove|host1|ip',
-        'dhcp|remove|host2|',
+      expect(staged.written, {
+        'firewall|cfg0f00',
+        'firewall|named',
+        'dhcp|lan',
+        'dhcp|host1',
+        'dhcp|host2',
       });
     });
+
+    // Once the router shows the staged section, the planner edits it rather
+    // than adding it again, so the retry writes a `set` and never repeats the
+    // leftover `add` row. Ownership has to be per section for that to pass.
+    test(
+      'editing a section left staged by a failed add owns its rows',
+      () async {
+        final h = _build();
+        h.api.changes = {
+          'dhcp': [
+            ['add', 'cfg0a', 'host'],
+            ['set', 'cfg0a', 'mac', 'AA:BB:CC:11:22:33'],
+            ['set', 'cfg0a', 'ip', '192.168.1.50'],
+          ],
+        };
+
+        final staged = await h.service.stage(_session, const [
+          UciSet('dhcp', section: 'cfg0a', values: {'ip': '192.168.1.60'}),
+        ]);
+        final outcome = await h.service.apply(
+          _session,
+          ours: const {'dhcp'},
+          baseline: staged.baseline,
+          writtenSections: staged.written,
+          mode: ApplyMode.unchecked,
+        );
+
+        expect(outcome.phase, ApplyPhase.confirmed);
+      },
+    );
+
+    test(
+      'an adopted section is still reported when a later op fails',
+      () async {
+        final h = _build();
+        h.api.changes = {
+          'dhcp': [
+            ['add', 'cfg0a', 'host'],
+            ['set', 'cfg0a', 'mac', 'AA:BB:CC:11:22:33'],
+          ],
+        };
+        h.api.setError = const RpcException(
+          object: 'uci',
+          method: 'set',
+          status: 6,
+        );
+
+        await expectLater(
+          h.service.stage(_session, const [
+            UciAdd('dhcp', type: 'host', values: {'mac': 'AA:BB:CC:11:22:33'}),
+            UciSet('firewall', section: 'cfg02', values: {'enabled': '0'}),
+          ]),
+          throwsA(
+            isA<UciStagingException>().having(
+              (e) => e.stillStaged,
+              'stillStaged',
+              {'dhcp'},
+            ),
+          ),
+        );
+      },
+    );
 
     // `network.lan.ipaddr` and `dhcp.lan.ipaddr` are different rows; a key
     // without the config would let the one we wrote vouch for the other.
@@ -705,7 +763,7 @@ void _foreignChangeRegressions() {
           _session,
           ours: const {'network', 'dhcp'},
           baseline: staged.baseline,
-          restaged: staged.keys,
+          writtenSections: staged.written,
         );
 
         expect(outcome.reason, RollbackReason.foreignChanges);
@@ -741,7 +799,7 @@ void _foreignChangeRegressions() {
         _session,
         ours: const {'dhcp'},
         baseline: staged.baseline,
-        restaged: staged.keys,
+        writtenSections: staged.written,
         mode: ApplyMode.unchecked,
       );
       expect(outcome.phase, ApplyPhase.confirmed);

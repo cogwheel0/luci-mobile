@@ -133,7 +133,12 @@ bool isRouterUnreachable(Object error) {
     DioExceptionType.badResponse ||
     DioExceptionType.transformTimeout ||
     DioExceptionType.cancel => false,
-    DioExceptionType.unknown => error.error is SocketException,
+    // Dio wraps a dropped connection - reset, refused, closed mid-header
+    // while the router reboots - as `unknown` with the IO error inside.
+    DioExceptionType.unknown =>
+      error.error is SocketException ||
+          error.error is HttpException ||
+          error.error is OSError,
   };
 }
 

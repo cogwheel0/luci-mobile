@@ -184,7 +184,7 @@ class UciChangesetService {
   /// On failure every config touched so far is reverted and a
   /// [UciStagingException] is thrown.
   Future<
-    ({Map<int, String> sections, UciChangeSet? baseline, Set<String> keys})
+    ({Map<int, String> sections, UciChangeSet? baseline, Set<String> written})
   >
   stage(
     RouterSession session,
@@ -193,9 +193,9 @@ class UciChangesetService {
   }) async {
     final generatedSections = <int, String>{};
     final touched = <String>{};
-    // The change rows this batch will show up as in `uci.changes`, so that
-    // apply can tell a row we just (re-)staged from one left behind earlier.
-    final keys = <String>{};
+    // The sections this batch wrote, as [UciChange.sectionId]s, so that apply
+    // can tell a row we just (re-)staged from one left behind earlier.
+    final written = <String>{};
 
     // `uci.revert` is config-wide, so cleaning up after a failed batch would
     // also discard anything already staged in the same config — typically
@@ -227,6 +227,9 @@ class UciChangesetService {
 
     for (var i = 0; i < ops.length; i++) {
       final op = ops[i];
+      // Before anything else, so an adopted section is still reported as
+      // left staged if a later operation in the batch fails.
+      touched.add(op.config);
 
       // A failed apply whose cleanup revert was denied leaves our own rows
       // staged. A retry simply overwrites a named row, but an anonymous add
@@ -239,14 +242,12 @@ class UciChangesetService {
         if (adopted != null) {
           Logger.info('Reusing staged ${op.config} section $adopted');
           generatedSections[i] = adopted;
-          keys.addAll(op.changeKeys(section: adopted));
+          written.add('${op.config}|$adopted');
           continue;
         }
       }
 
       try {
-        touched.add(op.config);
-        if (op is! UciAdd) keys.addAll(op.changeKeys());
         switch (op) {
           case UciSet():
             await _api.uciSet(
@@ -258,6 +259,7 @@ class UciChangesetService {
               values: op.values,
               context: context?.mounted == true ? context : null,
             );
+            written.add('${op.config}|${op.section}');
           case UciSetList():
             await _api.uciSet(
               session.ipAddress,
@@ -268,6 +270,7 @@ class UciChangesetService {
               values: {op.option: op.values},
               context: context?.mounted == true ? context : null,
             );
+            written.add('${op.config}|${op.section}');
           case UciAdd():
             final result = await _api.uciAdd(
               session.ipAddress,
@@ -288,7 +291,7 @@ class UciChangesetService {
               );
             }
             generatedSections[i] = section;
-            keys.addAll(op.changeKeys(section: section));
+            written.add('${op.config}|$section');
           case UciRemove():
             await _api.uciDelete(
               session.ipAddress,
@@ -299,6 +302,7 @@ class UciChangesetService {
               option: op.option,
               context: context?.mounted == true ? context : null,
             );
+            written.add('${op.config}|${op.section}');
         }
       } catch (e, stack) {
         Logger.exception('Failed to stage UCI operation $i', e, stack);
@@ -339,7 +343,7 @@ class UciChangesetService {
       }
     }
 
-    return (sections: generatedSections, baseline: baseline, keys: keys);
+    return (sections: generatedSections, baseline: baseline, written: written);
   }
 
   /// The section of a staged anonymous add in [baseline] whose type and
@@ -401,7 +405,7 @@ class UciChangesetService {
     Duration timeout = defaultTimeout,
     Set<String>? ours,
     UciChangeSet? baseline,
-    Set<String> restaged = const {},
+    Set<String> writtenSections = const {},
     void Function(ApplyPhase phase, Duration remaining)? onPhase,
     BuildContext? context,
   }) async {
@@ -422,15 +426,15 @@ class UciChangesetService {
     // cannot pick up another client's work; `uci.changes` does not report it
     // and our apply leaves it pending.
     //
-    // [restaged] names the rows this operation itself just wrote. A row that
-    // was already in the baseline but carries the same key as one of ours has
-    // been overwritten by ours — re-trying an edit whose earlier attempt was
-    // left staged must not be refused as somebody else's work.
+    // [writtenSections] names the sections this operation itself just wrote.
+    // Baseline rows on those sections are our own earlier attempt at the
+    // same edit — re-trying one whose failed apply was left staged must not
+    // be refused as somebody else's work.
     if (ours != null) {
       final foreign = staged.foreignTo(
         ours,
         baseline: baseline,
-        restaged: restaged,
+        writtenSections: writtenSections,
       );
       if (foreign.isNotEmpty) {
         Logger.warning(
