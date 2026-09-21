@@ -53,6 +53,7 @@ Future<ApplyOutcome?> applyUciOperations(
     return ApplyOutcome(
       phase: ApplyPhase.failed,
       applied: const UciChangeSet.empty(),
+      stillStaged: e.stillStaged,
       error: e.cause,
     );
   } finally {

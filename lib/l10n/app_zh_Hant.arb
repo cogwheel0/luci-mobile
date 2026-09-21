@@ -505,5 +505,6 @@
   "notifyClientJoined": "有新裝置連線時",
   "notifyIntervalNote": "Android 的背景檢查最快每 15 分鐘一次，並可能為省電進一步延後。",
   "notifyAwayNote": "檢查僅在路由器所在網路內有效。不在家時會略過，而不會誤報為斷線。",
-  "changeBlockedByOthers": "路由器在 {configs} 中仍有未儲存的變更。現在套用會一併提交它們，請先捨棄或套用這些變更。"
+  "changeBlockedByOthers": "路由器在 {configs} 中仍有未儲存的變更。現在套用會一併提交它們，請先捨棄或套用這些變更。",
+  "changeLeftStaged": "變更失敗，路由器上 {configs} 中仍有未儲存的變更。請在 LuCI 中捨棄或套用它們。"
 }

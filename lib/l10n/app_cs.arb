@@ -505,5 +505,6 @@
   "notifyClientJoined": "Připojí se nové zařízení",
   "notifyIntervalNote": "Android nespouští kontroly na pozadí častěji než jednou za 15 minut a může je kvůli baterii dále odložit.",
   "notifyAwayNote": "Kontroly fungují jen v síti routeru. Mimo domov se přeskočí, místo aby se hlásily jako výpadek.",
-  "changeBlockedByOthers": "Router má stále neuložené změny v {configs}. Použití by potvrdilo i je — nejprve je zahoďte nebo použijte."
+  "changeBlockedByOthers": "Router má stále neuložené změny v {configs}. Použití by potvrdilo i je — nejprve je zahoďte nebo použijte.",
+  "changeLeftStaged": "Změna selhala a na routeru zůstaly neuložené změny v {configs}. Zahoďte je nebo je použijte v LuCI."
 }

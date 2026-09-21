@@ -790,5 +790,13 @@
         "type": "String"
       }
     }
+  },
+  "changeLeftStaged": "The change failed and unsaved changes are still on the router in {configs}. Discard or apply them in LuCI.",
+  "@changeLeftStaged": {
+    "placeholders": {
+      "configs": {
+        "type": "String"
+      }
+    }
   }
 }

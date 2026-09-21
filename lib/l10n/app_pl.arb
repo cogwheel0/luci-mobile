@@ -505,5 +505,6 @@
   "notifyClientJoined": "Podłączenie nowego urządzenia",
   "notifyIntervalNote": "Android nie uruchamia sprawdzeń w tle częściej niż co 15 minut i może je opóźniać, by oszczędzać baterię.",
   "notifyAwayNote": "Sprawdzenia działają tylko w sieci routera. Poza domem są pomijane, a nie zgłaszane jako awaria.",
-  "changeBlockedByOthers": "Router ma wciąż niezapisane zmiany w {configs}. Zastosowanie teraz zatwierdziłoby także je — najpierw je odrzuć lub zastosuj."
+  "changeBlockedByOthers": "Router ma wciąż niezapisane zmiany w {configs}. Zastosowanie teraz zatwierdziłoby także je — najpierw je odrzuć lub zastosuj.",
+  "changeLeftStaged": "Zmiana nie powiodła się, a na routerze pozostały niezapisane zmiany w {configs}. Odrzuć je lub zastosuj w LuCI."
 }

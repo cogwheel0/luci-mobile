@@ -55,6 +55,7 @@ class ApplyOutcome {
     required this.phase,
     required this.applied,
     this.foreign = const UciChangeSet.empty(),
+    this.stillStaged = const {},
     this.reason,
     this.error,
   });
@@ -67,6 +68,10 @@ class ApplyOutcome {
   /// Staged changes this operation did not make, when that is why it was
   /// refused.
   final UciChangeSet foreign;
+
+  /// Configs left staged on the router by a failure, so the message can say
+  /// which ones need discarding.
+  final Set<String> stillStaged;
 
   final RollbackReason? reason;
   final Object? error;
@@ -81,12 +86,18 @@ class UciStagingException implements Exception {
     required this.failedIndex,
     required this.cause,
     required this.revertedConfigs,
+    this.stillStaged = const {},
     this.revertFailed = false,
   });
 
   final int failedIndex;
   final Object cause;
   final Set<String> revertedConfigs;
+
+  /// Configs this operation touched but did not clean up — either they were
+  /// already dirty, or the revert itself failed. The user has to deal with
+  /// them, so the names have to survive as far as the message.
+  final Set<String> stillStaged;
 
   /// True when the cleanup revert itself failed, meaning changes may still be
   /// staged on the router.
@@ -296,6 +307,7 @@ class UciChangesetService {
           failedIndex: i,
           cause: e,
           revertedConfigs: safeToRevert,
+          stillStaged: revertFailed ? touched : leftStaged,
           revertFailed: revertFailed,
         );
       }
@@ -460,7 +472,12 @@ class UciChangesetService {
 
       final backoff = _probeBackoff[attempt.clamp(0, _probeBackoff.length - 1)];
       attempt++;
-      await _delay(backoff);
+      // Never sleep past the guard band: a failed probe near the end would
+      // otherwise hold the caller well beyond the confirmation window before
+      // reporting the rollback.
+      final left = hardStop.difference(_clock());
+      if (left <= Duration.zero) break;
+      await _delay(backoff < left ? backoff : left);
     }
 
     onPhase?.call(ApplyPhase.rolledBack, Duration.zero);

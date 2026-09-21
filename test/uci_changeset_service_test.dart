@@ -618,6 +618,45 @@ void _foreignChangeRegressions() {
       );
     });
 
+    // A failure that could not clean up after itself leaves work on the
+    // router; "failed" alone hides that there is something to undo.
+    test('a spared config is reported as still staged', () async {
+      final h = _build();
+      h.api.changes = {
+        'firewall': [
+          ['set', 'cfg02', 'enabled', '0'],
+        ],
+      };
+      h.api.setError = Exception('nope');
+
+      try {
+        await h.service.stage(_session, const [
+          UciSet('firewall', section: 'cfg03', values: {'target': 'REJECT'}),
+        ]);
+        fail('staging should have thrown');
+      } on UciStagingException catch (e) {
+        expect(e.stillStaged, {'firewall'});
+        expect(e.revertedConfigs, isEmpty);
+      }
+    });
+
+    test('a failed revert reports everything it touched', () async {
+      final h = _build();
+      h.api.changes = const {};
+      h.api.setError = Exception('nope');
+      h.api.revertError = Exception('revert denied');
+
+      try {
+        await h.service.stage(_session, const [
+          UciSet('dhcp', section: 'lan', values: {'start': '100'}),
+        ]);
+        fail('staging should have thrown');
+      } on UciStagingException catch (e) {
+        expect(e.revertFailed, isTrue);
+        expect(e.stillStaged, {'dhcp'});
+      }
+    });
+
     test('staging cleanup still reverts a config only we touched', () async {
       final h = _build();
       h.api.changes = const {};

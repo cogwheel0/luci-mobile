@@ -157,7 +157,13 @@ class AddonPlanner {
 
   static String _normalise(AddonField field, Object? value) {
     if (field is AddonSwitch) return value == true ? '1' : '0';
-    return value?.toString().trim() ?? '';
+    final text = value?.toString().trim() ?? '';
+    // sqm-scripts documents 0 as the way to disable shaping in a direction;
+    // an empty or absent option is undefined and can leave the queue
+    // half-configured. So a cleared number field writes the value that
+    // actually means "none" rather than a blank.
+    if (field is AddonNumber && text.isEmpty) return '0';
+    return text;
   }
 
   /// Whether [value] is a number the field will accept.

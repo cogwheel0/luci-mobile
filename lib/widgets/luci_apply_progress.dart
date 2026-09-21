@@ -129,6 +129,11 @@ String applyOutcomeMessage(BuildContext context, ApplyOutcome? outcome) {
     // LuCI, and "something is staged somewhere" is not actionable.
     _ when outcome.reason == RollbackReason.foreignChanges =>
       l10n.changeBlockedByOthers(outcome.foreign.configs.join(', ')),
+    // A failure that could not clean up after itself leaves work on the
+    // router. Saying only "failed" hides that there is something to undo.
+    _ when outcome.stillStaged.isNotEmpty => l10n.changeLeftStaged(
+      outcome.stillStaged.join(', '),
+    ),
     _ => l10n.changeFailed,
   };
 }
