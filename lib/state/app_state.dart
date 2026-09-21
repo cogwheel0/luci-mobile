@@ -1463,7 +1463,14 @@ class AppState extends ChangeNotifier {
     _criticalSection = false;
     notifyListeners();
     if (refresh) {
-      await fetchDashboardData();
+      // Guarded so the restart below still happens: a refresh that throws
+      // would otherwise leave live throughput frozen until some other flow
+      // happened to start the timer again.
+      try {
+        await fetchDashboardData();
+      } catch (e, stack) {
+        Logger.exception('Refresh after a change failed', e, stack);
+      }
     }
     // Both paths: `beginCriticalSection` cancelled the timer, and four of the
     // five write flows end with `refresh: false`. Restarting only in the

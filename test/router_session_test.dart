@@ -124,6 +124,8 @@ void main() {
   });
 
   group('AppState critical section', () {
+    _cleanupSurvivesAFailedRefresh();
+
     test(
       'suppresses the dashboard fetch while an apply is confirming',
       () async {
@@ -185,5 +187,38 @@ void main() {
       await state.endCriticalSection(refresh: false);
       expect(state.isInCriticalSection, isFalse);
     });
+  });
+}
+
+/// Fails the dashboard fetch, so cleanup can be checked when refresh throws.
+class _FailingFetchAppState extends AppState {
+  _FailingFetchAppState()
+    : super.forTesting(
+        apiService: MockApiService(),
+        authService: MockAuthService(),
+      );
+
+  var fetched = false;
+
+  @override
+  Future<void> fetchDashboardData({bool isRetryAfterFallback = false}) async {
+    fetched = true;
+    throw StateError('router went away');
+  }
+}
+
+void _cleanupSurvivesAFailedRefresh() {
+  // beginCriticalSection cancels the throughput timer. If the refresh on the
+  // way out throws, the restart must still happen or live throughput stays
+  // frozen until some other flow happens to start it.
+  test('a failed refresh still leaves the critical section', () async {
+    final state = _FailingFetchAppState();
+    addTearDown(state.dispose);
+
+    state.beginCriticalSection();
+    await state.endCriticalSection();
+
+    expect(state.fetched, isTrue);
+    expect(state.isInCriticalSection, isFalse);
   });
 }
