@@ -317,11 +317,15 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
           detail.host?.ip ??
           (client.ipAddress == 'N/A' ? '' : client.ipAddress),
     );
-    return showDialog<String>(
-      context: context,
-      builder: (dialogContext) =>
-          _ReservationDialog(controller: controller, detail: detail),
-    );
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (dialogContext) =>
+            _ReservationDialog(controller: controller, detail: detail),
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> _apply(List<UciOperation> ops) async {

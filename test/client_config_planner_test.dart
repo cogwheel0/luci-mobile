@@ -220,6 +220,18 @@ void main() {
       );
     });
 
+    // The value saved is trimmed, so the checks must run on that too.
+    test('a pasted space does not slip a duplicate past the guard', () {
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          ' 192.168.1.51 ',
+          subnets: lan,
+          alreadyReserved: reserved(),
+        ),
+        IpCheckResult.duplicate,
+      );
+    });
+
     test('malformed input is rejected', () {
       for (final bad in ['', 'nope', '192.168.1', '192.168.1.999']) {
         expect(

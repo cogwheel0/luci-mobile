@@ -421,11 +421,17 @@ class UciChangesetService {
       // Applying blind would commit whatever is staged - including the
       // unrelated rows the guard below exists to refuse - and a failure
       // after that would have nothing to revert or report. Back out our own
-      // staging instead, and say what could not be cleared.
-      final unreverted = await _revertEach(
-        session,
-        (ours ?? const <String>{}).difference(baseline?.configs ?? const {}),
-      );
+      // staging instead, and say what could not be cleared. Same policy as
+      // `stage`: with no baseline we do not know what else is in those
+      // configs, and reverting would discard it - so nothing is reverted
+      // and everything we touched is reported as still staged.
+      final safeToRevert = baseline == null || ours == null
+          ? const <String>{}
+          : ours.difference(baseline.configs);
+      final unreverted = {
+        ...(ours ?? const <String>{}).difference(safeToRevert),
+        ...await _revertEach(session, safeToRevert),
+      };
       onPhase?.call(ApplyPhase.failed, Duration.zero);
       return ApplyOutcome(
         phase: ApplyPhase.failed,

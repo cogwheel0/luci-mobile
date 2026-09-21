@@ -40,6 +40,9 @@ class _ProbeApi extends MockApiService {
   Set<String> accessGrants = const {};
   bool accessErrors = false;
 
+  /// Probes that throw, keyed "object.function".
+  Set<String> accessErrorsFor = const {};
+
   int get accessCalls => calls.where((c) => c.startsWith('access ')).length;
 
   @override
@@ -111,7 +114,9 @@ class _ProbeApi extends MockApiService {
     BuildContext? context,
   }) async {
     calls.add('access $object.$function');
-    if (accessErrors) throw Exception('denied');
+    if (accessErrors || accessErrorsFor.contains('$object.$function')) {
+      throw Exception('denied');
+    }
     return accessGrants.contains('$object.$function');
   }
 }
@@ -256,6 +261,24 @@ void main() {
       expect(api.accessCalls, greaterThan(1));
       expect(caps.allows('uci', 'set'), isTrue);
       expect(caps.allows('uci', 'apply'), isFalse);
+    });
+
+    // A probe that timed out is not a denial. Reading it as one on
+    // `uci.rollback` would have the next change committed without rollback
+    // protection over a blip.
+    test('an unanswered access probe reads as unknown, not denied', () async {
+      final api = _ProbeApi()
+        ..acl = null
+        ..accessGrants = const {'uci.set', 'uci.apply', 'uci.confirm'}
+        ..accessErrorsFor = const {'uci.rollback'};
+
+      final caps = await build(api).probe(_session);
+
+      expect(caps.unprobedFunctions, {'uci.rollback'});
+      expect(caps.allows('uci', 'rollback'), isTrue);
+      expect(caps.of(RouterFeature.uciApplyRollback).available, isTrue);
+      // A measured denial still counts.
+      expect(caps.allows('system', 'reboot'), isFalse);
     });
 
     // If not one access probe answers we know nothing about permissions, so

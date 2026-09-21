@@ -82,8 +82,14 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
     final current = state.value ?? const NotificationSettings();
 
     if (!enabled) {
-      await disableBackgroundPoll(_store);
+      // Cancel first: if storage then fails, the task at least stops
+      // polling. A write failure must not escape the switch's callback.
       await _cancel();
+      try {
+        await disableBackgroundPoll(_store);
+      } catch (e, stack) {
+        Logger.exception('Persisting the notification switch failed', e, stack);
+      }
       state = AsyncValue.data(
         current.copyWith(
           enabled: false,

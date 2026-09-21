@@ -137,12 +137,14 @@ void main() {
             wanUp: false,
             clientMacs: {'AA:BB:CC:11:22:33'},
             names: {'AA:BB:CC:11:22:33': 'Laptop'},
+            uptime: 4321,
           ),
           at: _at,
         ).toJson(),
       );
       expect(back, isNotNull);
       expect(back!.observation.wanUp, isFalse);
+      expect(back.observation.uptime, 4321);
       expect(back.observation.clientMacs, {'AA:BB:CC:11:22:33'});
       expect(back.observation.names['AA:BB:CC:11:22:33'], 'Laptop');
       expect(back.at.isAtSameMomentAs(_at), isTrue);

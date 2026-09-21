@@ -78,6 +78,9 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
     _clientsFuture = appState
         .fetchClientsForSelectedRouter()
         .then((clients) {
+          // The screen may have been left while the fetch was in flight;
+          // `ref` is unusable then, and the list itself is still wanted.
+          if (!mounted) return clients;
           unawaited(
             ref
                 .read(eventFeedProvider.notifier)
@@ -95,7 +98,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
           // router that answered and refused (a permission error, say) is
           // reachable, and says nothing about its clients — so no
           // observation at all rather than a false "unreachable".
-          if (isRouterUnreachable(error)) {
+          if (mounted && isRouterUnreachable(error)) {
             unawaited(
               ref
                   .read(eventFeedProvider.notifier)

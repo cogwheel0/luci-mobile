@@ -3,6 +3,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/models/client.dart';
 import 'package:luci_mobile/models/router_event.dart';
 import 'package:luci_mobile/services/event_log.dart';
+import 'package:luci_mobile/services/secure_storage_service.dart';
+
+class _MemoryStorage implements SecureStorageService {
+  final Map<String, String> values = {};
+
+  @override
+  Future<String?> readValue(String key) async => values[key];
+
+  @override
+  Future<void> writeValue(String key, String value) async =>
+      values[key] = value;
+
+  @override
+  Future<void> deleteValue(String key) async => values.remove(key);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 final _at = DateTime.utc(2026, 9, 20, 12);
 
@@ -10,8 +28,13 @@ RouterObservation obs({
   bool reachable = true,
   bool wanUp = true,
   Set<String> clients = const {'AA:BB:CC:11:22:33'},
-}) =>
-    RouterObservation(reachable: reachable, wanUp: wanUp, clientMacs: clients);
+  int? uptime,
+}) => RouterObservation(
+  reachable: reachable,
+  wanUp: wanUp,
+  clientMacs: clients,
+  uptime: uptime,
+);
 
 List<RouterEvent> diff(RouterObservation? prev, RouterObservation now) =>
     EventDeriver.diff(previous: prev, current: now, routerId: 'r1', at: _at);
@@ -45,6 +68,19 @@ void main() {
         RouterEventKind.wanDown,
       );
       expect(diff(obs(wanUp: false), obs()).single.kind, RouterEventKind.wanUp);
+    });
+
+    // The router has no event stream; uptime going backwards is the only
+    // evidence of a reboot there is.
+    test('uptime going backwards is a reboot', () {
+      expect(
+        diff(obs(uptime: 90000), obs(uptime: 120)).single.kind,
+        RouterEventKind.rebooted,
+      );
+      expect(diff(obs(uptime: 100), obs(uptime: 200)), isEmpty);
+      // Unknown on either side is not evidence of anything.
+      expect(diff(obs(uptime: 100), obs()), isEmpty);
+      expect(diff(obs(), obs(uptime: 5)), isEmpty);
     });
 
     test('clients joining and leaving are reported with their MAC', () {
@@ -140,6 +176,17 @@ void main() {
   });
 
   group('observing', () {
+    test('reads the uptime the dashboard already fetched', () {
+      final o = EventDeriver.observe(
+        reachable: true,
+        dashboardData: {
+          'sysInfo': {'uptime': 1234},
+        },
+        clients: const [],
+      );
+      expect(o.uptime, 1234);
+    });
+
     test('reads WAN state and client MACs from the dashboard payload', () {
       final o = EventDeriver.observe(
         reachable: true,
@@ -172,6 +219,61 @@ void main() {
         clients: const [],
       );
       expect(o.wanUp, isFalse);
+    });
+  });
+
+  group('persisting', () {
+    RouterEvent event(RouterEventKind kind, int minute) => RouterEvent(
+      kind: kind,
+      at: _at.add(Duration(minutes: minute)),
+      routerId: 'r1',
+    );
+
+    // Two isolates append: the app and the background poll. A shared key
+    // would lose whichever read-modify-write landed first.
+    test('the app and the background poll never write the same key', () async {
+      final storage = _MemoryStorage();
+      final log = EventLog(storage);
+
+      await log.append('r1', [event(RouterEventKind.wanDown, 1)]);
+      await log.append('r1', [
+        event(RouterEventKind.wanUp, 2),
+      ], fromBackground: true);
+
+      expect(storage.values.keys, {
+        EventLog.storageKey('r1'),
+        EventLog.backgroundKey('r1'),
+      });
+      expect((await log.load('r1')).map((e) => e.kind), [
+        RouterEventKind.wanDown,
+        RouterEventKind.wanUp,
+      ]);
+    });
+
+    test('a background event already in the app copy is not doubled', () async {
+      final storage = _MemoryStorage();
+      final log = EventLog(storage);
+      final e = event(RouterEventKind.wanDown, 1);
+
+      await log.append('r1', [e], fromBackground: true);
+      final merged = await log.append('r1', [e]);
+
+      expect(merged, hasLength(1));
+      expect(await log.load('r1'), hasLength(1));
+    });
+
+    test('clearing empties both copies', () async {
+      final storage = _MemoryStorage();
+      final log = EventLog(storage);
+      await log.append('r1', [event(RouterEventKind.wanDown, 1)]);
+      await log.append('r1', [
+        event(RouterEventKind.wanUp, 2),
+      ], fromBackground: true);
+
+      await log.clear('r1');
+
+      expect(storage.values, isEmpty);
+      expect(await log.load('r1'), isEmpty);
     });
   });
 

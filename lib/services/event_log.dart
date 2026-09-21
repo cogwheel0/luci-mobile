@@ -15,11 +15,17 @@ class RouterObservation {
     required this.wanUp,
     required this.clientMacs,
     this.names = const {},
+    this.uptime,
   });
 
   final bool reachable;
   final bool wanUp;
   final Set<String> clientMacs;
+
+  /// Seconds since the router booted, when `system.info` reported it. Going
+  /// backwards between two observations is the only evidence of a reboot
+  /// there is.
+  final int? uptime;
 
   /// MAC -> the name to show. A feed that says "AA:BB:CC:11:22:33 joined"
   /// makes the reader do the lookup the app already did.
@@ -71,6 +77,14 @@ class EventDeriver {
     // reporting "every client left" on a dropped connection would be noise.
     if (!current.reachable || !previous.reachable) return events;
 
+    final before = previous.uptime;
+    final now = current.uptime;
+    if (before != null && now != null && now < before) {
+      events.add(
+        RouterEvent(kind: RouterEventKind.rebooted, at: at, routerId: routerId),
+      );
+    }
+
     if (previous.wanUp && !current.wanUp) {
       events.add(
         RouterEvent(kind: RouterEventKind.wanDown, at: at, routerId: routerId),
@@ -112,9 +126,12 @@ class EventDeriver {
     required List<Client> clients,
   }) {
     final wan = dashboardData?['wan'];
+    final sysInfo = dashboardData?['sysInfo'];
+    final uptime = sysInfo is Map ? sysInfo['uptime'] : null;
     return RouterObservation(
       reachable: reachable,
       wanUp: wan is Map ? wan['up'] == true : false,
+      uptime: uptime is num ? uptime.toInt() : null,
       clientMacs: {
         for (final c in clients)
           if (c.macAddress != 'N/A') c.macAddress.toUpperCase(),
@@ -136,6 +153,11 @@ class EventDeriver {
 /// is empty on every cold start — which users read as broken. Keeping the
 /// last [maxEntries] means it has something to show and can honestly say how
 /// far back it goes.
+///
+/// Two isolates write events: the app, and the WorkManager poll. Each has a
+/// key of its own, because an append is a read-modify-write and two of them
+/// on one key silently lose whichever landed first. The feed the app shows
+/// is the union of both.
 class EventLog {
   EventLog(this._storage);
 
@@ -143,11 +165,21 @@ class EventLog {
 
   static const int maxEntries = 100;
 
+  /// The key the app writes.
   static String storageKey(String routerId) => 'events:$routerId';
 
-  Future<List<RouterEvent>> load(String routerId) async {
+  /// The key the background isolate writes.
+  static String backgroundKey(String routerId) => 'events:bg:$routerId';
+
+  /// Everything recorded for [routerId], from both writers.
+  Future<List<RouterEvent>> load(String routerId) async => _merge(
+    await _read(storageKey(routerId)),
+    await _read(backgroundKey(routerId)),
+  );
+
+  Future<List<RouterEvent>> _read(String key) async {
     try {
-      final raw = await _storage.readValue(storageKey(routerId));
+      final raw = await _storage.readValue(key);
       if (raw == null || raw.isEmpty) return const [];
       final decoded = jsonDecode(raw);
       if (decoded is! List) return const [];
@@ -161,40 +193,51 @@ class EventLog {
     }
   }
 
-  /// Appends [events], de-duplicating and trimming to [maxEntries].
-  ///
-  /// Returns the new list so callers do not have to re-read.
-  Future<List<RouterEvent>> append(
-    String routerId,
-    List<RouterEvent> events,
-  ) async {
-    if (events.isEmpty) return load(routerId);
-    final existing = await load(routerId);
-    final seen = {for (final e in existing) e.dedupeKey};
+  /// [a] and [b] de-duplicated, in time order, trimmed to [maxEntries].
+  static List<RouterEvent> _merge(List<RouterEvent> a, List<RouterEvent> b) {
+    final seen = <String>{};
     final merged = [
-      ...existing,
-      for (final e in events)
+      for (final e in a)
+        if (seen.add(e.dedupeKey)) e,
+      for (final e in b)
         if (seen.add(e.dedupeKey)) e,
     ];
     merged.sort((a, b) => a.at.compareTo(b.at));
-    final trimmed = merged.length <= maxEntries
+    return merged.length <= maxEntries
         ? merged
         : merged.sublist(merged.length - maxEntries);
+  }
 
+  /// Appends [events], de-duplicating and trimming to [maxEntries].
+  ///
+  /// [fromBackground] selects the background isolate's key; the app's copy
+  /// picks those events up on its next [load]. Returns the full feed so
+  /// callers do not have to re-read.
+  Future<List<RouterEvent>> append(
+    String routerId,
+    List<RouterEvent> events, {
+    bool fromBackground = false,
+  }) async {
+    if (events.isEmpty) return load(routerId);
+    final key = fromBackground ? backgroundKey(routerId) : storageKey(routerId);
+    final own = _merge(await _read(key), events);
     try {
       await _storage.writeValue(
-        storageKey(routerId),
-        jsonEncode([for (final e in trimmed) e.toJson()]),
+        key,
+        jsonEncode([for (final e in own) e.toJson()]),
       );
     } catch (e, stack) {
       Logger.exception('Failed to save the event log', e, stack);
     }
-    return trimmed;
+    return fromBackground
+        ? _merge(await _read(storageKey(routerId)), own)
+        : _merge(own, await _read(backgroundKey(routerId)));
   }
 
   Future<void> clear(String routerId) async {
     try {
       await _storage.deleteValue(storageKey(routerId));
+      await _storage.deleteValue(backgroundKey(routerId));
     } catch (e, stack) {
       Logger.exception('Failed to clear the event log', e, stack);
     }

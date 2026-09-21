@@ -107,6 +107,7 @@ class RouterCapabilities {
     this.uciConfigs = const <String>{},
     this.features = const <String, dynamic>{},
     this.ubusAcl,
+    this.unprobedFunctions = const <String>{},
     this.probeFailed = false,
     this.probedAt,
   });
@@ -126,6 +127,13 @@ class RouterCapabilities {
   /// "probably allowed" rather than blocking the UI on a guess.
   final Map<String, Set<String>>? ubusAcl;
 
+  /// `object.function` pairs the per-function fallback could not get an
+  /// answer for. Only ever populated alongside a fallback-built [ubusAcl],
+  /// where an absent function would otherwise read as a measured denial —
+  /// and a measured denial of `uci.rollback` is what makes the app commit
+  /// without rollback protection.
+  final Set<String> unprobedFunctions;
+
   /// True when the probe could not be completed.
   final bool probeFailed;
 
@@ -141,6 +149,7 @@ class RouterCapabilities {
   bool allows(String object, String function) {
     final acl = ubusAcl;
     if (acl == null) return true;
+    if (unprobedFunctions.contains('$object.$function')) return true;
     final fns = acl[object];
     if (fns == null) return false;
     return fns.contains('*') || fns.contains(function);
@@ -276,12 +285,14 @@ class RouterCapabilities {
     Set<String>? uciConfigs,
     Map<String, dynamic>? features,
     Map<String, Set<String>>? ubusAcl,
+    Set<String>? unprobedFunctions,
     bool? probeFailed,
     DateTime? probedAt,
   }) => RouterCapabilities(
     uciConfigs: uciConfigs ?? this.uciConfigs,
     features: features ?? this.features,
     ubusAcl: ubusAcl ?? this.ubusAcl,
+    unprobedFunctions: unprobedFunctions ?? this.unprobedFunctions,
     probeFailed: probeFailed ?? this.probeFailed,
     probedAt: probedAt ?? this.probedAt,
   );

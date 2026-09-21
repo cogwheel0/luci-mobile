@@ -175,7 +175,7 @@ Future<void> runBackgroundPoll({
 
   // The feed is the record; the notification is only the nudge. Writing
   // here means opening the app after a notification shows the same events.
-  await EventLog(store).append(router.id, events);
+  await EventLog(store).append(router.id, events, fromBackground: true);
 
   await (notifications ?? NotificationService()).show([
     for (final event in events) (event: event, text: _describe(event)),
@@ -188,8 +188,9 @@ Future<RouterObservation?> _observe(
   String sysauth,
 ) async {
   try {
-    // The same two calls the dashboard makes, and no more: a background
-    // poll should cost the router as little as the foreground one does.
+    // The calls the dashboard makes, and no more: a background poll should
+    // cost the router as little as the foreground one does. `system.info`
+    // is there for its uptime, which is how a reboot is noticed.
     final results = await Future.wait([
       api.call(
         router.ipAddress,
@@ -206,15 +207,34 @@ Future<RouterObservation?> _observe(
         method: 'getDHCPLeases',
         params: const {},
       ),
+      api
+          .call(
+            router.ipAddress,
+            sysauth,
+            router.useHttps,
+            object: 'system',
+            method: 'info',
+            params: const {},
+          )
+          .catchError((Object e) {
+            // Uptime is a nice-to-have; a router that refuses it still has a
+            // WAN and clients worth reporting on.
+            Logger.info('Background poll could not read uptime: $e');
+            return null;
+          }),
     ]);
 
     final dump = _payload(results[0]);
     final leaseData = _payload(results[1]);
     final leases = leaseData is Map ? leaseData['dhcp_leases'] : null;
+    final sysInfo = _payload(results[2]);
 
     return EventDeriver.observe(
       reachable: true,
-      dashboardData: {'wan': wanStateFrom(dump)},
+      dashboardData: {
+        'wan': wanStateFrom(dump),
+        if (sysInfo is Map) 'sysInfo': sysInfo,
+      },
       clients: clientsFromLeases(leases is List ? leases : const []),
     );
   } catch (e, stack) {

@@ -446,11 +446,29 @@ void main() {
       expect(outcome.phase, ApplyPhase.failed);
       expect(outcome.reason, RollbackReason.stateUnknown);
       expect(h.api.calls.where((c) => c.startsWith('apply')), isEmpty);
-      // Only the config we alone dirtied is backed out.
+      // Only the config we alone dirtied is backed out; the one that was
+      // already dirty is left alone and reported, as stage() does.
       expect(h.api.calls, contains('revert dhcp'));
       expect(h.api.calls, isNot(contains('revert network')));
-      expect(outcome.stillStaged, isEmpty);
+      expect(outcome.stillStaged, {'network'});
     });
+
+    // Same policy as stage(): with no baseline, a revert could discard an
+    // edit the user still wanted, so nothing is reverted - and everything we
+    // touched is reported, because it is still there.
+    test(
+      'an unreadable staging state with no baseline reverts nothing',
+      () async {
+        final h = _build();
+        h.api.changesError = Exception('timeout');
+
+        final outcome = await h.service.apply(_session, ours: const {'dhcp'});
+
+        expect(outcome.reason, RollbackReason.stateUnknown);
+        expect(h.api.calls.where((c) => c.startsWith('revert')), isEmpty);
+        expect(outcome.stillStaged, {'dhcp'});
+      },
+    );
 
     test('an unreadable staging state names what it could not clear', () async {
       final h = _build();
@@ -461,7 +479,11 @@ void main() {
         status: 6,
       );
 
-      final outcome = await h.service.apply(_session, ours: const {'dhcp'});
+      final outcome = await h.service.apply(
+        _session,
+        ours: const {'dhcp'},
+        baseline: const UciChangeSet.empty(),
+      );
 
       expect(outcome.reason, RollbackReason.stateUnknown);
       expect(outcome.stillStaged, {'dhcp'});

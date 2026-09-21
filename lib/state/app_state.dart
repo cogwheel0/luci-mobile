@@ -1478,7 +1478,10 @@ class AppState extends ChangeNotifier {
     // refresh branch left live throughput frozen after any firewall,
     // wireless, add-on or client change. `_startThroughputTimer` already
     // returns early while rebooting or inside a critical section.
-    _startThroughputTimer();
+    //
+    // Not after a logout, though: an apply that outlived the session would
+    // otherwise leave a timer ticking on the login screen.
+    if (_authService?.sysauth != null) _startThroughputTimer();
   }
 
   Future<bool> reboot({BuildContext? context}) async {

@@ -113,12 +113,18 @@ class CapabilityService {
       return RouterCapabilities(probeFailed: true, probedAt: _clock());
     }
 
-    acl ??= await _probeAclIndividually(session);
+    var unprobed = const <String>{};
+    if (acl == null) {
+      final fallback = await _probeAclIndividually(session);
+      acl = fallback?.acl;
+      unprobed = fallback?.unprobed ?? const {};
+    }
 
     return RouterCapabilities(
       uciConfigs: configs.toSet(),
       features: features ?? const <String, dynamic>{},
       ubusAcl: acl,
+      unprobedFunctions: unprobed,
       probedAt: _clock(),
     );
   }
@@ -155,10 +161,12 @@ class CapabilityService {
   ///
   /// Returns null when nothing could be determined, which
   /// [RouterCapabilities.allows] treats as "assume permitted" rather than
-  /// hiding every write behind a guess.
-  Future<Map<String, Set<String>>?> _probeAclIndividually(
-    RouterSession session,
-  ) async {
+  /// hiding every write behind a guess. A probe that answered for some
+  /// functions and not others reports the rest as [unprobed]: an unanswered
+  /// probe is not a denial, and mistaking one for the other on
+  /// `uci.rollback` would drop rollback protection over a timeout.
+  Future<({Map<String, Set<String>> acl, Set<String> unprobed})?>
+  _probeAclIndividually(RouterSession session) async {
     final pairs = <(String, String)>[
       for (final entry in _fallbackProbes.entries)
         for (final fn in entry.value) (entry.key, fn),
@@ -179,16 +187,21 @@ class CapabilityService {
     ]);
 
     final acl = <String, Set<String>>{};
+    final unprobed = <String>{};
     var answered = false;
     for (var i = 0; i < pairs.length; i++) {
+      final (object, fn) = pairs[i];
       final allowed = answers[i];
-      if (allowed == null) continue;
+      if (allowed == null) {
+        unprobed.add('$object.$fn');
+        continue;
+      }
       answered = true;
       if (allowed == true) {
-        acl.putIfAbsent(pairs[i].$1, () => <String>{}).add(pairs[i].$2);
+        acl.putIfAbsent(object, () => <String>{}).add(fn);
       }
     }
-    return answered ? acl : null;
+    return answered ? (acl: acl, unprobed: unprobed) : null;
   }
 
   /// Runs [body], logging and swallowing any failure.

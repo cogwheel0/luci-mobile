@@ -309,6 +309,9 @@ class ClientConfigPlanner {
     required Set<String> alreadyReserved,
     Map<String, DhcpPool> pools = const {},
   }) {
+    // The value saved is the trimmed one, so every check runs on that;
+    // otherwise a pasted space would slip a duplicate past the guard.
+    ip = ip.trim();
     final octets = _parseIpv4(ip);
     if (octets == null) return IpCheckResult.malformed;
     if (alreadyReserved.contains(ip)) return IpCheckResult.duplicate;
