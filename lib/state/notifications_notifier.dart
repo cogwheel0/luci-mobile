@@ -104,6 +104,17 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
         }),
       );
     }
+    // Storage is written from places that have no screen of their own, and
+    // this view of it has to follow whether or not whoever triggered the
+    // write is still on screen.
+    onBackgroundPollChanged = _refresh;
+    ref.onDispose(() {
+      if (onBackgroundPollChanged == _refresh) onBackgroundPollChanged = null;
+    });
+    return _read();
+  }
+
+  Future<NotificationSettings> _read() async {
     final enabled = await _store.readValue(BackgroundKeys.enabled) == 'true';
     final failed =
         await _store.readValue(BackgroundKeys.schedulingFailed) == 'true';
@@ -112,6 +123,14 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
       kinds: await readNotificationKinds(_store),
       schedulingFailed: !enabled && failed,
     );
+  }
+
+  /// Re-reads storage in place. Not `invalidateSelf`, which would drop the
+  /// current value and put the screen back on a spinner for a change that
+  /// only moves a switch.
+  Future<void> _refresh() async {
+    final next = await _read();
+    if (ref.mounted) state = AsyncValue.data(next);
   }
 
   Future<void> setEnabled(bool enabled) async {

@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:luci_mobile/state/notifications_notifier.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/navigation/luci_tab.dart';
 import 'package:luci_mobile/models/router.dart' as model;
@@ -185,14 +184,12 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                 );
                                 if (!context.mounted) return;
                                 if (confirm == true) {
-                                  await appState.removeRouter(router.id);
-                                  // The screen can be gone by now, and a
-                                  // disposed ConsumerState's `ref` throws.
-                                  if (!mounted) return;
                                   // Deleting the monitored router switches
-                                  // the poll off in storage; the cached
-                                  // settings would still read "on".
-                                  ref.invalidate(notificationSettingsProvider);
+                                  // the poll off in storage; the settings
+                                  // notifier follows that write itself, so
+                                  // it no longer matters whether this
+                                  // screen outlives the call.
+                                  await appState.removeRouter(router.id);
                                   if (!context.mounted) return;
                                   if (appState.routers.isEmpty) {
                                     unawaited(

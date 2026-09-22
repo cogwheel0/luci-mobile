@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/models/router_event.dart';
 import 'package:luci_mobile/services/background_monitor.dart';
 import 'package:luci_mobile/services/background_worker.dart';
@@ -32,6 +33,7 @@ List<RouterEvent> notifiable(
 
 void main() {
   _wanDetection();
+  _pollStateAnnouncement();
 
   group('deciding what is worth a notification', () {
     // The whole point of the feature.
@@ -313,4 +315,70 @@ void _wanDetection() {
       );
     });
   });
+}
+
+void _pollStateAnnouncement() {
+  // The stored switch is written from places with no screen of their own.
+  // Having each call site refresh the view was the bug the hook replaces:
+  // the one that did it from a screen stopped as soon as the screen went.
+  group('announcing a change to the stored poll state', () {
+    tearDown(() => onBackgroundPollChanged = null);
+
+    test('switching the poll off tells whoever is showing it', () async {
+      final store = _MemoryStorage();
+      var announced = 0;
+      onBackgroundPollChanged = () => announced++;
+
+      await disableBackgroundPoll(store);
+
+      expect(announced, 1);
+      expect(store.values[BackgroundKeys.enabled], 'false');
+    });
+
+    test('forgetting the monitored router announces it too', () async {
+      final store = _MemoryStorage();
+      await setMonitoredRouter(
+        store,
+        const MonitoredRouter(
+          id: 'r1',
+          ipAddress: '192.168.1.1',
+          username: 'root',
+          password: 'secret',
+          useHttps: false,
+        ),
+      );
+      var announced = 0;
+      onBackgroundPollChanged = () => announced++;
+
+      await forgetBackgroundRouter('r1', storage: store);
+
+      expect(announced, 1);
+      expect(store.values[BackgroundKeys.router], isNull);
+    });
+
+    // The background isolate has nothing on screen to tell.
+    test('no listener is not an error', () async {
+      final store = _MemoryStorage();
+      onBackgroundPollChanged = null;
+      await disableBackgroundPoll(store);
+      expect(store.values[BackgroundKeys.enabled], 'false');
+    });
+  });
+}
+
+class _MemoryStorage implements SecureStorageService {
+  final Map<String, String> values = {};
+
+  @override
+  Future<String?> readValue(String key) async => values[key];
+
+  @override
+  Future<void> writeValue(String key, String value) async =>
+      values[key] = value;
+
+  @override
+  Future<void> deleteValue(String key) async => values.remove(key);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

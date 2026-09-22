@@ -118,6 +118,17 @@ Future<void> _ensureScheduled(
   }
 }
 
+/// Called when the stored poll state changes, so anything showing it can
+/// follow. Set by the app; left null in the background isolate, where
+/// there is nothing on screen to refresh.
+///
+/// The switch is written from places with no `BuildContext` and no screen
+/// of their own - removing the monitored router, rotating its credential,
+/// startup giving up after a refused registration. Having each of those
+/// call sites remember to refresh the view was the bug: the one that did
+/// it from a screen stopped doing it as soon as the screen was gone.
+void Function()? onBackgroundPollChanged;
+
 /// Turns the poll off in storage. With [failed], records that it was the
 /// platform's refusal rather than the user's choice; with [keepRouter], the
 /// stored credentials stay, so switching back on is one tap.
@@ -133,6 +144,7 @@ Future<void> disableBackgroundPoll(
   } else {
     await store.deleteValue(BackgroundKeys.schedulingFailed);
   }
+  onBackgroundPollChanged?.call();
 }
 
 /// Points the background poll at [router] and drops the old baseline, which

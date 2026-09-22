@@ -11,7 +11,6 @@ import 'package:luci_mobile/services/background_worker.dart';
 import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
-import 'package:luci_mobile/state/notifications_notifier.dart';
 import 'package:luci_mobile/state/uci_mutation.dart';
 import 'package:luci_mobile/utils/logger.dart';
 
@@ -278,11 +277,8 @@ class PasswordMutations {
       } catch (e2, stack2) {
         Logger.exception('Could not disable background monitoring', e2, stack2);
       }
-      // The settings notifier caches its state and only reads storage when it
-      // builds, so writing the flag is not enough — without this the switch
-      // keeps showing "on" while nothing polls, which is the same silent lie
-      // this whole path exists to avoid.
-      if (ref.mounted) ref.invalidate(notificationSettingsProvider);
+      // `disableBackgroundPoll` announces the write, and the settings
+      // notifier re-reads on its own; nothing to do here.
     }
   }
 }
