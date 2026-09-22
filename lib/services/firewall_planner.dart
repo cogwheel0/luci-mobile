@@ -1,5 +1,6 @@
 import 'package:luci_mobile/models/firewall_config.dart';
 import 'package:luci_mobile/models/uci_change.dart';
+import 'package:luci_mobile/services/client_config_planner.dart';
 
 /// Reads and edits `/etc/config/firewall` and the routes in
 /// `/etc/config/network`.
@@ -22,11 +23,8 @@ class FirewallPlanner {
     return s.isEmpty ? null : s;
   }
 
-  static bool _bool(dynamic v, {bool orElse = true}) {
-    final s = _str(v);
-    if (s == null) return orElse;
-    return s != '0' && s.toLowerCase() != 'false';
-  }
+  static bool _bool(dynamic v, {bool orElse = true}) =>
+      ClientConfigPlanner.uciBool(v, orElse: orElse);
 
   static List<String> _list(dynamic v) {
     if (v == null) return const [];

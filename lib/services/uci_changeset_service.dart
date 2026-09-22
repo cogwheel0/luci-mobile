@@ -271,12 +271,16 @@ class UciChangesetService {
           continue;
         }
         try {
-          await _sweepLeftoverAdds(
+          // Owned even after the delete: libuci keeps the earlier rows in
+          // the delta alongside the removal, and they are ours.
+          for (final swept in await _sweepLeftoverAdds(
             session,
             baseline,
             op,
             context: context?.mounted == true ? context : null,
-          );
+          )) {
+            own(op.config, swept);
+          }
         } catch (e, stack) {
           // Not fatal here: the apply will refuse and name the config.
           Logger.exception('Could not clear a leftover staged add', e, stack);
@@ -388,13 +392,15 @@ class UciChangesetService {
   }
 
   /// Deletes every uncommitted add of [op]'s type in its config that the
-  /// baseline holds - the previous, corrected-since attempts at this add.
-  Future<void> _sweepLeftoverAdds(
+  /// baseline holds - the previous, corrected-since attempts at this add -
+  /// and returns the sections it deleted.
+  Future<List<String>> _sweepLeftoverAdds(
     RouterSession session,
     UciChangeSet baseline,
     UciAdd op, {
     BuildContext? context,
   }) async {
+    final swept = <String>[];
     for (final section in baseline.addedSections(op.config, op.type)) {
       Logger.info('Deleting leftover staged ${op.config} section $section');
       await _api.uciDelete(
@@ -405,7 +411,9 @@ class UciChangesetService {
         section: section,
         context: context?.mounted == true ? context : null,
       );
+      swept.add(section);
     }
+    return swept;
   }
 
   /// The section of a staged anonymous add in [baseline] whose type and
@@ -555,6 +563,7 @@ class UciChangesetService {
       // it did not clear is still on the router, and the message has to be
       // able to name it rather than just saying "failed".
       final unreverted = await _revertEach(session, staged.configs);
+      onPhase?.call(ApplyPhase.failed, Duration.zero);
       return ApplyOutcome(
         phase: ApplyPhase.failed,
         applied: staged,

@@ -151,9 +151,9 @@ class ClientDetailLoader {
     final station = found.station;
     final stationNetworks = found.networks;
     final stationFailed = found.failed;
-    final dhcp = configs.dhcp;
-    final firewall = configs.firewall;
-    final configFailed = configs.failed;
+    final dhcp = configs.dhcp ?? const <String, dynamic>{};
+    final firewall = configs.firewall ?? const <String, dynamic>{};
+    final configFailed = configs.dhcp == null || configs.firewall == null;
 
     final host = ClientConfigPlanner.findHost(dhcp, mac);
     final hint = hints[mac];
@@ -167,18 +167,20 @@ class ClientDetailLoader {
     final interfaceDump = rawDump is Map ? rawDump : null;
     // Which interfaces face the internet is the firewall's call; with no
     // firewall to ask, only the name can say.
-    final upstream = configFailed
-        ? null
-        : ClientConfigPlanner.upstreamNetworks(firewall);
+    final allSubnets = ClientConfigPlanner.interfaceSubnets(
+      interfaceDump,
+      upstreamNetworks: configs.firewall == null
+          ? null
+          : ClientConfigPlanner.upstreamNetworks(firewall),
+    );
     final located = ClientConfigPlanner.networkForClient(
-      interfaceDump: interfaceDump,
+      subnets: allSubnets,
       addresses: <String>{
         ..._leaseAddresses(appState),
         ?host?.ip,
         ..._hintList(hint, 'ipaddrs'),
       },
       wirelessNetworks: stationNetworks,
-      upstreamNetworks: upstream,
     );
     final network = located?.name;
     // A reservation is checked against the client's own subnet when it is
@@ -186,10 +188,7 @@ class ClientDetailLoader {
     // interface would ever serve is still refused.
     final subnets = located?.subnet != null
         ? [located!.subnet!]
-        : ClientConfigPlanner.interfaceSubnets(
-            interfaceDump,
-            upstreamNetworks: upstream,
-          ).where((s) => !s.upstream).toList();
+        : allSubnets.where((s) => !s.upstream).toList();
 
     return ClientDetail(
       alias: alias,
@@ -229,9 +228,9 @@ class ClientDetailLoader {
     }
   }
 
-  Future<
-    ({Map<String, dynamic> dhcp, Map<String, dynamic> firewall, bool failed})
-  >
+  /// Each config, or null when its read failed. Kept apart so that a denied
+  /// `dhcp` does not throw away a firewall the router did answer with.
+  Future<({Map<String, dynamic>? dhcp, Map<String, dynamic>? firewall})>
   _fetchConfigs(RouterSession session, IApiService api) async {
     // Caught per config, so the log names the RPC that failed rather than
     // the wrapper a joint wait would throw.
@@ -239,11 +238,7 @@ class ClientDetailLoader {
       _configOrNull(session, api, 'dhcp'),
       _configOrNull(session, api, 'firewall'),
     ).wait;
-    return (
-      dhcp: dhcp ?? const <String, dynamic>{},
-      firewall: firewall ?? const <String, dynamic>{},
-      failed: dhcp == null || firewall == null,
-    );
+    return (dhcp: dhcp, firewall: firewall);
   }
 
   Future<Map<String, dynamic>?> _configOrNull(

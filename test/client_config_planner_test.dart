@@ -538,7 +538,7 @@ void main() {
     test('a guest client resolves to guest, not the first interface', () {
       expect(
         ClientConfigPlanner.networkForClient(
-          interfaceDump: dump,
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
           addresses: const ['192.168.2.50'],
         )?.name,
         'guest',
@@ -548,7 +548,7 @@ void main() {
     test('a lan client resolves to lan even with wan listed first', () {
       expect(
         ClientConfigPlanner.networkForClient(
-          interfaceDump: dump,
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
           addresses: const ['192.168.1.50'],
         )?.name,
         'lan',
@@ -558,15 +558,20 @@ void main() {
     test('an address on no interface subnet is unknown, not lan', () {
       expect(
         ClientConfigPlanner.networkForClient(
-          interfaceDump: dump,
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
           addresses: const ['172.16.0.9', 'garbage'],
         ),
         isNull,
       );
-      expect(ClientConfigPlanner.networkForClient(interfaceDump: dump), isNull);
       expect(
         ClientConfigPlanner.networkForClient(
-          interfaceDump: null,
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
+        ),
+        isNull,
+      );
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(null),
           addresses: const ['192.168.1.50'],
         ),
         isNull,
@@ -576,7 +581,7 @@ void main() {
     test('the AP the client is on outranks an address match', () {
       expect(
         ClientConfigPlanner.networkForClient(
-          interfaceDump: dump,
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
           addresses: const ['192.168.1.50'],
           wirelessNetworks: const ['guest'],
         )?.name,
@@ -587,7 +592,7 @@ void main() {
     test('an AP on an interface the dump does not list still names it', () {
       expect(
         ClientConfigPlanner.networkForClient(
-          interfaceDump: dump,
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
           wirelessNetworks: const ['iot'],
         )?.name,
         'iot',
@@ -615,7 +620,7 @@ void main() {
       };
       expect(
         ClientConfigPlanner.networkForClient(
-          interfaceDump: guestFirst,
+          subnets: ClientConfigPlanner.interfaceSubnets(guestFirst),
           addresses: const ['192.168.1.5', '192.168.2.5'],
         )?.name,
         'lan',
@@ -644,18 +649,22 @@ void main() {
       const upstream = {'transit'};
       expect(
         ClientConfigPlanner.networkForClient(
-          interfaceDump: doubleNat,
+          subnets: ClientConfigPlanner.interfaceSubnets(
+            doubleNat,
+            upstreamNetworks: upstream,
+          ),
           addresses: const ['192.168.1.50'],
-          upstreamNetworks: upstream,
         )?.name,
         'lan',
       );
       // An address only the upstream holds is not a client of this router.
       expect(
         ClientConfigPlanner.networkForClient(
-          interfaceDump: doubleNat,
+          subnets: ClientConfigPlanner.interfaceSubnets(
+            doubleNat,
+            upstreamNetworks: upstream,
+          ),
           addresses: const ['192.168.7.7'],
-          upstreamNetworks: upstream,
         ),
         isNull,
       );
@@ -663,6 +672,34 @@ void main() {
 
     // The firewall says which networks face the internet: the zone that
     // NATs, or one named wan. Not the default route.
+    test('UCI booleans are read in every spelling', () {
+      for (final yes in ['1', 'yes', 'on', 'true', 'enabled', 'YES']) {
+        expect(ClientConfigPlanner.uciBool(yes), isTrue, reason: yes);
+      }
+      for (final no in ['0', 'no', 'off', 'false', 'disabled', 'Off']) {
+        expect(ClientConfigPlanner.uciBool(no), isFalse, reason: no);
+      }
+      expect(ClientConfigPlanner.uciBool(null), isFalse);
+      expect(ClientConfigPlanner.uciBool(null, orElse: true), isTrue);
+      expect(ClientConfigPlanner.uciBool('maybe', orElse: true), isTrue);
+    });
+
+    // `option masq 'no'` is a LAN zone; treating anything but '0' as NAT
+    // would have made every client on it unlocatable.
+    test('a zone with masq spelled "no" is not upstream', () {
+      expect(
+        ClientConfigPlanner.upstreamNetworks({
+          'z_lan': {
+            '.type': 'zone',
+            'name': 'lan',
+            'masq': 'no',
+            'network': ['lan'],
+          },
+        }),
+        isEmpty,
+      );
+    });
+
     test('upstream networks come from the internet-facing zones', () {
       expect(
         ClientConfigPlanner.upstreamNetworks({
@@ -705,9 +742,11 @@ void main() {
       };
       expect(
         ClientConfigPlanner.networkForClient(
-          interfaceDump: dumbAp,
+          subnets: ClientConfigPlanner.interfaceSubnets(
+            dumbAp,
+            upstreamNetworks: const {},
+          ),
           addresses: const ['192.168.1.50'],
-          upstreamNetworks: const {},
         )?.name,
         'lan',
       );
@@ -732,7 +771,7 @@ void main() {
       };
       expect(
         ClientConfigPlanner.networkForClient(
-          interfaceDump: nested,
+          subnets: ClientConfigPlanner.interfaceSubnets(nested),
           addresses: const ['10.0.1.50'],
         )?.name,
         'lan',
@@ -752,14 +791,14 @@ void main() {
         ],
       };
       final located = ClientConfigPlanner.networkForClient(
-        interfaceDump: twoSubnets,
+        subnets: ClientConfigPlanner.interfaceSubnets(twoSubnets),
         addresses: const ['192.168.1.20'],
       );
       expect(located?.name, 'lan');
       expect(located?.subnet?.address, '192.168.1.1');
 
       final viaAp = ClientConfigPlanner.networkForClient(
-        interfaceDump: twoSubnets,
+        subnets: ClientConfigPlanner.interfaceSubnets(twoSubnets),
         addresses: const ['192.168.1.20'],
         wirelessNetworks: const ['lan'],
       );

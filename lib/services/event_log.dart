@@ -32,6 +32,15 @@ class RouterObservation {
   final Map<String, String> names;
 
   String label(String mac) => names[mac] ?? mac;
+
+  /// This observation with [uptime] in place of its own.
+  RouterObservation withUptime(int? uptime) => RouterObservation(
+    reachable: reachable,
+    wanUp: wanUp,
+    clientMacs: clientMacs,
+    names: names,
+    uptime: uptime,
+  );
 }
 
 /// Derives events by comparing consecutive observations.
@@ -73,17 +82,21 @@ class EventDeriver {
       );
     }
 
-    // A router we cannot reach tells us nothing about its WAN or its clients;
-    // reporting "every client left" on a dropped connection would be noise.
-    if (!current.reachable || !previous.reachable) return events;
-
+    // Before the reachability guard: a reboot is usually *seen* as an
+    // outage, and the observation taken while the router was away carries
+    // the last uptime it reported, so the comparison still works when it
+    // comes back.
     final before = previous.uptime;
     final now = current.uptime;
-    if (before != null && now != null && now < before) {
+    if (current.reachable && before != null && now != null && now < before) {
       events.add(
         RouterEvent(kind: RouterEventKind.rebooted, at: at, routerId: routerId),
       );
     }
+
+    // A router we cannot reach tells us nothing about its WAN or its clients;
+    // reporting "every client left" on a dropped connection would be noise.
+    if (!current.reachable || !previous.reachable) return events;
 
     if (previous.wanUp && !current.wanUp) {
       events.add(

@@ -85,6 +85,19 @@ class ClientConfigPlanner {
     return s.isEmpty ? null : s;
   }
 
+  /// A UCI boolean option. UCI accepts several spellings on each side
+  /// (`1`/`yes`/`on`/`true`/`enabled` and `0`/`no`/`off`/`false`/
+  /// `disabled`); anything unrecognised, or absent, reads as [orElse].
+  static bool uciBool(dynamic v, {bool orElse = false}) {
+    final s = _str(v)?.toLowerCase();
+    if (s == null) return orElse;
+    return switch (s) {
+      '1' || 'yes' || 'on' || 'true' || 'enabled' => true,
+      '0' || 'no' || 'off' || 'false' || 'disabled' => false,
+      _ => orElse,
+    };
+  }
+
   /// Sections of one `.type` out of a `uci.get` `values` map.
   static Iterable<MapEntry<String, Map<String, dynamic>>> sectionsOfType(
     Map<String, dynamic> values,
@@ -163,8 +176,8 @@ class ClientConfigPlanner {
   ///
   /// Decided by the client, not by the router's interface order. The
   /// [addresses] are tried in the order given — callers put the live lease
-  /// first and stale host hints last — against the subnets in
-  /// `network.interface dump` ([interfaceDump]). [wirelessNetworks] is the
+  /// first and stale host hints last — against [subnets], from
+  /// [interfaceSubnets]. [wirelessNetworks] is the
   /// `network` option of the AP the client is associated to, which is the
   /// most direct evidence there is and also covers a station with no
   /// address yet.
@@ -172,16 +185,10 @@ class ClientConfigPlanner {
   /// Null when nothing matches. Guessing `lan` there would put a guest-VLAN
   /// client's block rule in the wrong zone, where it blocks nothing.
   static ClientNetwork? networkForClient({
-    required Map? interfaceDump,
+    required List<InterfaceSubnet> subnets,
     Iterable<String> addresses = const [],
     Iterable<String> wirelessNetworks = const [],
-    Set<String>? upstreamNetworks,
   }) {
-    final subnets = interfaceSubnets(
-      interfaceDump,
-      upstreamNetworks: upstreamNetworks,
-    );
-
     for (final network in wirelessNetworks) {
       final onInterface = subnets.where((s) => s.name == network).toList();
       if (onInterface.isEmpty) continue;
@@ -287,9 +294,8 @@ class ClientConfigPlanner {
     final out = <String>{};
     for (final entry in sectionsOfType(firewallValues, 'zone')) {
       final name = _str(entry.value['name']) ?? '';
-      final masq = _str(entry.value['masq']);
       final facesInternet =
-          (masq != null && masq != '0') || name.toLowerCase().startsWith('wan');
+          uciBool(entry.value['masq']) || name.toLowerCase().startsWith('wan');
       if (!facesInternet) continue;
       final networks = entry.value['network'];
       out.addAll(

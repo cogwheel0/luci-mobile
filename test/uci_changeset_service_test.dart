@@ -489,6 +489,16 @@ void main() {
       expect(outcome.stillStaged, {'dhcp'});
     });
 
+    test('a rejected apply tells the progress listener it failed', () async {
+      final h = _build();
+      h.api.applyError = Exception('boom');
+      final phases = <ApplyPhase>[];
+
+      await h.service.apply(_session, onPhase: (phase, _) => phases.add(phase));
+
+      expect(phases.last, ApplyPhase.failed);
+    });
+
     test('a rejected apply reverts and reports routerRejected', () async {
       final h = _build();
       h.api.changes = {
@@ -813,7 +823,19 @@ void _foreignChangeRegressions() {
         h.api.calls.indexOf('delete dhcp.cfg0a'),
         lessThan(h.api.calls.indexOf('add dhcp host')),
       );
-      expect(staged.ownedSections, {'dhcp|cfg0a1b2c'});
+      expect(staged.ownedSections, {'dhcp|cfg0a1b2c', 'dhcp|cfg0a'});
+
+      // libuci keeps the swept section's rows in the delta next to the
+      // removal (the mock leaves `changes` as it was), and they are ours.
+      final outcome = await h.service.apply(
+        _session,
+        ours: const {'dhcp'},
+        baseline: staged.baseline,
+        writtenKeys: staged.writtenKeys,
+        ownedSections: staged.ownedSections,
+        mode: ApplyMode.unchecked,
+      );
+      expect(outcome.phase, ApplyPhase.confirmed);
     });
 
     // Once the router shows the staged section, the planner edits it rather

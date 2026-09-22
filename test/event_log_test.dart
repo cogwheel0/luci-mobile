@@ -83,6 +83,22 @@ void main() {
       expect(diff(obs(), obs(uptime: 5)), isEmpty);
     });
 
+    // A reboot is usually seen as an outage. The observation taken while the
+    // router was away carries the last uptime it reported, so the comparison
+    // still happens when it comes back - alongside "router back".
+    test('a reboot seen through an outage is still a reboot', () {
+      final away = obs(reachable: false).withUptime(90000);
+      expect(
+        diff(away, obs(uptime: 30)).map((e) => e.kind),
+        containsAll([RouterEventKind.routerBack, RouterEventKind.rebooted]),
+      );
+      // Going away is not a reboot, whatever the stale payload says.
+      expect(
+        diff(obs(uptime: 90000), obs(reachable: false, uptime: 10)).single.kind,
+        RouterEventKind.routerUnreachable,
+      );
+    });
+
     test('clients joining and leaving are reported with their MAC', () {
       final joined = diff(
         obs(clients: const {}),

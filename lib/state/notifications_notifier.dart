@@ -38,6 +38,20 @@ class NotificationSettings {
   /// reads the router from storage, so without one every run returns early.
   final bool needsRouter;
 
+  /// Switched off for exactly one reason, or none. The three reasons are
+  /// mutually exclusive, and each exit path used to spell all of them out.
+  NotificationSettings off({
+    bool permissionDenied = false,
+    bool schedulingFailed = false,
+    bool needsRouter = false,
+  }) => NotificationSettings(
+    enabled: false,
+    kinds: kinds,
+    permissionDenied: permissionDenied,
+    schedulingFailed: schedulingFailed,
+    needsRouter: needsRouter,
+  );
+
   NotificationSettings copyWith({
     bool? enabled,
     Set<RouterEventKind>? kinds,
@@ -90,14 +104,7 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
       } catch (e, stack) {
         Logger.exception('Persisting the notification switch failed', e, stack);
       }
-      state = AsyncValue.data(
-        current.copyWith(
-          enabled: false,
-          permissionDenied: false,
-          schedulingFailed: false,
-          needsRouter: false,
-        ),
-      );
+      state = AsyncValue.data(current.off());
       return;
     }
 
@@ -107,14 +114,7 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
         .read(notificationServiceProvider)
         .requestPermission();
     if (!granted) {
-      state = AsyncValue.data(
-        current.copyWith(
-          enabled: false,
-          permissionDenied: true,
-          schedulingFailed: false,
-          needsRouter: false,
-        ),
-      );
+      state = AsyncValue.data(current.off(permissionDenied: true));
       return;
     }
 
@@ -129,27 +129,16 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
       if (!await _saveRouter()) {
         // Nothing to poll: the switch stays off and says why, rather than
         // reading "on" over a poll that returns early every run.
-        state = AsyncValue.data(
-          current.copyWith(
-            enabled: false,
-            permissionDenied: false,
-            schedulingFailed: false,
-            needsRouter: true,
-          ),
-        );
+        state = AsyncValue.data(current.off(needsRouter: true));
         return;
       }
       if (!await _schedule()) {
-        // No poll will ever read the credentials, so they do not stay.
+        // A task from an earlier launch may have survived the failed
+        // replace; it must not keep waking the app. And no poll will ever
+        // read the credentials, so they do not stay.
+        await _cancel();
         await disableBackgroundPoll(_store, failed: true);
-        state = AsyncValue.data(
-          current.copyWith(
-            enabled: false,
-            permissionDenied: false,
-            schedulingFailed: true,
-            needsRouter: false,
-          ),
-        );
+        state = AsyncValue.data(current.off(schedulingFailed: true));
         return;
       }
       await _store.writeValue(BackgroundKeys.enabled, 'true');
@@ -162,24 +151,10 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
       } catch (e, stack) {
         Logger.exception('Could not record the failure', e, stack);
       }
-      state = AsyncValue.data(
-        current.copyWith(
-          enabled: false,
-          permissionDenied: false,
-          schedulingFailed: true,
-          needsRouter: false,
-        ),
-      );
+      state = AsyncValue.data(current.off(schedulingFailed: true));
       return;
     }
-    state = AsyncValue.data(
-      current.copyWith(
-        enabled: true,
-        permissionDenied: false,
-        schedulingFailed: false,
-        needsRouter: false,
-      ),
-    );
+    state = AsyncValue.data(current.copyWith(enabled: true));
   }
 
   Future<void> setKind(RouterEventKind kind, bool on) async {

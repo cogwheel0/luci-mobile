@@ -46,29 +46,40 @@ class WolService {
   /// Read once per router and kept: the config does not change between
   /// wakes, and a router without `luci-app-wol` has no config to read at
   /// all, which is not worth a failed round trip on every tap.
-  Future<String?> configuredInterface(RouterSession session) =>
-      _interfaceByRouter.putIfAbsent(session.routerId, () async {
-        try {
-          final values = uciValuesOf(
-            await _api.uciGetAll(
-              session.ipAddress,
-              session.sysauth,
-              session.useHttps,
-              config: 'etherwake',
-            ),
-          );
-          for (final section in values.values) {
-            if (section is! Map || section['.type'] != 'etherwake') continue;
-            final iface = section['interface']?.toString().trim();
-            if (iface != null && iface.isNotEmpty) return iface;
-          }
-        } catch (e) {
-          Logger.info('No etherwake config to read: $e');
+  ///
+  /// Only an answer is kept. A read that failed - a timeout, a session that
+  /// had just expired - is forgotten, so the next wake asks again rather
+  /// than sending on the wrong interface for the rest of the session.
+  Future<String?> configuredInterface(RouterSession session) async {
+    final cached = _interfaceByRouter[session.routerId];
+    if (cached != null) return cached.value;
+    try {
+      final values = uciValuesOf(
+        await _api.uciGetAll(
+          session.ipAddress,
+          session.sysauth,
+          session.useHttps,
+          config: 'etherwake',
+        ),
+      );
+      String? found;
+      for (final section in values.values) {
+        if (section is! Map || section['.type'] != 'etherwake') continue;
+        final iface = section['interface']?.toString().trim();
+        if (iface != null && iface.isNotEmpty) {
+          found = iface;
+          break;
         }
-        return null;
-      });
+      }
+      _interfaceByRouter[session.routerId] = (value: found);
+      return found;
+    } catch (e) {
+      Logger.info('Could not read the etherwake config: $e');
+      return null;
+    }
+  }
 
-  final Map<String, Future<String?>> _interfaceByRouter = {};
+  final Map<String, ({String? value})> _interfaceByRouter = {};
 
   /// Returns false when the router refused or the MAC is unusable.
   ///

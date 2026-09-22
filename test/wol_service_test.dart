@@ -71,6 +71,26 @@ void main() {
     expect(api.sentParams, ['-D', 'aa:bb:cc:dd:ee:ff']);
   });
 
+  // One timeout must not send every later wake on the wrong interface.
+  test('a failed config read is retried on the next wake', () async {
+    final api = _ConfigApi();
+    final wol = WolService(api);
+
+    await wol.wake(session, 'aa:bb:cc:dd:ee:ff');
+    expect(api.sentParams, ['-D', 'aa:bb:cc:dd:ee:ff']);
+
+    api.etherwake = {
+      'setup': {'.type': 'etherwake', 'interface': 'br-lan'},
+    };
+    await wol.wake(session, 'aa:bb:cc:dd:ee:ff');
+    expect(api.sentParams, ['-D', '-i', 'br-lan', 'aa:bb:cc:dd:ee:ff']);
+
+    // An answer, on the other hand, is kept.
+    api.etherwake = null;
+    await wol.wake(session, 'aa:bb:cc:dd:ee:ff');
+    expect(api.sentParams, ['-D', '-i', 'br-lan', 'aa:bb:cc:dd:ee:ff']);
+  });
+
   group('normalising a MAC for etherwake', () {
     test('accepts the forms the app already holds', () {
       expect(WolService.normaliseMac('AA:BB:CC:11:22:33'), 'aa:bb:cc:11:22:33');
