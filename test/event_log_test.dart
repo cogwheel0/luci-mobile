@@ -26,7 +26,7 @@ final _at = DateTime.utc(2026, 9, 20, 12);
 
 RouterObservation obs({
   bool reachable = true,
-  bool wanUp = true,
+  bool? wanUp = true,
   Set<String> clients = const {'AA:BB:CC:11:22:33'},
   int? bootTime,
 }) => RouterObservation(
@@ -278,13 +278,19 @@ void main() {
       expect(o.names.values, isNot(contains('Unknown')));
     });
 
-    test('a missing wan block reads as down rather than throwing', () {
+    // A poll that lands before the first dashboard fetch knows nothing
+    // about the WAN. Reading that as "down" would report the internet as
+    // restored on the next poll.
+    test('a missing wan block reads as unknown, not down', () {
       final o = EventDeriver.observe(
         reachable: true,
         dashboardData: const {},
         clients: const [],
       );
-      expect(o.wanUp, isFalse);
+      expect(o.wanUp, isNull);
+      final known = obs(wanUp: true, clients: const {});
+      expect(diff(o, known), isEmpty);
+      expect(diff(known, o), isEmpty);
     });
   });
 

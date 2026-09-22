@@ -6,7 +6,6 @@ import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/state/apply_lock.dart';
-import 'package:luci_mobile/state/feature_notifier.dart';
 import 'package:luci_mobile/state/feature_providers.dart';
 import 'package:luci_mobile/utils/logger.dart';
 
@@ -50,22 +49,23 @@ Future<ApplyOutcome?> applyUciOperations(
 
     appState.beginCriticalSection();
     try {
-      return await ref.read(sessionGuardProvider).run<ApplyOutcome>((
-        session,
-        ctx,
-      ) async {
-        final staged = await service.stage(session, ops, context: ctx);
-        return service.apply(
-          session,
-          mode: mode,
-          ours: ours,
-          baseline: staged.baseline,
-          writtenKeys: staged.writtenKeys,
-          ownedSections: staged.ownedSections,
-          rollbackVerified: verified,
-          onPhase: onPhase,
-        );
-      }, context: context?.mounted == true ? context : null);
+      // Not through the session guard: it would return null when the
+      // session changed while the apply ran, and a change the router has
+      // already confirmed does not become "failed" because a re-login
+      // happened during the confirm window. The session was checked before
+      // starting; from here the outcome is the router's word.
+      final ctx = context?.mounted == true ? context : null;
+      final staged = await service.stage(queuedFor, ops, context: ctx);
+      return await service.apply(
+        queuedFor,
+        mode: mode,
+        ours: ours,
+        baseline: staged.baseline,
+        writtenKeys: staged.writtenKeys,
+        ownedSections: staged.ownedSections,
+        rollbackVerified: verified,
+        onPhase: onPhase,
+      );
     } on UciStagingException catch (e, stack) {
       Logger.exception('Staging $describe failed', e, stack);
       return ApplyOutcome(

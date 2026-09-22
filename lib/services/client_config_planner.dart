@@ -176,7 +176,7 @@ class ClientConfigPlanner {
       return ClientBlockRule(
         section: entry.key,
         macAddresses: macs,
-        enabled: _str(entry.value['enabled']) != '0',
+        enabled: uciBool(entry.value['enabled'], orElse: true),
         ownedByApp: entry.key.startsWith(blockRulePrefix),
         target: rawTarget,
       );

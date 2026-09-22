@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
@@ -604,6 +606,38 @@ class UciChangesetService {
 
     onPhase?.call(ApplyPhase.awaitingConfirm, remaining());
 
+    // A probe of an unreachable router blocks for its whole timeout, and
+    // the backoff after it for longer still. The countdown is meant to
+    // explain exactly that wait, so it ticks on its own rather than once
+    // per probe.
+    final ticker = onPhase == null || !countdown
+        ? null
+        : Timer.periodic(const Duration(seconds: 1), (_) {
+            onPhase(ApplyPhase.awaitingConfirm, remaining());
+          });
+    try {
+      return await _confirmWithin(
+        session,
+        staged: staged,
+        hardStop: hardStop,
+        remaining: remaining,
+        onPhase: onPhase,
+        rollbackVerified: rollbackVerified,
+      );
+    } finally {
+      ticker?.cancel();
+    }
+  }
+
+  /// Probes and confirms until [hardStop].
+  Future<ApplyOutcome> _confirmWithin(
+    RouterSession session, {
+    required UciChangeSet staged,
+    required DateTime hardStop,
+    required Duration Function() remaining,
+    required void Function(ApplyPhase phase, Duration remaining)? onPhase,
+    required bool rollbackVerified,
+  }) async {
     // Give the router a moment to finish reloading services before the first
     // probe; LuCI waits a second for the same reason.
     await _delay(const Duration(seconds: 1));

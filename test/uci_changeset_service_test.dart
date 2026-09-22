@@ -576,7 +576,9 @@ void main() {
         ],
       };
 
-      final foreign = (await h.service.pending(_session)).foreignTo({'dhcp'});
+      final foreign = (await h.service.pending(
+        _session,
+      )).foreignTo({'dhcp'}, writtenKeys: const {'dhcp|set|cfg01|name'});
 
       expect(foreign.configs, {'network'});
     });
@@ -607,7 +609,11 @@ void _foreignChangeRegressions() {
         ],
       };
 
-      final outcome = await h.service.apply(_session, ours: const {'dhcp'});
+      final outcome = await h.service.apply(
+        _session,
+        ours: const {'dhcp'},
+        writtenKeys: const {'dhcp|set|lan|start'},
+      );
 
       expect(outcome.phase, ApplyPhase.failed);
       expect(outcome.reason, RollbackReason.foreignChanges);
@@ -630,10 +636,32 @@ void _foreignChangeRegressions() {
       final outcome = await h.service.apply(
         _session,
         ours: const {'dhcp'},
+        writtenKeys: const {'dhcp|set|lan|start'},
         mode: ApplyMode.unchecked,
       );
 
       expect(outcome.phase, ApplyPhase.confirmed);
+    });
+
+    // With no baseline there is no telling a leftover from our own work
+    // except by what we wrote. A row we cannot account for is foreign.
+    test('without a baseline, only what was written passes', () async {
+      final h = _build();
+      h.api.changes = {
+        'dhcp': [
+          ['set', 'lan', 'start', '100'],
+          ['set', 'lan', 'leasetime', '24h'],
+        ],
+      };
+
+      final outcome = await h.service.apply(
+        _session,
+        ours: const {'dhcp'},
+        writtenKeys: const {'dhcp|set|lan|start'},
+      );
+
+      expect(outcome.reason, RollbackReason.foreignChanges);
+      expect(outcome.foreign.forConfig('dhcp').single.option, 'leasetime');
     });
 
     // The hole a config-name-only check leaves: a row already staged in a

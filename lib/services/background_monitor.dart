@@ -130,7 +130,7 @@ class StoredObservation {
   Map<String, dynamic> toJson() => {
     'at': at.toIso8601String(),
     'reachable': observation.reachable,
-    'wanUp': observation.wanUp,
+    'wanUp': ?observation.wanUp,
     'clients': observation.clientMacs.toList(),
     'names': observation.names,
     'bootTime': ?observation.bootTime,
@@ -146,7 +146,7 @@ class StoredObservation {
       at: at,
       observation: RouterObservation(
         reachable: json['reachable'] == true,
-        wanUp: json['wanUp'] == true,
+        wanUp: json['wanUp'] is bool ? json['wanUp'] as bool : null,
         clientMacs: {
           if (clients is List)
             for (final c in clients) c.toString(),

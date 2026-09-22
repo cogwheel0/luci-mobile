@@ -201,12 +201,15 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
     await _store.writeValue(
       BackgroundKeys.router,
       jsonEncode(
+        // The address the app last reached the router on, not the primary
+        // one: a profile reached through its fallback would otherwise be
+        // polled at an address that never answers.
         MonitoredRouter(
           id: router.id,
-          ipAddress: router.ipAddress,
+          ipAddress: router.activeAddress,
           username: router.username,
           password: router.password,
-          useHttps: router.useHttps,
+          useHttps: router.activeUseHttps,
         ).toJson(),
       ),
     );

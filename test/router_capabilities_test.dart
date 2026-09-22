@@ -158,6 +158,33 @@ void main() {
 
     // A router that will not report its ACL should not have every write
     // hidden - the call itself will surface a permission error if denied.
+    // rpcd matches ACL object names with fnmatch: the common "full access"
+    // recipe grants `*`, and `network.*` covers `network.interface`.
+    test('ACL object names are matched as globs', () {
+      const caps = RouterCapabilities(
+        uciConfigs: {'dhcp', 'firewall'},
+        ubusAcl: {
+          '*': {'*'},
+        },
+        probedAt: null,
+      );
+      expect(caps.allows('uci', 'set'), isTrue);
+      expect(caps.allows('anything', 'at-all'), isTrue);
+
+      const scoped = RouterCapabilities(
+        ubusAcl: {
+          'network.*': {'status', 'dump'},
+          'uci': {'get'},
+        },
+      );
+      expect(scoped.allows('network.interface', 'dump'), isTrue);
+      expect(scoped.allows('network.interface', 'up'), isFalse);
+      expect(scoped.allows('uci', 'set'), isFalse);
+      expect(RouterCapabilities.globMatches('luci-rpc', 'luci-rpc'), isTrue);
+      expect(RouterCapabilities.globMatches('luci?rpc', 'luci-rpc'), isTrue);
+      expect(RouterCapabilities.globMatches('luci', 'luci-rpc'), isFalse);
+    });
+
     test('an unknown ACL assumes permitted rather than guessing', () {
       final caps = RouterCapabilities(
         uciConfigs: const {'dhcp', 'firewall'},

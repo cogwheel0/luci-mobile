@@ -150,6 +150,20 @@ void main() {
       expect(back.at.isAtSameMomentAs(_at), isTrue);
     });
 
+    test('an unknown WAN state stays unknown through storage', () {
+      final back = StoredObservation.fromJson(
+        StoredObservation(
+          observation: const RouterObservation(
+            reachable: true,
+            wanUp: null,
+            clientMacs: {},
+          ),
+          at: _at,
+        ).toJson(),
+      );
+      expect(back!.observation.wanUp, isNull);
+    });
+
     test('a malformed entry is dropped rather than crashing the poll', () {
       expect(StoredObservation.fromJson(const {}), isNull);
       expect(StoredObservation.fromJson(const {'at': 'nonsense'}), isNull);

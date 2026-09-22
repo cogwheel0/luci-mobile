@@ -165,9 +165,10 @@ class UciChangeSet {
   ///
   /// A row counts as foreign when it is in a config the operation never
   /// touched, or when it was already staged before the operation began —
-  /// [baseline] captured just before staging. Without the baseline, a stray
-  /// row in a config we happen to be editing would be treated as ours and
-  /// committed along with it.
+  /// [baseline] captured just before staging. Without the baseline every
+  /// row in our configs is suspect, and only the ones the operation itself
+  /// accounts for pass: a stray row in a config we happen to be editing must
+  /// not be committed along with it.
   ///
   /// Two things make a baseline row ours rather than foreign, both from the
   /// staging step: [writtenKeys], the rows this operation itself wrote
@@ -193,11 +194,12 @@ class UciChangeSet {
         if (entry.value.isNotEmpty) out[entry.key] = entry.value;
         continue;
       }
-      if (baseline == null) continue;
-      final before = {for (final c in baseline.forConfig(entry.key)) c.key};
+      final before = baseline == null
+          ? null
+          : {for (final c in baseline.forConfig(entry.key)) c.key};
       final stale = [
         for (final change in entry.value)
-          if (before.contains(change.key) &&
+          if ((before == null || before.contains(change.key)) &&
               !writtenKeys.contains(change.key) &&
               !ownedSections.contains(change.sectionId))
             change,

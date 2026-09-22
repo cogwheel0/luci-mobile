@@ -38,6 +38,18 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   Client get client => widget.client;
   String get mac => StationInfo.normalizeMac(client.macAddress);
 
+  /// The name the page shows: the alias if set, else the lease name, else
+  /// the MAC. The same name goes on anything written to the router about
+  /// this client, so a block rule is recognisable in LuCI.
+  String _displayName(ClientDetail? detail) {
+    final alias = detail?.alias;
+    if (alias != null && alias.isNotEmpty) return alias;
+    if (client.hostname.isNotEmpty && client.hostname != 'Unknown') {
+      return client.hostname;
+    }
+    return client.macAddress;
+  }
+
   /// Whether this client belongs to the router currently selected.
   ///
   /// The clients list can aggregate several routers; writing a reservation or
@@ -59,11 +71,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final detailAsync = ref.watch(clientDetailProvider(mac));
-    final displayName = detailAsync.value?.alias?.isNotEmpty == true
-        ? detailAsync.value!.alias!
-        : (client.hostname.isNotEmpty && client.hostname != 'Unknown'
-              ? client.hostname
-              : client.macAddress);
+    final displayName = _displayName(detailAsync.value);
 
     return Scaffold(
       appBar: LuciAppBar(title: displayName, showBack: true),
@@ -315,7 +323,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       ClientConfigPlanner.planBlock(
         mac: mac,
         zone: zone,
-        displayName: client.hostname,
+        displayName: _displayName(detail),
         existing: rule,
       ),
     );

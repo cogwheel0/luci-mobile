@@ -40,13 +40,11 @@ class BackgroundKeys {
 Future<void> ensureScheduled({
   SecureStorageService? storage,
   Future<void> Function(Duration) delay = Future.delayed,
-}) {
-  final settled = Completer<void>();
-  _settled = settled;
-  return _ensureScheduled(storage ?? SecureStorageService(), delay, settled);
-}
+}) => _ensureScheduled(storage ?? SecureStorageService(), delay, _settled);
 
-Completer<void>? _settled;
+/// Exists from the moment the library loads, so a settings screen that
+/// comes up before [ensureScheduled] has even been called still waits.
+Completer<void> _settled = Completer<void>();
 
 /// Completes once startup knows whether the stored switch stands - never
 /// with an error. The settings screen reads that switch, and reading it
@@ -54,7 +52,17 @@ Completer<void>? _settled;
 /// that is about to be turned off. In the normal case this is one storage
 /// read and one registration; only a registration that hiccups holds it
 /// for the retry.
-Future<void> get backgroundStartup => _settled?.future ?? Future.value();
+Future<void> get backgroundStartup => _settled.future;
+
+/// For a launch on which [ensureScheduled] will never run - WorkManager
+/// itself failed to initialise - so that nothing waits forever.
+void settleBackgroundStartup() {
+  if (!_settled.isCompleted) _settled.complete();
+}
+
+/// Test hook: a fresh, pending startup.
+@visibleForTesting
+void resetBackgroundStartup() => _settled = Completer<void>();
 
 Future<void> _ensureScheduled(
   SecureStorageService store,
@@ -83,7 +91,7 @@ Future<void> _ensureScheduled(
       stack,
     );
   } finally {
-    settled.complete();
+    if (!settled.isCompleted) settled.complete();
   }
 }
 
@@ -203,6 +211,20 @@ Future<void> runBackgroundPoll({
     jsonEncode(StoredObservation(observation: current, at: now).toJson()),
   );
 
+  // Everything that happened goes in the feed - departures, the joins past
+  // the notification cap - because the feed is the record; the notification
+  // is only the nudge, and is filtered and capped separately.
+  final all = baseline == null
+      ? const <RouterEvent>[]
+      : EventDeriver.diff(
+          previous: baseline,
+          current: current,
+          routerId: router.id,
+          at: now,
+        );
+  if (all.isEmpty) return;
+  await EventLog(store).append(router.id, all, fromBackground: true);
+
   final kinds = await readNotificationKinds(store);
   final events = BackgroundMonitor.capped(
     BackgroundMonitor.notifiable(
@@ -214,10 +236,6 @@ Future<void> runBackgroundPoll({
     ),
   );
   if (events.isEmpty) return;
-
-  // The feed is the record; the notification is only the nudge. Writing
-  // here means opening the app after a notification shows the same events.
-  await EventLog(store).append(router.id, events, fromBackground: true);
 
   await (notifications ?? NotificationService()).show([
     for (final event in events) (event: event, text: _describe(event)),

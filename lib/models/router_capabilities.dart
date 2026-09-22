@@ -146,13 +146,37 @@ class RouterCapabilities {
   /// Returns true when the ACL is unknown: a router that will not report its
   /// ACL should not have every write hidden. The call itself will surface a
   /// permission error if it really is denied.
+  ///
+  /// rpcd matches the object names in an ACL with `fnmatch`, so a grant on
+  /// `network.*` covers `network.interface`, and the common "full access"
+  /// recipe grants `*`. Function names are matched the same way.
   bool allows(String object, String function) {
     final acl = ubusAcl;
     if (acl == null) return true;
     if (unprobedFunctions.contains('$object.$function')) return true;
-    final fns = acl[object];
-    if (fns == null) return false;
-    return fns.contains('*') || fns.contains(function);
+    for (final entry in acl.entries) {
+      if (!globMatches(entry.key, object)) continue;
+      if (entry.value.any((fn) => globMatches(fn, function))) return true;
+    }
+    return false;
+  }
+
+  /// `fnmatch`-style matching: `*` for any run, `?` for one character.
+  @visibleForTesting
+  static bool globMatches(String pattern, String value) {
+    if (!pattern.contains('*') && !pattern.contains('?')) {
+      return pattern == value;
+    }
+    final regex = StringBuffer('^');
+    for (final ch in pattern.split('')) {
+      regex.write(switch (ch) {
+        '*' => '.*',
+        '?' => '.',
+        _ => RegExp.escape(ch),
+      });
+    }
+    regex.write(r'$');
+    return RegExp(regex.toString()).hasMatch(value);
   }
 
   /// A boolean out of `luci.getFeatures`, or null when it was not reported.

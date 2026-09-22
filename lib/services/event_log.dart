@@ -19,7 +19,12 @@ class RouterObservation {
   });
 
   final bool reachable;
-  final bool wanUp;
+
+  /// Whether the WAN is up, or null when the payload did not say - a poll
+  /// that landed before the first dashboard fetch, say. Unknown is not
+  /// down: a baseline of "down" would report the internet as restored on
+  /// the next poll.
+  final bool? wanUp;
   final Set<String> clientMacs;
 
   /// When the router booted, in its own clock's epoch seconds: `localtime`
@@ -99,11 +104,15 @@ class EventDeriver {
     // reporting "every client left" on a dropped connection would be noise.
     if (!current.reachable || !previous.reachable) return events;
 
-    if (previous.wanUp && !current.wanUp) {
+    final wanWas = previous.wanUp;
+    final wanIs = current.wanUp;
+    if (wanWas == null || wanIs == null) {
+      // Nothing to compare against on one side or the other.
+    } else if (wanWas && !wanIs) {
       events.add(
         RouterEvent(kind: RouterEventKind.wanDown, at: at, routerId: routerId),
       );
-    } else if (!previous.wanUp && current.wanUp) {
+    } else if (!wanWas && wanIs) {
       events.add(
         RouterEvent(kind: RouterEventKind.wanUp, at: at, routerId: routerId),
       );
@@ -180,7 +189,7 @@ class EventDeriver {
     final wan = dashboardData?['wan'];
     return RouterObservation(
       reachable: reachable,
-      wanUp: wan is Map ? wan['up'] == true : false,
+      wanUp: wan is Map ? wan['up'] == true : null,
       bootTime: bootTimeOf(dashboardData?['sysInfo']),
       clientMacs: {
         for (final c in clients)
