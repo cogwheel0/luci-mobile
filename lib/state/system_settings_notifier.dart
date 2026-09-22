@@ -273,12 +273,14 @@ class PasswordMutations {
         Logger.exception('Could not cancel the background poll', e2, stack2);
       }
       try {
-        await _storage.writeValue(BackgroundKeys.enabled, 'false');
+        // Through `disableBackgroundPoll`, not a bare write of the flag:
+        // that also drops the credential the router has stopped accepting,
+        // and announces the change so the settings switch stops reading
+        // "on" without waiting for its next rebuild.
+        await disableBackgroundPoll(_storage);
       } catch (e2, stack2) {
         Logger.exception('Could not disable background monitoring', e2, stack2);
       }
-      // `disableBackgroundPoll` announces the write, and the settings
-      // notifier re-reads on its own; nothing to do here.
     }
   }
 }

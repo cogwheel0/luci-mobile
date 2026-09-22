@@ -257,6 +257,9 @@ void main() {
           ).toJson(),
         );
       final h = _harness(_RecordingApi(), storage: storage);
+      var announced = 0;
+      onBackgroundPollChanged = () => announced++;
+      addTearDown(() => onBackgroundPollChanged = null);
 
       final error = await h.container
           .read(passwordMutationsProvider)
@@ -265,6 +268,10 @@ void main() {
       // The password change itself succeeded; only the side effect failed.
       expect(error, isNull);
       expect(storage.values[BackgroundKeys.enabled], 'false');
+      // The credential the router has stopped accepting goes with it, and
+      // the switch is told rather than waiting for its next rebuild.
+      expect(storage.values[BackgroundKeys.router], isNull);
+      expect(announced, 1);
     });
 
     test('a transport failure leaves the saved credential alone', () async {
