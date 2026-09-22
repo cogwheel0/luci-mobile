@@ -29,9 +29,10 @@ class RpcException implements Exception {
     this.detail,
   });
 
-  /// True when the router has no such object, method or config.
-  bool get isNotFound =>
-      status == 4 || detail?.toLowerCase().contains('not found') == true;
+  /// True when the router has no such object, method or config: ubus
+  /// status 4. The message text is not consulted - "not found" appears in
+  /// too many unrelated errors to be an answer.
+  bool get isNotFound => status == 4;
 
   /// True when the router refused the call for lack of permission.
   ///

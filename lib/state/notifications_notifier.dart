@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -93,9 +94,16 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
   @override
   Future<NotificationSettings> build() async {
     // Startup may still be deciding whether the stored switch can be
-    // honoured; reading it first would show "on" over a poll about to be
-    // turned off.
-    await backgroundStartup;
+    // honoured. Rather than hold the screen on a spinner for the retry, or
+    // forever in a host that never runs startup, read now and read again
+    // once it has settled.
+    if (!backgroundStartupSettled) {
+      unawaited(
+        backgroundStartup.then((_) {
+          if (ref.mounted) ref.invalidateSelf();
+        }),
+      );
+    }
     final enabled = await _store.readValue(BackgroundKeys.enabled) == 'true';
     final failed =
         await _store.readValue(BackgroundKeys.schedulingFailed) == 'true';

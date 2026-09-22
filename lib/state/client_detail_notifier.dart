@@ -175,9 +175,9 @@ class ClientDetailLoader {
     // firewall to ask, only the name can say.
     final allSubnets = ClientConfigPlanner.interfaceSubnets(
       interfaceDump,
-      upstreamNetworks: configs.firewall == null
+      hints: configs.firewall == null
           ? null
-          : ClientConfigPlanner.upstreamNetworks(firewall),
+          : ClientConfigPlanner.upstreamHints(firewall),
     );
     final located = ClientConfigPlanner.networkForClient(
       subnets: allSubnets,

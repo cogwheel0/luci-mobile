@@ -642,13 +642,18 @@ void main() {
       );
     });
 
-    test('a wan-named interface is upstream whatever the firewall said', () {
-      final subnets = ClientConfigPlanner.interfaceSubnets(
+    // With the firewall read, its word is final; the name only decides
+    // when there is no firewall to ask.
+    test('the interface name decides only without a firewall', () {
+      final byName = ClientConfigPlanner.interfaceSubnets(dump);
+      expect(byName.firstWhere((s) => s.name == 'wan').upstream, isTrue);
+      expect(byName.firstWhere((s) => s.name == 'lan').upstream, isFalse);
+
+      final byFirewall = ClientConfigPlanner.interfaceSubnets(
         dump,
-        upstreamNetworks: const {},
+        hints: const UpstreamHints(named: {}, masq: {}),
       );
-      expect(subnets.firstWhere((s) => s.name == 'wan').upstream, isTrue);
-      expect(subnets.firstWhere((s) => s.name == 'lan').upstream, isFalse);
+      expect(byFirewall.every((s) => !s.upstream), isTrue);
     });
 
     test('an AP on an interface the dump does not list still names it', () {
@@ -699,6 +704,9 @@ void main() {
             'ipv4-address': [
               {'address': '192.168.0.7', 'mask': 16},
             ],
+            'route': [
+              {'target': '0.0.0.0', 'mask': 0, 'nexthop': '192.168.0.1'},
+            ],
           },
           {
             'interface': 'lan',
@@ -708,12 +716,13 @@ void main() {
           },
         ],
       };
-      const upstream = {'transit'};
+      // Not named wan, but it NATs and carries the default route.
+      const hints = UpstreamHints(named: {}, masq: {'transit'});
       expect(
         ClientConfigPlanner.networkForClient(
           subnets: ClientConfigPlanner.interfaceSubnets(
             doubleNat,
-            upstreamNetworks: upstream,
+            hints: hints,
           ),
           addresses: const ['192.168.1.50'],
         )?.name,
@@ -724,12 +733,44 @@ void main() {
         ClientConfigPlanner.networkForClient(
           subnets: ClientConfigPlanner.interfaceSubnets(
             doubleNat,
-            upstreamNetworks: upstream,
+            hints: hints,
           ),
           addresses: const ['192.168.7.7'],
         ),
         isNull,
       );
+    });
+
+    // A lan that masquerades out a VPN is still where the clients are: NAT
+    // alone is not upstream, only NAT on the interface with the default
+    // route.
+    test('a masquerading lan without the default route stays a lan', () {
+      final vpnOut = <String, dynamic>{
+        'interface': [
+          {
+            'interface': 'lan',
+            'ipv4-address': [
+              {'address': '192.168.1.1', 'mask': 24},
+            ],
+          },
+          {
+            'interface': 'vpn',
+            'ipv4-address': [
+              {'address': '10.8.0.2', 'mask': 24},
+            ],
+            'route': [
+              {'target': '0.0.0.0', 'mask': 0, 'nexthop': '10.8.0.1'},
+            ],
+          },
+        ],
+      };
+      const hints = UpstreamHints(named: {}, masq: {'lan', 'vpn'});
+      final subnets = ClientConfigPlanner.interfaceSubnets(
+        vpnOut,
+        hints: hints,
+      );
+      expect(subnets.firstWhere((s) => s.name == 'lan').upstream, isFalse);
+      expect(subnets.firstWhere((s) => s.name == 'vpn').upstream, isTrue);
     });
 
     // The firewall says which networks face the internet: the zone that
@@ -748,43 +789,41 @@ void main() {
 
     // `option masq 'no'` is a LAN zone; treating anything but '0' as NAT
     // would have made every client on it unlocatable.
-    test('a zone with masq spelled "no" is not upstream', () {
-      expect(
-        ClientConfigPlanner.upstreamNetworks({
-          'z_lan': {
-            '.type': 'zone',
-            'name': 'lan',
-            'masq': 'no',
-            'network': ['lan'],
-          },
-        }),
-        isEmpty,
-      );
+    test('a zone with masq spelled "no" is not a NAT hint', () {
+      final hints = ClientConfigPlanner.upstreamHints({
+        'z_lan': {
+          '.type': 'zone',
+          'name': 'lan',
+          'masq': 'no',
+          'network': ['lan'],
+        },
+      });
+      expect(hints.masq, isEmpty);
+      expect(hints.named, isEmpty);
     });
 
-    test('upstream networks come from the internet-facing zones', () {
-      expect(
-        ClientConfigPlanner.upstreamNetworks({
-          'z_lan': {
-            '.type': 'zone',
-            'name': 'lan',
-            'network': ['lan'],
-          },
-          'z_wan': {
-            '.type': 'zone',
-            'name': 'wan',
-            'masq': '1',
-            'network': 'wan wan6',
-          },
-          'z_transit': {
-            '.type': 'zone',
-            'name': 'transit',
-            'masq': '1',
-            'network': ['transit'],
-          },
-        }),
-        {'wan', 'wan6', 'transit'},
-      );
+    test('the firewall hints are the wan-named and the NAT zones', () {
+      final hints = ClientConfigPlanner.upstreamHints({
+        'z_lan': {
+          '.type': 'zone',
+          'name': 'lan',
+          'network': ['lan'],
+        },
+        'z_wan': {
+          '.type': 'zone',
+          'name': 'wan',
+          'masq': '1',
+          'network': 'wan wan6',
+        },
+        'z_transit': {
+          '.type': 'zone',
+          'name': 'transit',
+          'masq': '1',
+          'network': ['transit'],
+        },
+      });
+      expect(hints.named, {'wan', 'wan6'});
+      expect(hints.masq, {'wan', 'wan6', 'transit'});
     });
 
     // A dumb AP's lan carries the default route, and every client is on it.
@@ -806,7 +845,7 @@ void main() {
         ClientConfigPlanner.networkForClient(
           subnets: ClientConfigPlanner.interfaceSubnets(
             dumbAp,
-            upstreamNetworks: const {},
+            hints: const UpstreamHints(named: {}, masq: {}),
           ),
           addresses: const ['192.168.1.50'],
         )?.name,

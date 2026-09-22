@@ -652,6 +652,44 @@ void _foreignChangeRegressions() {
       );
     });
 
+    // Refusing must not leave our own rows behind as well, or the next
+    // apply finds them in its baseline and refuses for them too.
+    test('a refusal backs our own staging out and names the rest', () async {
+      final h = _build();
+      h.api.changes = {
+        'dhcp': [
+          ['set', 'lan', 'start', '100'],
+        ],
+        'firewall': [
+          ['set', 'cfg02', 'enabled', '0'],
+        ],
+      };
+
+      final outcome = await h.service.apply(
+        _session,
+        ours: const {'dhcp'},
+        baseline: const UciChangeSet(
+          byConfig: {
+            'firewall': [
+              UciChange(
+                op: UciOp.set,
+                config: 'firewall',
+                section: 'cfg02',
+                option: 'enabled',
+              ),
+            ],
+          },
+          fetchedAt: null,
+        ),
+        writtenKeys: const {'dhcp|set|lan|start'},
+      );
+
+      expect(outcome.reason, RollbackReason.foreignChanges);
+      expect(h.api.calls, contains('revert dhcp'));
+      expect(h.api.calls, isNot(contains('revert firewall')));
+      expect(outcome.stillStaged, isEmpty);
+    });
+
     test('apply proceeds when every pending change is ours', () async {
       final h = _build();
       h.api.changes = {

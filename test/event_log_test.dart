@@ -384,6 +384,35 @@ void main() {
       ]);
     });
 
+    // The app and the background poll each derive against their own
+    // baseline, so one join can be recorded by both, seconds apart.
+    test('the same event seen by both observers is one event', () async {
+      final storage = _MemoryStorage();
+      final log = EventLog(storage);
+      RouterEvent joined(int seconds) => RouterEvent(
+        kind: RouterEventKind.clientJoined,
+        at: _at.add(Duration(seconds: seconds)),
+        routerId: 'r1',
+        subject: 'AA:BB:CC:11:22:33',
+      );
+
+      await log.append('r1', [joined(0)]);
+      await log.append('r1', [joined(7)], fromBackground: true);
+      expect(await log.load('r1'), hasLength(1));
+
+      // Left and joined again: two real events, both kept.
+      await log.append('r1', [
+        RouterEvent(
+          kind: RouterEventKind.clientLeft,
+          at: _at.add(const Duration(seconds: 60)),
+          routerId: 'r1',
+          subject: 'AA:BB:CC:11:22:33',
+        ),
+        joined(120),
+      ]);
+      expect(await log.load('r1'), hasLength(3));
+    });
+
     test('a background event already in the app copy is not doubled', () async {
       final storage = _MemoryStorage();
       final log = EventLog(storage);

@@ -286,7 +286,17 @@ class EventLog {
     }
   }
 
+  /// How close two records of the same thing may be before they are one
+  /// event seen by two observers.
+  static const Duration echoWindow = Duration(minutes: 5);
+
   /// [a] and [b] de-duplicated, in time order, trimmed to [maxEntries].
+  ///
+  /// The app and the background poll each derive events against their own
+  /// baseline, so one change - a device joining - can be recorded by both,
+  /// seconds apart. A record of the same kind about the same subject, with
+  /// nothing else about that subject in between and within [echoWindow] of
+  /// the last, is the echo, not a second event.
   static List<RouterEvent> _merge(List<RouterEvent> a, List<RouterEvent> b) {
     final seen = <String>{};
     final merged = [
@@ -296,9 +306,21 @@ class EventLog {
         if (seen.add(e.dedupeKey)) e,
     ];
     merged.sort((a, b) => a.at.compareTo(b.at));
-    return merged.length <= maxEntries
-        ? merged
-        : merged.sublist(merged.length - maxEntries);
+    final kept = <RouterEvent>[];
+    final lastFor = <String, RouterEvent>{};
+    for (final e in merged) {
+      final subject = '${e.routerId}|${e.subject ?? ""}';
+      final last = lastFor[subject];
+      final echo =
+          last != null &&
+          last.kind == e.kind &&
+          e.at.difference(last.at) <= echoWindow;
+      lastFor[subject] = e;
+      if (!echo) kept.add(e);
+    }
+    return kept.length <= maxEntries
+        ? kept
+        : kept.sublist(kept.length - maxEntries);
   }
 
   /// Appends [events], de-duplicating and trimming to [maxEntries].

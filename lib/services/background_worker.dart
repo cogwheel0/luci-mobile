@@ -54,6 +54,9 @@ Completer<void> _settled = Completer<void>();
 /// for the retry.
 Future<void> get backgroundStartup => _settled.future;
 
+/// True once [backgroundStartup] has completed.
+bool get backgroundStartupSettled => _settled.isCompleted;
+
 /// For a launch on which [ensureScheduled] will never run - WorkManager
 /// itself failed to initialise - so that nothing waits forever.
 void settleBackgroundStartup() {

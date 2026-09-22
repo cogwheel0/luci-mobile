@@ -55,15 +55,9 @@ class WolService {
     if (cached != null) return cached.value;
     try {
       final values = await uciConfigValues(_api, session, 'etherwake');
-      String? found;
-      for (final section in values.values) {
-        if (section is! Map || section['.type'] != 'etherwake') continue;
-        final iface = section['interface']?.toString().trim();
-        if (iface != null && iface.isNotEmpty) {
-          found = iface;
-          break;
-        }
-      }
+      final found = uciSections(values, 'etherwake')
+          .map((e) => uciText(e.value['interface']))
+          .firstWhere((iface) => iface != null, orElse: () => null);
       _interfaceByRouter[session.routerId] = (value: found);
       return found;
     } on RpcException catch (e) {

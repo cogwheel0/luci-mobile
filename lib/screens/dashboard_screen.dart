@@ -962,20 +962,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     // Now add disabled interfaces from UCI config that aren't in runtime data
     if (uciWirelessConfig != null) {
       final uciValues = uciSectionsOf(uciWirelessConfig, config: 'wireless');
-      final uciRadios = <String, Map>{};
-      final uciInterfaces = <String, Map>{};
-
-      // Categorize UCI entries
-      uciValues.forEach((key, value) {
-        // The bare-body fallback can hand over a map whose values are not
-        // sections at all; those are skipped, not cast.
-        if (value is! Map) return;
-        if (value['.type'] == 'wifi-device') {
-          uciRadios[key] = value;
-        } else if (value['.type'] == 'wifi-iface') {
-          uciInterfaces[key] = value;
-        }
-      });
+      final uciRadios = <String, Map>{
+        for (final e in uciSections(uciValues, 'wifi-device')) e.key: e.value,
+      };
+      final uciInterfaces = <String, Map>{
+        for (final e in uciSections(uciValues, 'wifi-iface')) e.key: e.value,
+      };
 
       // Add interfaces that aren't in runtime data
       uciInterfaces.forEach((uciName, config) {

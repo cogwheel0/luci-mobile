@@ -274,7 +274,10 @@ class UciChangesetService {
       // and it is adopted; different values mean a corrected retry, and the
       // leftover is deleted first. `uci.delete` of an uncommitted section is
       // what the stock ACL does grant, unlike `uci.revert`.
-      if (op is UciAdd && op.name == null && baseline != null) {
+      if (op is UciAdd &&
+          op.name == null &&
+          op.identity.isNotEmpty &&
+          baseline != null) {
         final adopted = _identicalStagedAdd(baseline, op, spare: consumed);
         if (adopted != null) {
           Logger.info('Reusing staged ${op.config} section $adopted');
@@ -578,11 +581,17 @@ class UciChangesetService {
           'Refusing to apply: unrelated changes still staged in '
           '${foreign.configs.join(", ")}',
         );
+        // Our own rows must not stay behind as well: the next apply would
+        // find them in its baseline and refuse for them too. Configs that
+        // were clean before staging are reverted; the rest, which hold the
+        // foreign rows, are left and named.
+        final backedOut = await _backOut(session, ours, baseline?.configs);
         onPhase?.call(ApplyPhase.failed, Duration.zero);
         return ApplyOutcome(
           phase: ApplyPhase.failed,
           applied: const UciChangeSet.empty(),
           foreign: foreign,
+          stillStaged: backedOut.stillStaged,
           reason: RollbackReason.foreignChanges,
         );
       }

@@ -28,6 +28,18 @@ class InterfaceSubnet {
       ClientConfigPlanner._sameSubnet(octets, base, prefix);
 }
 
+/// What the firewall says about upstream networks; see
+/// [ClientConfigPlanner.upstreamHints].
+class UpstreamHints {
+  const UpstreamHints({required this.named, required this.masq});
+
+  /// Networks in a zone named `wan…`.
+  final Set<String> named;
+
+  /// Networks in a zone that masquerades.
+  final Set<String> masq;
+}
+
 /// Where a client sits: the logical network, and the interface subnet it was
 /// matched to (absent when only the AP's membership named the network).
 class ClientNetwork {
@@ -106,8 +118,7 @@ class ClientConfigPlanner {
     String? exceptSection,
   }) => {
     for (final entry in uciSections(dhcpValues, 'host'))
-      if (entry.key != exceptSection && uciText(entry.value['ip']) != null)
-        uciText(entry.value['ip'])!,
+      if (entry.key != exceptSection) ?uciText(entry.value['ip']),
   };
 
   /// Finds a firewall rule blocking [mac].
@@ -210,13 +221,12 @@ class ClientConfigPlanner {
 
   /// Every IPv4 subnet in a `network.interface dump`, in the dump's order.
   ///
-  /// [upstreamNetworks] are the networks the firewall puts in an
-  /// internet-facing zone (see the static [upstreamNetworks]). A name
-  /// starting with `wan` counts as well: a firewall that answered but names
-  /// its upstream zone `internet` without NAT would otherwise say nothing.
+  /// [hints] is what the firewall said (see [upstreamHints]); it is trusted
+  /// when given. Only when the firewall could not be read does the name
+  /// decide, and then a name starting with `wan` is the one hint there is.
   static List<InterfaceSubnet> interfaceSubnets(
     Map? interfaceDump, {
-    Set<String>? upstreamNetworks,
+    UpstreamHints? hints,
   }) {
     final interfaces = interfaceDump?['interface'];
     if (interfaces is! List) return const [];
@@ -227,8 +237,10 @@ class ClientConfigPlanner {
       if (name == null || name.isEmpty || name == 'loopback') continue;
       final addrs = iface['ipv4-address'];
       if (addrs is! List) continue;
-      final upstream =
-          name.startsWith('wan') || (upstreamNetworks?.contains(name) ?? false);
+      final upstream = hints == null
+          ? name.startsWith('wan')
+          : hints.named.contains(name) ||
+                (hints.masq.contains(name) && _hasDefaultRoute(iface['route']));
       for (final addr in addrs) {
         if (addr is! Map) continue;
         final base = _parseIpv4(addr['address']?.toString() ?? '');
@@ -251,19 +263,31 @@ class ClientConfigPlanner {
     return out;
   }
 
-  /// The networks in zones that face the internet - the ones that NAT, or
-  /// are named `wan`. A dumb AP has none, and its `lan` stays a client
-  /// network even though it carries the default route.
-  static Set<String> upstreamNetworks(Map<String, dynamic> firewallValues) {
-    final out = <String>{};
+  /// What the firewall says about which networks face the internet: those
+  /// in a zone named `wan`, and those in a zone that NATs.
+  ///
+  /// The two are kept apart because NAT alone proves nothing - a `lan` that
+  /// masquerades out a VPN is still where the clients are - so a
+  /// masquerading network counts as upstream only if it also carries the
+  /// default route (see [interfaceSubnets]). A dumb AP has neither hint,
+  /// and its `lan` stays a client network even with the default route.
+  static UpstreamHints upstreamHints(Map<String, dynamic> firewallValues) {
+    final named = <String>{};
+    final masq = <String>{};
     for (final entry in uciSections(firewallValues, 'zone')) {
       final name = uciText(entry.value['name']) ?? '';
-      final facesInternet =
-          uciBool(entry.value['masq']) || name.toLowerCase().startsWith('wan');
-      if (!facesInternet) continue;
-      out.addAll(uciList(entry.value['network']));
+      final networks = uciList(entry.value['network']);
+      if (name.toLowerCase().startsWith('wan')) named.addAll(networks);
+      if (uciBool(entry.value['masq'])) masq.addAll(networks);
     }
-    return out;
+    return UpstreamHints(named: named, masq: masq);
+  }
+
+  static bool _hasDefaultRoute(dynamic routes) {
+    if (routes is! List) return false;
+    return routes.any(
+      (r) => r is Map && r['target'] == '0.0.0.0' && r['mask'] == 0,
+    );
   }
 
   /// The firewall zone whose `network` list contains [network].
