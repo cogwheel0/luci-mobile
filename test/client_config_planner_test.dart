@@ -632,9 +632,6 @@ void main() {
             'ipv4-address': [
               {'address': '192.168.0.7', 'mask': 16},
             ],
-            'route': [
-              {'target': '0.0.0.0', 'mask': 0, 'nexthop': '192.168.0.1'},
-            ],
           },
           {
             'interface': 'lan',
@@ -644,10 +641,12 @@ void main() {
           },
         ],
       };
+      const upstream = {'transit'};
       expect(
         ClientConfigPlanner.networkForClient(
           interfaceDump: doubleNat,
           addresses: const ['192.168.1.50'],
+          upstreamNetworks: upstream,
         )?.name,
         'lan',
       );
@@ -656,8 +655,61 @@ void main() {
         ClientConfigPlanner.networkForClient(
           interfaceDump: doubleNat,
           addresses: const ['192.168.7.7'],
+          upstreamNetworks: upstream,
         ),
         isNull,
+      );
+    });
+
+    // The firewall says which networks face the internet: the zone that
+    // NATs, or one named wan. Not the default route.
+    test('upstream networks come from the internet-facing zones', () {
+      expect(
+        ClientConfigPlanner.upstreamNetworks({
+          'z_lan': {
+            '.type': 'zone',
+            'name': 'lan',
+            'network': ['lan'],
+          },
+          'z_wan': {
+            '.type': 'zone',
+            'name': 'wan',
+            'masq': '1',
+            'network': 'wan wan6',
+          },
+          'z_transit': {
+            '.type': 'zone',
+            'name': 'transit',
+            'masq': '1',
+            'network': ['transit'],
+          },
+        }),
+        {'wan', 'wan6', 'transit'},
+      );
+    });
+
+    // A dumb AP's lan carries the default route, and every client is on it.
+    test('a dumb AP still locates its clients on lan', () {
+      final dumbAp = <String, dynamic>{
+        'interface': [
+          {
+            'interface': 'lan',
+            'ipv4-address': [
+              {'address': '192.168.1.2', 'mask': 24},
+            ],
+            'route': [
+              {'target': '0.0.0.0', 'mask': 0, 'nexthop': '192.168.1.1'},
+            ],
+          },
+        ],
+      };
+      expect(
+        ClientConfigPlanner.networkForClient(
+          interfaceDump: dumbAp,
+          addresses: const ['192.168.1.50'],
+          upstreamNetworks: const {},
+        )?.name,
+        'lan',
       );
     });
 

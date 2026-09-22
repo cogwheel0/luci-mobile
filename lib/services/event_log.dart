@@ -235,11 +235,14 @@ class EventLog {
   }
 
   Future<void> clear(String routerId) async {
-    try {
-      await _storage.deleteValue(storageKey(routerId));
-      await _storage.deleteValue(backgroundKey(routerId));
-    } catch (e, stack) {
-      Logger.exception('Failed to clear the event log', e, stack);
+    // Each on its own: a failure on one must not leave the other to bring
+    // the cleared feed back on the next load.
+    for (final key in [storageKey(routerId), backgroundKey(routerId)]) {
+      try {
+        await _storage.deleteValue(key);
+      } catch (e, stack) {
+        Logger.exception('Failed to clear the event log', e, stack);
+      }
     }
   }
 }

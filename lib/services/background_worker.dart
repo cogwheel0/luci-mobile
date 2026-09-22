@@ -41,7 +41,10 @@ Future<void> ensureScheduled({SecureStorageService? storage}) async {
   if (await store.readValue(BackgroundKeys.enabled) != 'true') return;
   if (await schedulePoll(keepExisting: true)) return;
   // Refused: the switch must not keep reading "on" over a poll that will
-  // never run, and the credentials it would have used have no reader.
+  // never run, and the credentials it would have used have no reader. A
+  // task registered by an earlier launch may still exist; it goes too,
+  // rather than waking the app every 15 minutes to bail out.
+  await cancelPoll();
   await disableBackgroundPoll(store, failed: true);
 }
 

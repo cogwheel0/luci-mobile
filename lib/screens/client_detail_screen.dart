@@ -210,14 +210,14 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
 
   Future<void> _wake(String mac) async {
     final session = ref.read(sessionProvider);
-    final api = ref.read(apiServiceProvider);
-    if (session == null || api == null) return;
+    final wol = ref.read(wolServiceProvider);
+    if (session == null || wol == null) return;
 
     setState(() => _wakeBusy = true);
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
     try {
-      final sent = await WolService(api).wake(session, mac);
+      final sent = await wol.wake(session, mac);
       if (!mounted) return;
       // Nothing acknowledges a magic packet, so the wording promises only
       // that it was sent — not that anything woke up.
@@ -311,22 +311,15 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     );
   }
 
-  Future<String?> _askForIp(ClientDetail detail) async {
-    final controller = TextEditingController(
-      text:
+  Future<String?> _askForIp(ClientDetail detail) => showDialog<String>(
+    context: context,
+    builder: (dialogContext) => _ReservationDialog(
+      initialText:
           detail.host?.ip ??
           (client.ipAddress == 'N/A' ? '' : client.ipAddress),
-    );
-    try {
-      return await showDialog<String>(
-        context: context,
-        builder: (dialogContext) =>
-            _ReservationDialog(controller: controller, detail: detail),
-      );
-    } finally {
-      controller.dispose();
-    }
-  }
+      detail: detail,
+    ),
+  );
 
   Future<void> _apply(List<UciOperation> ops) async {
     if (ops.isEmpty) return;
@@ -645,9 +638,9 @@ class _MessageCard extends StatelessWidget {
 /// Asks for a reservation address, validating it against the subnet, the DHCP
 /// pool and the other reservations before letting the user commit.
 class _ReservationDialog extends StatefulWidget {
-  const _ReservationDialog({required this.controller, required this.detail});
+  const _ReservationDialog({required this.initialText, required this.detail});
 
-  final TextEditingController controller;
+  final String initialText;
   final ClientDetail detail;
 
   @override
@@ -655,7 +648,18 @@ class _ReservationDialog extends StatefulWidget {
 }
 
 class _ReservationDialogState extends State<_ReservationDialog> {
+  // Owned here, so it outlives the route's exit animation and is disposed
+  // with the dialog rather than the moment the future resolves.
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialText,
+  );
   IpCheckResult _check = IpCheckResult.ok;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   void _validate(String value) {
     setState(() {
@@ -671,7 +675,7 @@ class _ReservationDialogState extends State<_ReservationDialog> {
   @override
   void initState() {
     super.initState();
-    _validate(widget.controller.text);
+    _validate(_controller.text);
   }
 
   String? _message(BuildContext context) => switch (_check) {
@@ -688,7 +692,7 @@ class _ReservationDialogState extends State<_ReservationDialog> {
     return AlertDialog(
       title: Text(context.l10n.reserveThisAddress),
       content: TextField(
-        controller: widget.controller,
+        controller: _controller,
         autofocus: true,
         keyboardType: TextInputType.number,
         decoration: InputDecoration(
@@ -708,7 +712,7 @@ class _ReservationDialogState extends State<_ReservationDialog> {
         FilledButton(
           onPressed: _check.isBlocking
               ? null
-              : () => Navigator.of(context).pop(widget.controller.text.trim()),
+              : () => Navigator.of(context).pop(_controller.text.trim()),
           child: Text(context.l10n.saveAction),
         ),
       ],

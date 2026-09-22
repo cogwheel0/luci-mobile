@@ -9,6 +9,7 @@ import 'package:luci_mobile/services/client_config_planner.dart';
 import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
+import 'package:luci_mobile/services/wol_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/state/uci_mutation.dart';
 import 'package:luci_mobile/state/router_session.dart';
@@ -17,6 +18,13 @@ import 'package:luci_mobile/utils/logger.dart';
 final clientAliasStoreProvider = Provider<ClientAliasStore>(
   (ref) => ClientAliasStore(SecureStorageService()),
 );
+
+/// One [WolService] per API service, so what it learns about the router's
+/// etherwake config is kept between wakes.
+final wolServiceProvider = Provider<WolService?>((ref) {
+  final api = ref.watch(apiServiceProvider);
+  return api == null ? null : WolService(api);
+});
 
 /// Everything the detail page knows about one client beyond its list entry.
 @immutable
@@ -157,6 +165,11 @@ class ClientDetailLoader {
     // first: host hints remember addresses a client has since moved off.
     final rawDump = appState.dashboardData?['interfaceDump'];
     final interfaceDump = rawDump is Map ? rawDump : null;
+    // Which interfaces face the internet is the firewall's call; with no
+    // firewall to ask, only the name can say.
+    final upstream = configFailed
+        ? null
+        : ClientConfigPlanner.upstreamNetworks(firewall);
     final located = ClientConfigPlanner.networkForClient(
       interfaceDump: interfaceDump,
       addresses: <String>{
@@ -165,6 +178,7 @@ class ClientDetailLoader {
         ..._hintList(hint, 'ipaddrs'),
       },
       wirelessNetworks: stationNetworks,
+      upstreamNetworks: upstream,
     );
     final network = located?.name;
     // A reservation is checked against the client's own subnet when it is
@@ -174,6 +188,7 @@ class ClientDetailLoader {
         ? [located!.subnet!]
         : ClientConfigPlanner.interfaceSubnets(
             interfaceDump,
+            upstreamNetworks: upstream,
           ).where((s) => !s.upstream).toList();
 
     return ClientDetail(
@@ -218,19 +233,29 @@ class ClientDetailLoader {
     ({Map<String, dynamic> dhcp, Map<String, dynamic> firewall, bool failed})
   >
   _fetchConfigs(RouterSession session, IApiService api) async {
+    // Caught per config, so the log names the RPC that failed rather than
+    // the wrapper a joint wait would throw.
+    final (dhcp, firewall) = await (
+      _configOrNull(session, api, 'dhcp'),
+      _configOrNull(session, api, 'firewall'),
+    ).wait;
+    return (
+      dhcp: dhcp ?? const <String, dynamic>{},
+      firewall: firewall ?? const <String, dynamic>{},
+      failed: dhcp == null || firewall == null,
+    );
+  }
+
+  Future<Map<String, dynamic>?> _configOrNull(
+    RouterSession session,
+    IApiService api,
+    String config,
+  ) async {
     try {
-      final (dhcp, firewall) = await (
-        _configValues(session, api, 'dhcp'),
-        _configValues(session, api, 'firewall'),
-      ).wait;
-      return (dhcp: dhcp, firewall: firewall, failed: false);
+      return await _configValues(session, api, config);
     } catch (e, stack) {
-      Logger.exception('Client config unavailable', e, stack);
-      return (
-        dhcp: const <String, dynamic>{},
-        firewall: const <String, dynamic>{},
-        failed: true,
-      );
+      Logger.exception('Client config $config unavailable', e, stack);
+      return null;
     }
   }
 

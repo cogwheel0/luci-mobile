@@ -131,6 +131,16 @@ class UciChangeSet {
   List<UciChange> forConfig(String config) =>
       byConfig[config] ?? const <UciChange>[];
 
+  /// True when [section] of [config] is an uncommitted add in this set.
+  bool hasAdd(String config, String section) =>
+      forConfig(config).any((c) => c.op == UciOp.add && c.section == section);
+
+  /// The sections that are uncommitted adds of [type] in [config].
+  List<String> addedSections(String config, String type) => [
+    for (final c in forConfig(config))
+      if (c.op == UciOp.add && c.option == type) c.section,
+  ];
+
   /// The subset of this changeset that this operation did not stage.
   ///
   /// A row counts as foreign when it is in a config the operation never
@@ -139,18 +149,23 @@ class UciChangeSet {
   /// row in a config we happen to be editing would be treated as ours and
   /// committed along with it.
   ///
-  /// [writtenSections] holds the [UciChange.sectionId]s this operation wrote
-  /// to. Staging is per rpcd session, so a baseline row on a section we are
-  /// writing again is our own earlier attempt at the same edit — one whose
-  /// failed apply could not be reverted, because the stock ACL denies
-  /// `uci.revert`. Refusing it would leave that edit impossible to retry
-  /// from the app. Ownership is per section rather than per option because
-  /// the retry does not always repeat the same rows: once the router shows
-  /// the staged section, the planner edits it instead of adding it again.
+  /// Two things make a baseline row ours rather than foreign, both from the
+  /// staging step: [writtenKeys], the rows this operation itself wrote
+  /// (`uci.changes` keeps one row per option, so ours has replaced the old
+  /// one), and [ownedSections], the [UciChange.sectionId]s of sections this
+  /// operation created, adopted, or edited while they were still uncommitted
+  /// adds. An uncommitted section in our own rpcd session can only be this
+  /// app's earlier attempt at the same edit — one whose failed apply could
+  /// not be reverted, because the stock ACL denies `uci.revert` — so once
+  /// the planner edits it, its `add` row and the options it carried are ours
+  /// too. A leftover option on a *committed* section is not covered by
+  /// either: editing `dhcp.lan.start` must not silently commit a stale
+  /// `dhcp.lan.leasetime` from an unrelated earlier failure.
   UciChangeSet foreignTo(
     Set<String> ours, {
     UciChangeSet? baseline,
-    Set<String> writtenSections = const {},
+    Set<String> writtenKeys = const {},
+    Set<String> ownedSections = const {},
   }) {
     final out = <String, List<UciChange>>{};
     for (final entry in byConfig.entries) {
@@ -163,7 +178,8 @@ class UciChangeSet {
       final stale = [
         for (final change in entry.value)
           if (before.contains(change.key) &&
-              !writtenSections.contains(change.sectionId))
+              !writtenKeys.contains(change.key) &&
+              !ownedSections.contains(change.sectionId))
             change,
       ];
       if (stale.isNotEmpty) out[entry.key] = stale;
@@ -192,6 +208,14 @@ class UciChangeSet {
 sealed class UciOperation {
   const UciOperation(this.config);
   final String config;
+
+  /// The [UciChange.key]s this operation shows up as once staged. Empty for
+  /// [UciAdd], whose section is only known once the router has named it;
+  /// the whole section is owned instead.
+  Set<String> get writtenKeys => const {};
+
+  String _keyOf(UciOp op, String section, [String? option]) =>
+      UciChange(op: op, config: config, section: section, option: option).key;
 }
 
 /// Assigns options on an existing section.
@@ -199,6 +223,11 @@ final class UciSet extends UciOperation {
   const UciSet(super.config, {required this.section, required this.values});
   final String section;
   final Map<String, String> values;
+
+  @override
+  Set<String> get writtenKeys => {
+    for (final option in values.keys) _keyOf(UciOp.set, section, option),
+  };
 }
 
 /// Replaces a UCI list option (`list foo 'a'`) wholesale.
@@ -215,6 +244,14 @@ final class UciSetList extends UciOperation {
   final String section;
   final String option;
   final List<String> values;
+
+  // rpcd stages a list assignment as a delete of the option followed by one
+  // `list-add` per entry.
+  @override
+  Set<String> get writtenKeys => {
+    _keyOf(UciOp.remove, section, option),
+    _keyOf(UciOp.listAdd, section, option),
+  };
 }
 
 /// Creates a section. When [name] is null the router generates an anonymous
@@ -237,4 +274,7 @@ final class UciRemove extends UciOperation {
   const UciRemove(super.config, {required this.section, this.option});
   final String section;
   final String? option;
+
+  @override
+  Set<String> get writtenKeys => {_keyOf(UciOp.remove, section, option)};
 }

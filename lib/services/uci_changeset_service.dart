@@ -188,7 +188,12 @@ class UciChangesetService {
   /// On failure every config touched so far is reverted and a
   /// [UciStagingException] is thrown.
   Future<
-    ({Map<int, String> sections, UciChangeSet? baseline, Set<String> written})
+    ({
+      Map<int, String> sections,
+      UciChangeSet? baseline,
+      Set<String> writtenKeys,
+      Set<String> ownedSections,
+    })
   >
   stage(
     RouterSession session,
@@ -197,9 +202,11 @@ class UciChangesetService {
   }) async {
     final generatedSections = <int, String>{};
     final touched = <String>{};
-    // The sections this batch wrote, as [UciChange.sectionId]s, so that apply
-    // can tell a row we just (re-)staged from one left behind earlier.
-    final written = <String>{};
+    // What this batch wrote - row keys, and the sections it created, adopted
+    // or edited while they were uncommitted adds - so that apply can tell a
+    // row we just (re-)staged from one left behind earlier.
+    final writtenKeys = <String>{};
+    final ownedSections = <String>{};
 
     // `uci.revert` is config-wide, so cleaning up after a failed batch would
     // also discard anything already staged in the same config — typically
@@ -229,6 +236,17 @@ class UciChangesetService {
       preExisting = null;
     }
 
+    void own(String config, String section) =>
+        ownedSections.add('$config|$section');
+    // An option written to a section that is still an uncommitted add: the
+    // whole section is ours, its `add` row and earlier options included.
+    void wrote(UciOperation op, String section) {
+      writtenKeys.addAll(op.writtenKeys);
+      if (baseline?.hasAdd(op.config, section) ?? false) {
+        own(op.config, section);
+      }
+    }
+
     for (var i = 0; i < ops.length; i++) {
       final op = ops[i];
       // Before anything else, so an adopted section is still reported as
@@ -239,15 +257,29 @@ class UciChangesetService {
       // staged. A retry simply overwrites a named row, but an anonymous add
       // cannot be overwritten — the router names the section — so retrying
       // would pile a duplicate on top and then be refused for the leftover.
-      // Staging is per session, so an add already staged with exactly this
-      // type and these values is ours: adopt it instead of adding again.
+      // Staging is per session, so an uncommitted add of this type can only
+      // be this app's earlier attempt: identical values mean the same edit,
+      // and it is adopted; different values mean a corrected retry, and the
+      // leftover is deleted first. `uci.delete` of an uncommitted section is
+      // what the stock ACL does grant, unlike `uci.revert`.
       if (op is UciAdd && op.name == null && baseline != null) {
         final adopted = _identicalStagedAdd(baseline, op);
         if (adopted != null) {
           Logger.info('Reusing staged ${op.config} section $adopted');
           generatedSections[i] = adopted;
-          written.add('${op.config}|$adopted');
+          own(op.config, adopted);
           continue;
+        }
+        try {
+          await _sweepLeftoverAdds(
+            session,
+            baseline,
+            op,
+            context: context?.mounted == true ? context : null,
+          );
+        } catch (e, stack) {
+          // Not fatal here: the apply will refuse and name the config.
+          Logger.exception('Could not clear a leftover staged add', e, stack);
         }
       }
 
@@ -263,7 +295,7 @@ class UciChangesetService {
               values: op.values,
               context: context?.mounted == true ? context : null,
             );
-            written.add('${op.config}|${op.section}');
+            wrote(op, op.section);
           case UciSetList():
             await _api.uciSet(
               session.ipAddress,
@@ -274,7 +306,7 @@ class UciChangesetService {
               values: {op.option: op.values},
               context: context?.mounted == true ? context : null,
             );
-            written.add('${op.config}|${op.section}');
+            wrote(op, op.section);
           case UciAdd():
             final result = await _api.uciAdd(
               session.ipAddress,
@@ -295,7 +327,7 @@ class UciChangesetService {
               );
             }
             generatedSections[i] = section;
-            written.add('${op.config}|$section');
+            own(op.config, section);
           case UciRemove():
             await _api.uciDelete(
               session.ipAddress,
@@ -306,7 +338,7 @@ class UciChangesetService {
               option: op.option,
               context: context?.mounted == true ? context : null,
             );
-            written.add('${op.config}|${op.section}');
+            wrote(op, op.section);
         }
       } catch (e, stack) {
         Logger.exception('Failed to stage UCI operation $i', e, stack);
@@ -347,7 +379,33 @@ class UciChangesetService {
       }
     }
 
-    return (sections: generatedSections, baseline: baseline, written: written);
+    return (
+      sections: generatedSections,
+      baseline: baseline,
+      writtenKeys: writtenKeys,
+      ownedSections: ownedSections,
+    );
+  }
+
+  /// Deletes every uncommitted add of [op]'s type in its config that the
+  /// baseline holds - the previous, corrected-since attempts at this add.
+  Future<void> _sweepLeftoverAdds(
+    RouterSession session,
+    UciChangeSet baseline,
+    UciAdd op, {
+    BuildContext? context,
+  }) async {
+    for (final section in baseline.addedSections(op.config, op.type)) {
+      Logger.info('Deleting leftover staged ${op.config} section $section');
+      await _api.uciDelete(
+        session.ipAddress,
+        session.sysauth,
+        session.useHttps,
+        config: op.config,
+        section: section,
+        context: context?.mounted == true ? context : null,
+      );
+    }
   }
 
   /// The section of a staged anonymous add in [baseline] whose type and
@@ -409,7 +467,8 @@ class UciChangesetService {
     Duration timeout = defaultTimeout,
     Set<String>? ours,
     UciChangeSet? baseline,
-    Set<String> writtenSections = const {},
+    Set<String> writtenKeys = const {},
+    Set<String> ownedSections = const {},
     void Function(ApplyPhase phase, Duration remaining)? onPhase,
     BuildContext? context,
   }) async {
@@ -451,15 +510,16 @@ class UciChangesetService {
     // cannot pick up another client's work; `uci.changes` does not report it
     // and our apply leaves it pending.
     //
-    // [writtenSections] names the sections this operation itself just wrote.
-    // Baseline rows on those sections are our own earlier attempt at the
+    // [writtenKeys] and [ownedSections] are what this operation itself just
+    // wrote. Baseline rows they cover are our own earlier attempt at the
     // same edit — re-trying one whose failed apply was left staged must not
     // be refused as somebody else's work.
     if (ours != null) {
       final foreign = staged.foreignTo(
         ours,
         baseline: baseline,
-        writtenSections: writtenSections,
+        writtenKeys: writtenKeys,
+        ownedSections: ownedSections,
       );
       if (foreign.isNotEmpty) {
         Logger.warning(

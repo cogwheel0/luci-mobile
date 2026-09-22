@@ -18,8 +18,9 @@ class InterfaceSubnet {
   final List<int> base;
   final int prefix;
 
-  /// True for the interface the default route leaves by (or one named like
-  /// it). Clients do not sit there, however wide its subnet.
+  /// True for an interface in an internet-facing firewall zone (or, with no
+  /// firewall to ask, one named like one). Clients do not sit there, however
+  /// wide its subnet. Not the default route: a dumb AP's `lan` carries one.
   final bool upstream;
 
   bool contains(List<int> octets) =>
@@ -174,8 +175,12 @@ class ClientConfigPlanner {
     required Map? interfaceDump,
     Iterable<String> addresses = const [],
     Iterable<String> wirelessNetworks = const [],
+    Set<String>? upstreamNetworks,
   }) {
-    final subnets = interfaceSubnets(interfaceDump);
+    final subnets = interfaceSubnets(
+      interfaceDump,
+      upstreamNetworks: upstreamNetworks,
+    );
 
     for (final network in wirelessNetworks) {
       final onInterface = subnets.where((s) => s.name == network).toList();
@@ -233,7 +238,14 @@ class ClientConfigPlanner {
   }
 
   /// Every IPv4 subnet in a `network.interface dump`, in the dump's order.
-  static List<InterfaceSubnet> interfaceSubnets(Map? interfaceDump) {
+  ///
+  /// [upstreamNetworks] are the networks the firewall puts in an
+  /// internet-facing zone (see the static [upstreamNetworks]); with none
+  /// given, a name starting with `wan` is the only hint.
+  static List<InterfaceSubnet> interfaceSubnets(
+    Map? interfaceDump, {
+    Set<String>? upstreamNetworks,
+  }) {
     final interfaces = interfaceDump?['interface'];
     if (interfaces is! List) return const [];
     final out = <InterfaceSubnet>[];
@@ -243,8 +255,9 @@ class ClientConfigPlanner {
       if (name == null || name.isEmpty || name == 'loopback') continue;
       final addrs = iface['ipv4-address'];
       if (addrs is! List) continue;
-      final upstream =
-          _hasDefaultRoute(iface['route']) || name.startsWith('wan');
+      final upstream = upstreamNetworks == null
+          ? name.startsWith('wan')
+          : upstreamNetworks.contains(name);
       for (final addr in addrs) {
         if (addr is! Map) continue;
         final base = _parseIpv4(addr['address']?.toString() ?? '');
@@ -267,11 +280,25 @@ class ClientConfigPlanner {
     return out;
   }
 
-  static bool _hasDefaultRoute(dynamic routes) {
-    if (routes is! List) return false;
-    return routes.any(
-      (r) => r is Map && r['target'] == '0.0.0.0' && r['mask'] == 0,
-    );
+  /// The networks in zones that face the internet - the ones that NAT, or
+  /// are named `wan`. A dumb AP has none, and its `lan` stays a client
+  /// network even though it carries the default route.
+  static Set<String> upstreamNetworks(Map<String, dynamic> firewallValues) {
+    final out = <String>{};
+    for (final entry in sectionsOfType(firewallValues, 'zone')) {
+      final name = _str(entry.value['name']) ?? '';
+      final masq = _str(entry.value['masq']);
+      final facesInternet =
+          (masq != null && masq != '0') || name.toLowerCase().startsWith('wan');
+      if (!facesInternet) continue;
+      final networks = entry.value['network'];
+      out.addAll(
+        networks is List
+            ? networks.map((e) => e.toString())
+            : (_str(networks)?.split(RegExp(r'\s+')) ?? const <String>[]),
+      );
+    }
+    return out;
   }
 
   /// The firewall zone whose `network` list contains [network].

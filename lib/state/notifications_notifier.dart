@@ -122,41 +122,46 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
     // freshly registered periodic task straight away. Register, then persist
     // "enabled": a stored flag that no task backs would come back on every
     // launch as a switch that does nothing.
-    if (!await _saveRouter()) {
-      // Nothing to poll: the switch stays off and says why, rather than
-      // reading "on" over a poll that returns early every run.
-      state = AsyncValue.data(
-        current.copyWith(
-          enabled: false,
-          permissionDenied: false,
-          schedulingFailed: false,
-          needsRouter: true,
-        ),
-      );
-      return;
-    }
-    if (!await _schedule()) {
-      // No poll will ever read the credentials, so they do not stay.
-      await disableBackgroundPoll(_store, failed: true);
-      state = AsyncValue.data(
-        current.copyWith(
-          enabled: false,
-          permissionDenied: false,
-          schedulingFailed: true,
-          needsRouter: false,
-        ),
-      );
-      return;
-    }
+    // Every storage step is inside one guard: a locked or corrupted
+    // keystore must not escape the switch's callback, and whatever was
+    // registered by then must not keep polling with the switch off.
     try {
+      if (!await _saveRouter()) {
+        // Nothing to poll: the switch stays off and says why, rather than
+        // reading "on" over a poll that returns early every run.
+        state = AsyncValue.data(
+          current.copyWith(
+            enabled: false,
+            permissionDenied: false,
+            schedulingFailed: false,
+            needsRouter: true,
+          ),
+        );
+        return;
+      }
+      if (!await _schedule()) {
+        // No poll will ever read the credentials, so they do not stay.
+        await disableBackgroundPoll(_store, failed: true);
+        state = AsyncValue.data(
+          current.copyWith(
+            enabled: false,
+            permissionDenied: false,
+            schedulingFailed: true,
+            needsRouter: false,
+          ),
+        );
+        return;
+      }
       await _store.writeValue(BackgroundKeys.enabled, 'true');
       await _store.deleteValue(BackgroundKeys.schedulingFailed);
     } catch (e, stack) {
-      // The task is registered and would poll with stored credentials while
-      // the switch reads off and nothing ever cancels it. Undo both.
-      Logger.exception('Persisting the notification switch failed', e, stack);
+      Logger.exception('Turning notifications on failed', e, stack);
       await _cancel();
-      await disableBackgroundPoll(_store, failed: true);
+      try {
+        await disableBackgroundPoll(_store, failed: true);
+      } catch (e, stack) {
+        Logger.exception('Could not record the failure', e, stack);
+      }
       state = AsyncValue.data(
         current.copyWith(
           enabled: false,
