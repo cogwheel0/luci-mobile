@@ -1059,6 +1059,16 @@ void _foreignChangeRegressions() {
       ]);
       expect(h.api.calls.where((c) => c.startsWith('delete')), isEmpty);
 
+      // The same SSID on another radio is another network, not a retry.
+      await h.service.stage(_session, const [
+        UciAdd(
+          'wireless',
+          type: 'wifi-iface',
+          values: {'device': 'radio1', 'mode': 'ap', 'ssid': 'Guest'},
+        ),
+      ]);
+      expect(h.api.calls.where((c) => c.startsWith('delete')), isEmpty);
+
       // The same SSID with a corrected key is the same edit, retried.
       await h.service.stage(_session, const [
         UciAdd(
@@ -1286,6 +1296,18 @@ void _foreignChangeRegressions() {
         reason: 'no countdown may be shown when nothing will roll back',
       );
       expect(h.api.confirmCount, 0);
+    });
+
+    // Rollback requested without a measured grant: the router may well have
+    // kept the change. The outcome says so, so the message can too.
+    test('an unverified rollback is reported as such', () async {
+      final h = _build(reachable: false);
+
+      final outcome = await h.service.apply(_session, rollbackVerified: false);
+
+      expect(outcome.phase, ApplyPhase.rolledBack);
+      expect(outcome.rollbackVerified, isFalse);
+      expect((await _build().service.apply(_session)).rollbackVerified, isTrue);
     });
   });
 }

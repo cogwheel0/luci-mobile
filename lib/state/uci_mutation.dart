@@ -35,7 +35,7 @@ Future<ApplyOutcome?> applyUciOperations(
   final queuedFor = ref.read(sessionProvider);
   if (queuedFor == null) return null;
 
-  final mode = await _applyMode(ref);
+  final (mode, verified) = await _applyMode(ref);
   // `uci.apply` is global, so the service needs to know which configs are
   // ours to tell somebody else's staged work apart from our own.
   final ours = {for (final op in ops) op.config};
@@ -62,6 +62,7 @@ Future<ApplyOutcome?> applyUciOperations(
           baseline: staged.baseline,
           writtenKeys: staged.writtenKeys,
           ownedSections: staged.ownedSections,
+          rollbackVerified: verified,
           onPhase: onPhase,
         );
       }, context: context?.mounted == true ? context : null);
@@ -90,7 +91,8 @@ Future<ApplyOutcome?> applyUciOperations(
   });
 }
 
-/// Whether to ask the router for rollback protection.
+/// Whether to ask the router for rollback protection, and whether that
+/// protection is known to be real.
 ///
 /// Measured on stock OpenWrt 24.10: `uci.rollback` is denied even to root,
 /// and an unconfirmed apply is committed anyway. Requesting a rollback the
@@ -100,19 +102,20 @@ Future<ApplyOutcome?> applyUciOperations(
 ///
 /// Only a *measured* denial drops the protection. A probe that failed or never
 /// ran says nothing about the router, and treating it as "no rollback" would
-/// commit irreversibly over a blip in connectivity.
-Future<ApplyMode> _applyMode(Ref ref) async {
+/// commit irreversibly over a blip in connectivity. But rollback is then
+/// requested without knowing it will happen, so the outcome carries
+/// `verified: false` and an unconfirmed apply is reported as exactly that,
+/// not as "rolled back".
+Future<(ApplyMode, bool)> _applyMode(Ref ref) async {
   try {
     final caps = await ref.read(capabilitiesProvider.future);
     final rollback = caps.of(RouterFeature.uciApplyRollback);
-    if (rollback.available) return ApplyMode.checked;
+    if (rollback.available) return (ApplyMode.checked, true);
     return rollback.reason == UnavailableReason.noPermission
-        ? ApplyMode.unchecked
-        : ApplyMode.checked;
+        ? (ApplyMode.unchecked, true)
+        : (ApplyMode.checked, false);
   } catch (e, stack) {
     Logger.exception('Could not read rollback capability', e, stack);
-    // Unknown capabilities already read as "probably allowed" elsewhere;
-    // asking for rollback costs nothing if the router ignores it.
-    return ApplyMode.checked;
+    return (ApplyMode.checked, false);
   }
 }

@@ -92,6 +92,10 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
 
   @override
   Future<NotificationSettings> build() async {
+    // Startup may still be deciding whether the stored switch can be
+    // honoured; reading it first would show "on" over a poll about to be
+    // turned off.
+    await backgroundStartup;
     final enabled = await _store.readValue(BackgroundKeys.enabled) == 'true';
     final failed =
         await _store.readValue(BackgroundKeys.schedulingFailed) == 'true';

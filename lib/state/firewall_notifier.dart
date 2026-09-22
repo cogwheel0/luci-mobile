@@ -7,6 +7,7 @@ import 'package:luci_mobile/services/firewall_planner.dart';
 import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
+import 'package:luci_mobile/state/feature_providers.dart';
 import 'package:luci_mobile/state/uci_mutation.dart';
 import 'package:luci_mobile/state/router_session.dart';
 import 'package:luci_mobile/utils/logger.dart';
@@ -79,14 +80,9 @@ final firewallProvider = FutureProvider<FirewallState>((ref) async {
   // in the way of every apply that follows.
   UciChangeSet? pending;
   try {
-    pending = UciChangeSet.fromWire(
-      await api.uciChanges(
-        session.ipAddress,
-        session.sysauth,
-        session.useHttps,
-        config: 'firewall',
-      ),
-    );
+    pending = await ref
+        .read(uciChangesetServiceProvider)
+        ?.pending(session, config: 'firewall');
   } catch (e, stack) {
     Logger.exception('Pending firewall changes unavailable', e, stack);
   }

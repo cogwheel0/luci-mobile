@@ -63,9 +63,16 @@ class ApplyOutcome {
     this.stillStaged = const {},
     this.reason,
     this.error,
+    this.rollbackVerified = true,
   });
 
   final ApplyPhase phase;
+
+  /// False when rollback was requested without a measured `uci.rollback`
+  /// grant. Measured on stock OpenWrt 24.10: without it, an unconfirmed
+  /// apply stays committed - so a [ApplyPhase.rolledBack] outcome then only
+  /// means "could not confirm", and must be worded that way.
+  final bool rollbackVerified;
 
   /// What was staged at the moment the apply began.
   final UciChangeSet applied;
@@ -373,24 +380,24 @@ class UciChangesetService {
     );
   }
 
-  /// The option that says which thing a section of each type is about.
+  /// The options that say which thing a section of each type is about.
   ///
   /// Two `host` sections with the same MAC are two attempts at one
-  /// reservation; two with the same `name` are not. Matching on any shared
-  /// option would make `mode ap` or `interface lan` - constant across every
-  /// section of the type - relate everything to everything. Types not listed
-  /// are never swept.
-  static const Map<String, String> _identityOption = {
-    'host': 'mac',
-    'wifi-iface': 'ssid',
-    'route': 'target',
-    'rule': 'src_mac',
-    'redirect': 'name',
+  /// reservation; two `wifi-iface`s with the same SSID on different radios
+  /// are two networks. Matching on any shared option would make `mode ap` -
+  /// constant across every section of the type - relate everything to
+  /// everything. Only the anonymous adds the planners make are listed: block
+  /// rules and port forwards are added under a name, and a named re-add
+  /// re-sets the section, so they never reach the sweep.
+  static const Map<String, List<String>> _identityOptions = {
+    'host': ['mac'],
+    'wifi-iface': ['ssid', 'device'],
+    'route': ['target', 'interface', 'gateway'],
   };
 
   /// Deletes the uncommitted adds in the baseline that are earlier,
   /// corrected-since attempts at [op] - the same type, about the same thing
-  /// (see [_identityOption]) - calling [onSwept] after each delete, so a
+  /// (see [_identityOptions]) - calling [onSwept] after each delete, so a
   /// failure part-way leaves what was already deleted accounted for.
   ///
   /// A leftover about something else is somebody's other edit and is left
@@ -404,13 +411,19 @@ class UciChangesetService {
     required void Function(String section) onSwept,
     BuildContext? context,
   }) async {
-    final identity = _identityOption[op.type];
-    final wanted = identity == null ? null : op.values[identity]?.toString();
-    if (wanted == null || wanted.isEmpty) return;
+    final identity = _identityOptions[op.type];
+    if (identity == null) return;
+    final wanted = {
+      for (final option in identity) option: op.values[option]?.toString(),
+    };
+    final primary = wanted[identity.first];
+    if (primary == null || primary.isEmpty) return;
     final rows = baseline.forConfig(op.config);
     for (final section in baseline.addedSections(op.config, op.type)) {
       if (spare.contains(section)) continue;
-      if (_stagedOptions(rows, section)[identity] != wanted) continue;
+      final staged = _stagedOptions(rows, section);
+      final same = identity.every((option) => staged[option] == wanted[option]);
+      if (!same) continue;
       Logger.info('Deleting leftover staged ${op.config} section $section');
       await _api.uciDelete(
         session.ipAddress,
@@ -494,6 +507,7 @@ class UciChangesetService {
     UciChangeSet? baseline,
     Set<String> writtenKeys = const {},
     Set<String> ownedSections = const {},
+    bool rollbackVerified = true,
     void Function(ApplyPhase phase, Duration remaining)? onPhase,
     BuildContext? context,
   }) async {
@@ -628,6 +642,7 @@ class UciChangesetService {
               applied: staged,
               reason: reason,
               error: e,
+              rollbackVerified: rollbackVerified,
             );
           }
           // Transport-level failure: the router may still be coming back.
@@ -650,6 +665,7 @@ class UciChangesetService {
       phase: ApplyPhase.rolledBack,
       applied: staged,
       reason: RollbackReason.unreachable,
+      rollbackVerified: rollbackVerified,
     );
   }
 

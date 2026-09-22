@@ -90,46 +90,53 @@ void main() {
     // uptime can exceed the first. What the router should have gained is
     // the time that passed.
     test('a reboot is judged against the time that passed', () {
-      RouterObservation at(int uptime, DateTime when) => RouterObservation(
+      RouterObservation at(int uptime, DateTime? when) => RouterObservation(
         reachable: true,
         wanUp: true,
         clientMacs: const {},
         uptime: uptime,
-        observedAt: when,
+        uptimeAt: when,
       );
       final earlier = _at.subtract(const Duration(minutes: 15));
-      // 600s known 15 minutes ago; now 900s. Should be ~1500s: rebooted.
+      // 600s read 15 minutes ago; now 900s. Should be ~1500s: rebooted.
       expect(
-        EventDeriver.rebootedBetween(at(600, earlier), at(900, _at), _at),
+        EventDeriver.rebootedBetween(at(600, earlier), at(900, _at)),
         isTrue,
       );
       // 600s then 1495s: within the slack, just a running router.
       expect(
-        EventDeriver.rebootedBetween(at(600, earlier), at(1495, _at), _at),
+        EventDeriver.rebootedBetween(at(600, earlier), at(1495, _at)),
         isFalse,
       );
-      // Without a time on the previous observation, only going backwards
-      // counts.
+      // Without a time on either reading, only going backwards counts.
       expect(
-        EventDeriver.rebootedBetween(
-          at(600, earlier).withUptime(600),
-          at(900, _at),
-          _at,
-        ),
-        isTrue,
+        EventDeriver.rebootedBetween(at(600, null), at(900, _at)),
+        isFalse,
       );
-      final undated = RouterObservation(
+      expect(EventDeriver.rebootedBetween(at(600, null), at(30, _at)), isTrue);
+    });
+
+    // The foreground feed reads uptime out of a dashboard payload that may
+    // be minutes old. Two polls of the same payload are one reading, not a
+    // router that stopped gaining uptime.
+    test('the same dashboard payload seen twice is not a reboot', () {
+      final fetched = _at.subtract(const Duration(minutes: 5));
+      final payload = {
+        'fetchedAt': fetched,
+        'sysInfo': {'uptime': 600},
+      };
+      RouterObservation seen() => EventDeriver.observe(
         reachable: true,
-        wanUp: true,
-        clientMacs: const {},
-        uptime: 600,
+        dashboardData: payload,
+        clients: const [],
       );
-      expect(EventDeriver.rebootedBetween(undated, at(900, _at), _at), isFalse);
-      expect(EventDeriver.rebootedBetween(undated, at(30, _at), _at), isTrue);
+      expect(seen().uptimeAt, fetched);
+      expect(EventDeriver.rebootedBetween(seen(), seen()), isFalse);
+      expect(diff(seen(), seen()), isEmpty);
     });
 
     test('a reboot seen through an outage is still a reboot', () {
-      final away = obs(reachable: false).withUptime(90000);
+      final away = obs(reachable: false).withUptime(90000, null);
       expect(
         diff(away, obs(uptime: 30)).map((e) => e.kind),
         containsAll([RouterEventKind.routerBack, RouterEventKind.rebooted]),
@@ -241,10 +248,10 @@ void main() {
           'sysInfo': {'uptime': 1234},
         },
         clients: const [],
-        at: _at,
+        uptimeAt: _at,
       );
       expect(o.uptime, 1234);
-      expect(o.observedAt, _at);
+      expect(o.uptimeAt, _at);
     });
 
     test('reads WAN state and client MACs from the dashboard payload', () {

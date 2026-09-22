@@ -36,13 +36,36 @@ class BackgroundKeys {
 /// builds) a reboot. Without this the switch would still read "on" while
 /// nothing ever ran again — the worst kind of silent failure, because the
 /// user has no way to tell.
-Future<void> ensureScheduled({SecureStorageService? storage}) async {
-  final store = storage ?? SecureStorageService();
+Future<void> ensureScheduled({
+  SecureStorageService? storage,
+  Future<void> Function(Duration) delay = Future.delayed,
+}) {
+  final work = _ensureScheduled(storage ?? SecureStorageService(), delay);
+  _startup = work;
+  return work;
+}
+
+Future<void>? _startup;
+
+/// Completes once startup has settled the stored switch. The settings
+/// screen reads that switch, and reading it while [ensureScheduled] is
+/// still deciding could show "on" over a poll that is about to be turned
+/// off.
+Future<void> get backgroundStartup => _startup ?? Future.value();
+
+Future<void> _ensureScheduled(
+  SecureStorageService store,
+  Future<void> Function(Duration) delay,
+) async {
   if (await store.readValue(BackgroundKeys.enabled) != 'true') return;
   if (await schedulePoll(keepExisting: true)) return;
-  // Refused: the switch must not keep reading "on" over a poll that will
-  // never run, and the credentials it would have used have no reader. A
-  // task registered by an earlier launch may still exist; it goes too,
+  // The plugin channel is not always ready the instant the app starts; one
+  // hiccup must not switch off a setting the user turned on.
+  await delay(const Duration(seconds: 2));
+  if (await schedulePoll(keepExisting: true)) return;
+  // Refused twice: the switch must not keep reading "on" over a poll that
+  // will never run, and the credentials it would have used have no reader.
+  // A task registered by an earlier launch may still exist; it goes too,
   // rather than waking the app every 15 minutes to bail out.
   await cancelPoll();
   await disableBackgroundPoll(store, failed: true);
@@ -240,7 +263,7 @@ Future<RouterObservation?> _observe(
         if (sysInfo is Map) 'sysInfo': sysInfo,
       },
       clients: clientsFromLeases(leases is List ? leases : const []),
-      at: at,
+      uptimeAt: at,
     );
   } catch (e, stack) {
     Logger.exception('Background observation failed', e, stack);

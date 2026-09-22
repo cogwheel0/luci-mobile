@@ -139,11 +139,11 @@ class FirewallPlanner {
     String protocol, {
     String? exceptSection,
   }) {
-    final wanted = protocol.split(RegExp(r'\s+')).toSet();
+    final wanted = ClientConfigPlanner.uciList(protocol).toSet();
     return existing.any((f) {
       if (f.section == exceptSection) return false;
       if (f.sourcePort != port) return false;
-      final theirs = f.protocol.split(RegExp(r'\s+')).toSet();
+      final theirs = ClientConfigPlanner.uciList(f.protocol).toSet();
       return theirs.intersection(wanted).isNotEmpty;
     });
   }

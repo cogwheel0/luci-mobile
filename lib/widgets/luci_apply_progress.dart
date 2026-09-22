@@ -121,8 +121,12 @@ String applyOutcomeMessage(BuildContext context, ApplyOutcome? outcome) {
   if (outcome == null) return l10n.changeFailed;
   return switch (outcome.phase) {
     ApplyPhase.confirmed => l10n.changeApplied,
+    // A revert is only claimed when the router is known to perform one.
+    // Requested without a measured `uci.rollback` grant, or confirmed too
+    // late, all that is known is that the change could not be confirmed.
     ApplyPhase.rolledBack =>
-      outcome.reason == RollbackReason.deadlineMissed
+      outcome.reason == RollbackReason.deadlineMissed ||
+              !outcome.rollbackVerified
           ? l10n.changeUnconfirmed
           : l10n.changeRolledBack,
     // Naming the configs matters: the user has to go and deal with them in

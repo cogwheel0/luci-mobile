@@ -134,6 +134,7 @@ class StoredObservation {
     'clients': observation.clientMacs.toList(),
     'names': observation.names,
     'uptime': ?observation.uptime,
+    'uptimeAt': ?observation.uptimeAt?.toIso8601String(),
   };
 
   static StoredObservation? fromJson(Map<String, dynamic> json) {
@@ -142,6 +143,7 @@ class StoredObservation {
     final clients = json['clients'];
     final names = json['names'];
     final uptime = json['uptime'];
+    final uptimeAt = DateTime.tryParse(json['uptimeAt'] as String? ?? '');
     return StoredObservation(
       at: at,
       observation: RouterObservation(
@@ -156,7 +158,7 @@ class StoredObservation {
             for (final e in names.entries) e.key.toString(): e.value.toString(),
         },
         uptime: uptime is num ? uptime.toInt() : null,
-        observedAt: at,
+        uptimeAt: uptimeAt,
       ),
     );
   }

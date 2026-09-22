@@ -16,7 +16,7 @@ class RouterObservation {
     required this.clientMacs,
     this.names = const {},
     this.uptime,
-    this.observedAt,
+    this.uptimeAt,
   });
 
   final bool reachable;
@@ -28,9 +28,11 @@ class RouterObservation {
   /// there is.
   final int? uptime;
 
-  /// When this was observed, so the next observation knows how much uptime
-  /// the router should have gained since.
-  final DateTime? observedAt;
+  /// When [uptime] was read from the router - not when this observation
+  /// was made. The foreground feed reads it out of a dashboard payload that
+  /// may be minutes old, and two observations of the same payload must not
+  /// read as a router that failed to gain uptime.
+  final DateTime? uptimeAt;
 
   /// MAC -> the name to show. A feed that says "AA:BB:CC:11:22:33 joined"
   /// makes the reader do the lookup the app already did.
@@ -38,15 +40,16 @@ class RouterObservation {
 
   String label(String mac) => names[mac] ?? mac;
 
-  /// This observation with [uptime] in place of its own.
-  RouterObservation withUptime(int? uptime) => RouterObservation(
-    reachable: reachable,
-    wanUp: wanUp,
-    clientMacs: clientMacs,
-    names: names,
-    uptime: uptime,
-    observedAt: observedAt,
-  );
+  /// This observation with [uptime], read at [uptimeAt], in place of its own.
+  RouterObservation withUptime(int? uptime, DateTime? uptimeAt) =>
+      RouterObservation(
+        reachable: reachable,
+        wanUp: wanUp,
+        clientMacs: clientMacs,
+        names: names,
+        uptime: uptime,
+        uptimeAt: uptimeAt,
+      );
 }
 
 /// Derives events by comparing consecutive observations.
@@ -92,7 +95,7 @@ class EventDeriver {
     // outage, and the observation taken while the router was away carries
     // the last uptime it reported, so the comparison still works when it
     // comes back.
-    if (current.reachable && rebootedBetween(previous, current, at)) {
+    if (current.reachable && rebootedBetween(previous, current)) {
       events.add(
         RouterEvent(kind: RouterEventKind.rebooted, at: at, routerId: routerId),
       );
@@ -141,25 +144,26 @@ class EventDeriver {
   static const Duration rebootSlack = Duration(seconds: 30);
 
   /// Whether the router's uptime fell short of what it should have gained
-  /// between [previous] (taken at [previous.observedAt]) and [current]
-  /// (taken at [at]).
+  /// between the two readings.
   ///
   /// Comparing the raw numbers is not enough: a router that rebooted twice
   /// in a row, or whose last known uptime was shorter than the gap between
-  /// polls, shows a *larger* uptime after the second reboot. With the
-  /// elapsed time known, `uptime` should have grown by about that much.
+  /// polls, shows a *larger* uptime after the second reboot. With the time
+  /// between the two readings known, `uptime` should have grown by about
+  /// that much. A reading that is not newer than the previous one is the
+  /// same payload seen twice, and says nothing.
   static bool rebootedBetween(
     RouterObservation previous,
     RouterObservation current,
-    DateTime at,
   ) {
     final before = previous.uptime;
     final now = current.uptime;
     if (before == null || now == null) return false;
-    final since = previous.observedAt;
-    if (since == null) return now < before;
-    final elapsed = at.difference(since);
-    if (elapsed.isNegative) return now < before;
+    final since = previous.uptimeAt;
+    final until = current.uptimeAt;
+    if (since == null || until == null) return now < before;
+    if (!until.isAfter(since)) return false;
+    final elapsed = until.difference(since);
     return now + rebootSlack.inSeconds < before + elapsed.inSeconds;
   }
 
@@ -168,7 +172,7 @@ class EventDeriver {
     required bool reachable,
     required Map<String, dynamic>? dashboardData,
     required List<Client> clients,
-    DateTime? at,
+    DateTime? uptimeAt,
   }) {
     final wan = dashboardData?['wan'];
     final sysInfo = dashboardData?['sysInfo'];
@@ -177,7 +181,9 @@ class EventDeriver {
       reachable: reachable,
       wanUp: wan is Map ? wan['up'] == true : false,
       uptime: uptime is num ? uptime.toInt() : null,
-      observedAt: at,
+      // The dashboard stamps its payload; a poll that fetched `system.info`
+      // itself says so.
+      uptimeAt: uptimeAt ?? dashboardData?['fetchedAt'] as DateTime?,
       clientMacs: {
         for (final c in clients)
           if (c.macAddress != 'N/A') c.macAddress.toUpperCase(),
