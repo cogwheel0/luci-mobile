@@ -297,8 +297,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 final canReboot = ref.watch(
                   appStateProvider.select((state) => state.canReboot),
                 );
-                final accessError = ref.watch(
-                  appStateProvider.select((state) => state.rebootAccessError),
+                final accessUnknown = ref.watch(
+                  appStateProvider.select((state) => state.rebootAccessUnknown),
                 );
                 final rebootEnabled = canReboot == true && !isRebooting;
                 return LuciHubSection(
@@ -343,20 +343,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       },
                     ),
                     LuciHubTile(
-                      icon: accessError != null
+                      icon: accessUnknown
                           ? Icons.error_outline
                           : canReboot == false
                           ? Icons.lock_outline
                           : Icons.restart_alt,
                       iconColor: Theme.of(context).colorScheme.primary,
                       title: context.l10n.rebootRouter,
-                      subtitle:
-                          accessError ??
-                          switch (canReboot) {
-                            false => context.l10n.administratorAccessRequired,
-                            null => context.l10n.checkingAdministratorAccess,
-                            true => context.l10n.rebootRouterDescription,
-                          },
+                      subtitle: accessUnknown
+                          ? context.l10n.rebootAccessUnknown
+                          : switch (canReboot) {
+                              false => context.l10n.administratorAccessRequired,
+                              null => context.l10n.checkingAdministratorAccess,
+                              true => context.l10n.rebootRouterDescription,
+                            },
                       onTap: rebootEnabled
                           ? () => _showRebootDialog(context)
                           : null,

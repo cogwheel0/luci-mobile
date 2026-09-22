@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:luci_mobile/l10n/api_error_text.dart';
+import 'package:luci_mobile/l10n/failure_text.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';

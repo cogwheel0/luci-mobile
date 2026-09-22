@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:luci_mobile/models/app_failure.dart';
 import 'package:luci_mobile/services/event_log.dart';
 import 'package:luci_mobile/services/background_worker.dart';
 import 'package:luci_mobile/services/background_monitor.dart';
@@ -46,26 +47,24 @@ class AppState extends ChangeNotifier {
 
   bool _isLoading = false;
   String? _errorMessage;
+  AppFailure? _loginFailure;
   bool? _canReboot;
-  String? _rebootAccessError;
+
+  /// True when the administrator-access check could not be completed. A
+  /// flag, not a sentence: there is only one thing to say, and the screen
+  /// showing it can say it in the user's language.
+  bool _rebootAccessUnknown = false;
   int _rebootAccessRequestId = 0;
 
   Map<String, dynamic>? _dashboardData;
   bool _isDashboardLoading = false;
-  String? _dashboardErrorMessage;
 
-  /// What actually failed, when the failure came from a router call.
+  /// What went wrong, not how to say it.
   ///
-  /// The message is built here for logs and for the older assignments that
-  /// have only a sentence; a screen with a `BuildContext` prefers this and
-  /// words it in the user's language. Assigning a message clears it, so a
-  /// stale cause can never outlive the failure it explains.
-  Object? _dashboardErrorCause;
-
-  set _dashboardError(String? message) {
-    _dashboardErrorMessage = message;
-    _dashboardErrorCause = null;
-  }
+  /// `AppState` has no `BuildContext`, so it cannot look up a translation;
+  /// it records what failed and the screen showing it does the wording. See
+  /// `appFailureText`.
+  AppFailure? _appFailure;
 
   Timer? _throughputTimer;
   Timer? _pollingTimer;
@@ -424,12 +423,20 @@ class AppState extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool? get canReboot => _reviewerModeEnabled ? true : _canReboot;
-  String? get rebootAccessError => _rebootAccessError;
+  bool get rebootAccessUnknown => _rebootAccessUnknown;
 
+  /// A message the *screen* produced - a form that does not validate. It
+  /// arrives already translated, because the screen had a `BuildContext`.
   void setError(String error) {
     _errorMessage = error;
+    _loginFailure = null;
     notifyListeners();
   }
+
+  /// A failure `login` itself hit, which has no words yet: the login screen
+  /// looks them up. Set alongside [errorMessage] so that whichever happened
+  /// last is the one shown.
+  AppFailure? get loginFailure => _loginFailure;
 
   Map<String, dynamic>? get dashboardData => _dashboardData;
   List<double> get rxHistory => _throughputService?.rxHistory ?? [];
@@ -437,10 +444,7 @@ class AppState extends ChangeNotifier {
   double get currentRxRate => _throughputService?.currentRxRate ?? 0.0;
   double get currentTxRate => _throughputService?.currentTxRate ?? 0.0;
   bool get isDashboardLoading => _isDashboardLoading;
-  String? get dashboardError => _dashboardErrorMessage;
-
-  /// The error behind [dashboardError], when there was one.
-  Object? get dashboardErrorCause => _dashboardErrorCause;
+  AppFailure? get appFailure => _appFailure;
 
   // Interface-specific throughput getters
   List<double> getRxHistoryForInterface(String interface) {
@@ -557,9 +561,9 @@ class AppState extends ChangeNotifier {
     _isRebooting = false;
 
     _isLoading = true;
-    _dashboardError = null;
+    _appFailure = null;
     _canReboot = null;
-    _rebootAccessError = null;
+    _rebootAccessUnknown = false;
 
     // Clear throughput data and GL.iNet session when switching routers
     _cancelThroughputTimer();
@@ -599,8 +603,7 @@ class AppState extends ChangeNotifier {
     // login() already fetches dashboard data on success; fetching again here
     // would double the RPC burst on every router switch.
     if (!loginSuccess) {
-      _dashboardError =
-          'Login Failed: Invalid credentials or host unreachable.';
+      _appFailure = const AppFailure(AppFailureKind.login);
     }
     _isLoading = false;
     notifyListeners();
@@ -639,8 +642,9 @@ class AppState extends ChangeNotifier {
     final token = _sessionToken;
     _isLoading = true;
     _errorMessage = null;
+    _loginFailure = null;
     _canReboot = null;
-    _rebootAccessError = null;
+    _rebootAccessUnknown = false;
 
     // Clear throughput data when logging in to prevent mixing data from different sessions
     _cancelThroughputTimer();
@@ -729,15 +733,16 @@ class AppState extends ChangeNotifier {
         return true;
       } else {
         if (token != _sessionToken) return false;
-        _errorMessage =
-            'Login Failed: Invalid credentials or host unreachable.';
+        _errorMessage = null;
+        _loginFailure = const AppFailure(AppFailureKind.login);
         _isLoading = false;
         notifyListeners();
         return false;
       }
     } catch (e) {
       if (token != _sessionToken) return false;
-      _errorMessage = 'An error occurred: $e';
+      _errorMessage = null;
+      _loginFailure = AppFailure(AppFailureKind.login, cause: e);
       _isLoading = false;
       notifyListeners();
       return false;
@@ -765,9 +770,9 @@ class AppState extends ChangeNotifier {
     if (token != _sessionToken) return;
     _glInetService?.clearSession();
     _dashboardData = null;
-    _dashboardError = null;
+    _appFailure = null;
     _canReboot = null;
-    _rebootAccessError = null;
+    _rebootAccessUnknown = false;
     _cancelThroughputTimer();
     notifyListeners();
   }
@@ -783,7 +788,7 @@ class AppState extends ChangeNotifier {
     if (_reviewerModeEnabled) {
       // For reviewer mode, return mock data immediately
       _isDashboardLoading = true;
-      _dashboardError = null;
+      _appFailure = null;
       notifyListeners();
 
       await Future.delayed(
@@ -820,7 +825,7 @@ class AppState extends ChangeNotifier {
               DateTime.now().millisecondsSinceEpoch, // Force UI updates
         };
         _canReboot = true;
-        _rebootAccessError = null;
+        _rebootAccessUnknown = false;
 
         // Update throughput data with mock network data for reviewer mode
         if (_throughputService != null) {
@@ -860,7 +865,7 @@ class AppState extends ChangeNotifier {
         _isDashboardLoading = false;
         notifyListeners();
       } catch (e) {
-        _dashboardError = 'Failed to fetch dashboard data: $e';
+        _appFailure = AppFailure(AppFailureKind.fetch, cause: e);
         _isDashboardLoading = false;
         notifyListeners();
       }
@@ -885,9 +890,9 @@ class AppState extends ChangeNotifier {
     final token = _sessionToken;
 
     _isDashboardLoading = true;
-    _dashboardError = null;
+    _appFailure = null;
     _canReboot = null;
-    _rebootAccessError = null;
+    _rebootAccessUnknown = false;
     final rebootAccessRequestId = ++_rebootAccessRequestId;
     notifyListeners();
 
@@ -1225,8 +1230,7 @@ class AppState extends ChangeNotifier {
           return await fetchDashboardData(isRetryAfterFallback: true);
         }
       }
-      _dashboardError = userFacingApiError(e);
-      _dashboardErrorCause = e;
+      _appFailure = AppFailure(AppFailureKind.fetch, cause: e);
     } finally {
       // A newer session (router switch / re-login / logout) started while this
       // fetch was in flight - drop the stale results instead of clobbering it.
@@ -1245,7 +1249,7 @@ class AppState extends ChangeNotifier {
     required int requestId,
   }) async {
     bool? allowed;
-    String? error;
+    var unknown = false;
     try {
       final result = await _apiService!.call(
         ip,
@@ -1256,16 +1260,14 @@ class AppState extends ChangeNotifier {
         params: {'scope': 'ubus', 'object': 'system', 'function': 'reboot'},
       );
       allowed = rpcAccessAllowed(result);
-      if (allowed == null) {
-        error = 'Could not check administrator access. Refresh to retry.';
-      }
+      unknown = allowed == null;
     } catch (e) {
       Logger.warning('Could not check reboot access: $e');
-      error = 'Could not check administrator access. Refresh to retry.';
+      unknown = true;
     }
     if (token != _sessionToken || requestId != _rebootAccessRequestId) return;
     _canReboot = allowed;
-    _rebootAccessError = error;
+    _rebootAccessUnknown = unknown;
     notifyListeners();
   }
 
@@ -2004,7 +2006,7 @@ class AppState extends ChangeNotifier {
 
       return true;
     } catch (e) {
-      _dashboardError = 'Failed to toggle Wi-Fi: $e';
+      _appFailure = AppFailure(AppFailureKind.wifiToggle, cause: e);
       notifyListeners();
       return false;
     }
@@ -2184,7 +2186,10 @@ class AppState extends ChangeNotifier {
         throw FormatException('Radio $radioName not found');
       }
       if (_isUciDisabled(radio['disabled'])) {
-        _dashboardError = 'Enable $radioName before restarting it';
+        _appFailure = AppFailure(
+          AppFailureKind.radioDisabledForRestart,
+          subject: radioName,
+        );
         notifyListeners();
         return false;
       }
@@ -2196,7 +2201,7 @@ class AppState extends ChangeNotifier {
       return true;
     } catch (e, stack) {
       Logger.exception('Failed to restart radio $radioName', e, stack);
-      _dashboardError = 'Failed to restart radio: $e';
+      _appFailure = AppFailure(AppFailureKind.radioRestart, cause: e);
       notifyListeners();
       return false;
     }
@@ -2252,7 +2257,10 @@ class AppState extends ChangeNotifier {
         throw FormatException('Radio $radioDevice not found');
       }
       if (_isUciDisabled(radio['disabled'])) {
-        _dashboardError = 'Enable $radioDevice before connecting';
+        _appFailure = AppFailure(
+          AppFailureKind.radioDisabledForConnect,
+          subject: radioDevice,
+        );
         notifyListeners();
         return false;
       }
@@ -2650,7 +2658,11 @@ class AppState extends ChangeNotifier {
       return true;
     } catch (e, stack) {
       Logger.exception('Failed to connect to wireless network', e, stack);
-      _dashboardError = 'Failed to connect to $ssid: $e';
+      _appFailure = AppFailure(
+        AppFailureKind.wifiConnect,
+        subject: ssid,
+        cause: e,
+      );
       notifyListeners();
       return false;
     }
@@ -2702,7 +2714,7 @@ class AppState extends ChangeNotifier {
     } catch (e, stack) {
       // UCI operations failed — actual error
       Logger.exception('Failed to toggle wireless interface (UCI)', e, stack);
-      _dashboardError = 'Failed to toggle interface: $e';
+      _appFailure = AppFailure(AppFailureKind.interfaceToggle, cause: e);
       notifyListeners();
       return false;
     }
@@ -2718,7 +2730,7 @@ class AppState extends ChangeNotifier {
         e,
         stack,
       );
-      _dashboardError = 'Interface toggled but wireless reload failed: $e';
+      _appFailure = AppFailure(AppFailureKind.wirelessReload, cause: e);
       notifyListeners();
       return false;
     }
@@ -2765,7 +2777,7 @@ class AppState extends ChangeNotifier {
       );
     } catch (e, stack) {
       Logger.exception('Failed to modify wireless interface (UCI)', e, stack);
-      _dashboardError = 'Failed to modify interface: $e';
+      _appFailure = AppFailure(AppFailureKind.interfaceModify, cause: e);
       notifyListeners();
       return false;
     }
@@ -2774,7 +2786,7 @@ class AppState extends ChangeNotifier {
       await _wifiReload(context: context?.mounted == true ? context : null);
     } catch (e, stack) {
       Logger.exception('Wireless reload failed after interface edit', e, stack);
-      _dashboardError = 'Interface modified but wireless reload failed: $e';
+      _appFailure = AppFailure(AppFailureKind.wirelessReload, cause: e);
       notifyListeners();
       return false;
     }
@@ -2817,7 +2829,7 @@ class AppState extends ChangeNotifier {
       );
     } catch (e, stack) {
       Logger.exception('Failed to delete wireless interface (UCI)', e, stack);
-      _dashboardError = 'Failed to delete interface: $e';
+      _appFailure = AppFailure(AppFailureKind.interfaceDelete, cause: e);
       notifyListeners();
       return false;
     }
@@ -2830,7 +2842,7 @@ class AppState extends ChangeNotifier {
         e,
         stack,
       );
-      _dashboardError = 'Interface deleted but wireless reload failed: $e';
+      _appFailure = AppFailure(AppFailureKind.wirelessReload, cause: e);
       notifyListeners();
       return false;
     }

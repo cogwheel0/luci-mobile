@@ -8,6 +8,38 @@
   "more": "More",
   "settings": "Settings",
   "cancel": "Cancel",
+  "appFailureLogin": "Sign-in failed. Check the credentials, and that the router is reachable.",
+  "appFailureFetch": "Could not read the router's status.",
+  "appFailureWifiToggle": "Could not switch the wireless radio.",
+  "appFailureRadioRestart": "Could not restart the radio.",
+  "appFailureRadioDisabledForRestart": "Enable {radio} before restarting it.",
+  "@appFailureRadioDisabledForRestart": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "appFailureRadioDisabledForConnect": "Enable {radio} before connecting.",
+  "@appFailureRadioDisabledForConnect": {
+    "placeholders": {
+      "radio": {
+        "type": "String"
+      }
+    }
+  },
+  "appFailureWifiConnect": "Could not connect to {ssid}.",
+  "@appFailureWifiConnect": {
+    "placeholders": {
+      "ssid": {
+        "type": "String"
+      }
+    }
+  },
+  "appFailureInterfaceToggle": "Could not switch the interface.",
+  "appFailureInterfaceModify": "Could not change the interface.",
+  "appFailureInterfaceDelete": "Could not delete the interface.",
+  "appFailureWirelessReload": "The change was made, but reloading wireless failed.",
   "errorSessionRejected": "The router rejected this session. Reconnect and check the account's RPC permissions.",
   "errorNoPermission": "This account does not have permission for {call}. Sign in with an administrator account or grant the required RPC access.",
   "@errorNoPermission": {
@@ -128,6 +160,7 @@
   "wifiScanner": "WiFi Scanner",
   "wifiScannerDescription": "Scan and connect to wireless networks",
   "administratorAccessRequired": "View only, administrator access required",
+  "rebootAccessUnknown": "Could not check administrator access. Refresh to retry.",
   "checkingAdministratorAccess": "Checking administrator access...",
   "rebootRouterDescription": "Perform a system restart",
   "application": "Application",

@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:luci_mobile/state/app_state.dart';
+import 'package:luci_mobile/l10n/failure_text.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -235,6 +237,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         ),
       );
     }
+  }
+
+  /// What to show above the form: a message the screen itself produced, or
+  /// a failure `login` recorded, which is worded here where there is a
+  /// `BuildContext` to look it up with.
+  String? _loginError(BuildContext context, AppState appState) {
+    final failure = appState.loginFailure;
+    if (failure != null) return appFailureText(context, failure);
+    return appState.errorMessage;
   }
 
   @override
@@ -631,7 +642,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                             duration: const Duration(
                                               milliseconds: 300,
                                             ),
-                                            child: appState.errorMessage != null
+                                            child:
+                                                _loginError(
+                                                      context,
+                                                      appState,
+                                                    ) !=
+                                                    null
                                                 ? Padding(
                                                     key: const ValueKey(
                                                       'error',
@@ -668,8 +684,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                                           ),
                                                           Expanded(
                                                             child: Text(
-                                                              appState
-                                                                  .errorMessage!,
+                                                              _loginError(
+                                                                context,
+                                                                appState,
+                                                              )!,
                                                               style: textTheme
                                                                   .bodyMedium
                                                                   ?.copyWith(

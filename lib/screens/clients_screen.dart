@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:luci_mobile/l10n/api_error_text.dart';
+import 'package:luci_mobile/l10n/failure_text.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/models/client.dart';
 import 'package:luci_mobile/screens/client_detail_screen.dart';
@@ -162,10 +162,10 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                     final isLoading =
                         snapshot.connectionState == ConnectionState.waiting &&
                         (aggregatedClients.isEmpty);
-                    final dashboardCause = appState.dashboardErrorCause;
-                    final dashboardError = dashboardCause == null
-                        ? appState.dashboardError
-                        : apiErrorText(context, dashboardCause);
+                    final failure = appState.appFailure;
+                    final dashboardError = failure == null
+                        ? null
+                        : appFailureText(context, failure);
 
                     if (isLoading) {
                       return Padding(

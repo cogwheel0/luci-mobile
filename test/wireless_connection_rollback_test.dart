@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:luci_mobile/models/app_failure.dart';
 import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/mock_api_service.dart';
 import 'package:luci_mobile/services/mock_auth_service.dart';
@@ -187,7 +188,10 @@ void main() {
       isNot(contains('/sbin/uci del_list firewall.@zone[1].network=wwan')),
     );
     expect(api.calls, isNot(contains('delete network.wwan')));
-    expect(state.dashboardError, contains('wireless section wifinet0'));
+    expect(
+      state.appFailure?.cause.toString(),
+      contains('wireless section wifinet0'),
+    );
   });
 
   test('firewall read failure aborts before staging wireless', () async {
@@ -208,7 +212,7 @@ void main() {
     expect(connected, isFalse);
     expect(api.calls, contains('delete network.wwan'));
     expect(api.calls, isNot(contains('add wireless.wifinet0')));
-    expect(state.dashboardError, contains('timed out'));
+    expect(state.appFailure?.cause.toString(), contains('timed out'));
   });
 
   test('disabled radio rejects connection before mutation', () async {
@@ -228,7 +232,10 @@ void main() {
 
     expect(connected, isFalse);
     expect(api.calls, isEmpty);
-    expect(state.dashboardError, contains('Enable radio0'));
+    // No cause here: the radio being off is the whole answer, and the
+    // radio's name is the router's, not a translated word.
+    expect(state.appFailure?.kind, AppFailureKind.radioDisabledForConnect);
+    expect(state.appFailure?.subject, 'radio0');
   });
 
   test('failed WAN cleanup retains the new network interface', () async {
@@ -252,7 +259,10 @@ void main() {
       contains('/sbin/uci del_list firewall.@zone[1].network=wwan'),
     );
     expect(api.calls, isNot(contains('delete network.wwan')));
-    expect(state.dashboardError, contains('kept network interface wwan'));
+    expect(
+      state.appFailure?.cause.toString(),
+      contains('kept network interface wwan'),
+    );
   });
 
   test('interface reload leaves disabled radios disabled', () async {
