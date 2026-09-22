@@ -500,6 +500,7 @@
   "notifyPermissionDenied": "Android weigerde de meldingsrechten. Geef ze in de systeeminstellingen en probeer het opnieuw.",
   "notifySchedulingFailed": "Dit apparaat staat de app niet toe de router op de achtergrond te controleren, dus meldingen blijven uit.",
   "notifyNeedsRouter": "Achtergrondcontroles hebben een opgeslagen router nodig. Voeg er eerst een toe.",
+  "notifySaveFailed": "De instelling kon niet op dit apparaat worden opgeslagen, dus meldingen blijven uit. Probeer het opnieuw.",
   "notifyAbout": "Waarschuw mij bij",
   "notifyWanDown": "Internet valt weg",
   "notifyWanUp": "Internet is terug",

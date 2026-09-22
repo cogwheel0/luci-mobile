@@ -778,6 +778,7 @@
   "notifyPermissionDenied": "Android refused the notification permission. Grant it in system settings, then try again.",
   "notifySchedulingFailed": "This device would not let the app check the router in the background, so notifications stay off.",
   "notifyNeedsRouter": "Background checks need a saved router. Add one first.",
+  "notifySaveFailed": "The setting could not be saved on this device, so notifications stay off. Try again.",
   "notifyAbout": "Tell me about",
   "notifyWanDown": "Internet goes down",
   "notifyWanUp": "Internet comes back",

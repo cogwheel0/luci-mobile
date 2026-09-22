@@ -500,6 +500,7 @@
   "notifyPermissionDenied": "Android が通知の許可を拒否しました。システム設定で許可してからもう一度お試しください。",
   "notifySchedulingFailed": "この端末ではアプリがバックグラウンドでルーターを確認できないため、通知はオフのままです。",
   "notifyNeedsRouter": "バックグラウンド確認には保存済みのルーターが必要です。先にルーターを追加してください。",
+  "notifySaveFailed": "この端末に設定を保存できなかったため、通知はオフのままです。もう一度お試しください。",
   "notifyAbout": "知らせる項目",
   "notifyWanDown": "インターネットが切れたとき",
   "notifyWanUp": "インターネットが戻ったとき",

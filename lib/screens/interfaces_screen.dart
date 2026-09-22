@@ -13,6 +13,7 @@ import 'package:luci_mobile/widgets/luci_loading_states.dart';
 import 'package:luci_mobile/widgets/luci_refresh_components.dart';
 import 'package:luci_mobile/screens/wifi_scan_screen.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/utils/format_bytes.dart';
 
 class InterfacesScreen extends ConsumerStatefulWidget {
@@ -640,11 +641,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     final uciRadios = <String, Map>{};
     final uciInterfaces = <String, Map<String, dynamic>>{};
 
-    // Try 'values' key (real API) then 'wireless' key (mock data)
-    final uciValues =
-        (uciWirelessConfig?['values'] as Map?) ??
-        (uciWirelessConfig?['wireless'] as Map?);
-    if (uciValues != null) {
+    final uciValues = uciSectionsOf(uciWirelessConfig, config: 'wireless');
+    {
       uciValues.forEach((key, value) {
         if (value is! Map) return;
         if (value['.type'] == 'wifi-device') {

@@ -500,6 +500,7 @@
   "notifyPermissionDenied": "Android a refusé l’autorisation de notification. Accordez-la dans les réglages système puis réessayez.",
   "notifySchedulingFailed": "Cet appareil n’autorise pas l’application à vérifier le routeur en arrière-plan ; les notifications restent donc désactivées.",
   "notifyNeedsRouter": "Les vérifications en arrière-plan nécessitent un routeur enregistré. Ajoutez-en un d’abord.",
+  "notifySaveFailed": "Le réglage n’a pas pu être enregistré sur cet appareil ; les notifications restent désactivées. Réessayez.",
   "notifyAbout": "M’avertir pour",
   "notifyWanDown": "Perte d’Internet",
   "notifyWanUp": "Retour d’Internet",

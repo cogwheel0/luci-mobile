@@ -500,6 +500,7 @@
   "notifyPermissionDenied": "Android denegó el permiso de notificaciones. Concédelo en los ajustes del sistema y vuelve a intentarlo.",
   "notifySchedulingFailed": "Este dispositivo no permite que la app compruebe el router en segundo plano, así que las notificaciones siguen desactivadas.",
   "notifyNeedsRouter": "Las comprobaciones en segundo plano necesitan un router guardado. Añade uno primero.",
+  "notifySaveFailed": "El ajuste no se pudo guardar en este dispositivo, así que las notificaciones siguen desactivadas. Inténtalo de nuevo.",
   "notifyAbout": "Avisarme de",
   "notifyWanDown": "Se cae Internet",
   "notifyWanUp": "Vuelve Internet",

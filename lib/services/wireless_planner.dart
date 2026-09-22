@@ -25,11 +25,8 @@ class WirelessPlanner {
     return s.isEmpty ? null : s;
   }
 
-  static bool _bool(dynamic v, {bool orElse = false}) {
-    final s = _str(v);
-    if (s == null) return orElse;
-    return s == '1' || s.toLowerCase() == 'true';
-  }
+  static bool _bool(dynamic v, {bool orElse = false}) =>
+      ClientConfigPlanner.uciBool(v, orElse: orElse);
 
   static List<String> _list(dynamic v) => ClientConfigPlanner.uciList(v);
 

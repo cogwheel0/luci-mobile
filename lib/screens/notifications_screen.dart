@@ -38,7 +38,8 @@ class NotificationsScreen extends ConsumerWidget {
             ),
             if (settings.permissionDenied ||
                 settings.schedulingFailed ||
-                settings.needsRouter) ...[
+                settings.needsRouter ||
+                settings.saveFailed) ...[
               const SizedBox(height: LuciSpacing.md),
               LuciCardStyles.standardCardWrapper(
                 context: context,
@@ -56,6 +57,8 @@ class NotificationsScreen extends ConsumerWidget {
                             ? l10n.notifyPermissionDenied
                             : settings.needsRouter
                             ? l10n.notifyNeedsRouter
+                            : settings.saveFailed
+                            ? l10n.notifySaveFailed
                             : l10n.notifySchedulingFailed,
                         style: LuciTextStyles.cardSubtitle(context),
                       ),

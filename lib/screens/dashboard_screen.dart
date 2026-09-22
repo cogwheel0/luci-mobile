@@ -10,6 +10,7 @@ import 'package:luci_mobile/models/glinet_data.dart';
 import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/utils/wifi_utils.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/services/uci_changeset_service.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -960,8 +961,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     // Now add disabled interfaces from UCI config that aren't in runtime data
     if (uciWirelessConfig != null) {
-      final uciValues = uciWirelessConfig['values'] as Map?;
-      if (uciValues != null) {
+      final uciValues = uciSectionsOf(uciWirelessConfig, config: 'wireless');
+      {
         final uciRadios = <String, Map>{};
         final uciInterfaces = <String, Map>{};
 

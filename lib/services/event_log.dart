@@ -185,10 +185,13 @@ class EventLog {
   static String backgroundKey(String routerId) => 'events:bg:$routerId';
 
   /// Everything recorded for [routerId], from both writers.
-  Future<List<RouterEvent>> load(String routerId) async => _merge(
-    await _read(storageKey(routerId)),
-    await _read(backgroundKey(routerId)),
-  );
+  Future<List<RouterEvent>> load(String routerId) async {
+    final (own, background) = await (
+      _read(storageKey(routerId)),
+      _read(backgroundKey(routerId)),
+    ).wait;
+    return _merge(own, background);
+  }
 
   Future<List<RouterEvent>> _read(String key) async {
     try {

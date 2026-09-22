@@ -273,15 +273,14 @@ class UciChangesetService {
         try {
           // Owned even after the delete: libuci keeps the earlier rows in
           // the delta alongside the removal, and they are ours.
-          for (final swept in await _sweepLeftoverAdds(
+          await _sweepLeftoverAdds(
             session,
             baseline,
             op,
             spare: generatedSections.values,
+            onSwept: (swept) => own(op.config, swept),
             context: context?.mounted == true ? context : null,
-          )) {
-            own(op.config, swept);
-          }
+          );
         } catch (e, stack) {
           // Not fatal here: the apply will refuse and name the config.
           Logger.exception('Could not clear a leftover staged add', e, stack);
@@ -366,34 +365,44 @@ class UciChangesetService {
     );
   }
 
-  /// Deletes the uncommitted adds in the baseline that look like earlier,
-  /// corrected-since attempts at [op], and returns the sections it deleted.
+  /// The option that says which thing a section of each type is about.
   ///
-  /// "Look like": the same type, and at least one option value in common —
-  /// the MAC of a reservation, the SSID of a network, the target of a rule.
-  /// A leftover that shares nothing is somebody's other edit and is left
+  /// Two `host` sections with the same MAC are two attempts at one
+  /// reservation; two with the same `name` are not. Matching on any shared
+  /// option would make `mode ap` or `interface lan` - constant across every
+  /// section of the type - relate everything to everything. Types not listed
+  /// are never swept.
+  static const Map<String, String> _identityOption = {
+    'host': 'mac',
+    'wifi-iface': 'ssid',
+    'route': 'target',
+    'rule': 'src_mac',
+    'redirect': 'name',
+  };
+
+  /// Deletes the uncommitted adds in the baseline that are earlier,
+  /// corrected-since attempts at [op] - the same type, about the same thing
+  /// (see [_identityOption]) - calling [onSwept] after each delete, so a
+  /// failure part-way leaves what was already deleted accounted for.
+  ///
+  /// A leftover about something else is somebody's other edit and is left
   /// alone; the apply will name it. [spare] are sections this batch has
   /// already created or adopted, which are never leftovers.
-  Future<List<String>> _sweepLeftoverAdds(
+  Future<void> _sweepLeftoverAdds(
     RouterSession session,
     UciChangeSet baseline,
     UciAdd op, {
     required Iterable<String> spare,
+    required void Function(String section) onSwept,
     BuildContext? context,
   }) async {
+    final identity = _identityOption[op.type];
+    final wanted = identity == null ? null : op.values[identity]?.toString();
+    if (wanted == null || wanted.isEmpty) return;
     final rows = baseline.forConfig(op.config);
-    final wanted = {
-      for (final e in op.values.entries)
-        if (e.value is! List && e.value != null) e.key: e.value.toString(),
-    };
-    final swept = <String>[];
     for (final section in baseline.addedSections(op.config, op.type)) {
       if (spare.contains(section)) continue;
-      final staged = _stagedOptions(rows, section);
-      final related = wanted.entries.any(
-        (e) => e.value.isNotEmpty && staged[e.key] == e.value,
-      );
-      if (!related) continue;
+      if (_stagedOptions(rows, section)[identity] != wanted) continue;
       Logger.info('Deleting leftover staged ${op.config} section $section');
       await _api.uciDelete(
         session.ipAddress,
@@ -403,9 +412,8 @@ class UciChangesetService {
         section: section,
         context: context?.mounted == true ? context : null,
       );
-      swept.add(section);
+      onSwept(section);
     }
-    return swept;
   }
 
   /// The section of a staged anonymous add in [baseline] whose type and
@@ -720,17 +728,26 @@ class UciChangesetService {
 
 /// The `values` map out of a `uci.get` envelope (`[status, {values: {...}}]`).
 ///
-/// Some rpcd builds return the sections directly rather than under `values`;
-/// anything that is not a config at all reads as empty. One place, because
-/// every screen that reads a config had grown its own copy of this.
-Map<String, dynamic> uciValuesOf(dynamic envelope) {
+/// One place, because every screen that reads a config had grown its own
+/// copy of this. Anything that is not an envelope at all reads as empty; the
+/// body itself goes through [uciSectionsOf].
+Map<String, dynamic> uciValuesOf(dynamic envelope, {String? config}) {
   if (envelope is! List || envelope.length < 2) return const {};
-  final data = envelope[1];
-  if (data is! Map) return const {};
-  final values = data['values'];
-  return values is Map
-      ? Map<String, dynamic>.from(values)
-      : Map<String, dynamic>.from(data);
+  return uciSectionsOf(envelope[1], config: config);
+}
+
+/// The sections out of a `uci.get` body.
+///
+/// rpcd puts them under `values`; the reviewer-mode fixtures put them under
+/// the config's own name, which is [config]; some builds return them bare.
+Map<String, dynamic> uciSectionsOf(dynamic body, {String? config}) {
+  if (body is! Map) return const {};
+  final values = body['values'];
+  if (values is Map) return Map<String, dynamic>.from(values);
+  if (config != null && body[config] is Map) {
+    return Map<String, dynamic>.from(body[config] as Map);
+  }
+  return Map<String, dynamic>.from(body);
 }
 
 /// Extracts the section id rpcd generated for an anonymous `uci.add`.

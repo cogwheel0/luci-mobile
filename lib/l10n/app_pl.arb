@@ -500,6 +500,7 @@
   "notifyPermissionDenied": "Android odmówił uprawnienia do powiadomień. Przyznaj je w ustawieniach systemu i spróbuj ponownie.",
   "notifySchedulingFailed": "To urządzenie nie pozwala aplikacji sprawdzać routera w tle, więc powiadomienia pozostają wyłączone.",
   "notifyNeedsRouter": "Sprawdzanie w tle wymaga zapisanego routera. Najpierw go dodaj.",
+  "notifySaveFailed": "Nie udało się zapisać ustawienia na tym urządzeniu, więc powiadomienia pozostają wyłączone. Spróbuj ponownie.",
   "notifyAbout": "Powiadamiaj o",
   "notifyWanDown": "Zanik internetu",
   "notifyWanUp": "Powrót internetu",

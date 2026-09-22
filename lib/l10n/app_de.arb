@@ -500,6 +500,7 @@
   "notifyPermissionDenied": "Android hat die Benachrichtigungsberechtigung verweigert. Erteile sie in den Systemeinstellungen und versuche es erneut.",
   "notifySchedulingFailed": "Dieses Gerät erlaubt der App nicht, den Router im Hintergrund zu prüfen. Benachrichtigungen bleiben daher aus.",
   "notifyNeedsRouter": "Hintergrundprüfungen brauchen einen gespeicherten Router. Füge zuerst einen hinzu.",
+  "notifySaveFailed": "Die Einstellung konnte auf diesem Gerät nicht gespeichert werden. Benachrichtigungen bleiben aus. Versuche es erneut.",
   "notifyAbout": "Benachrichtigen bei",
   "notifyWanDown": "Internet fällt aus",
   "notifyWanUp": "Internet ist zurück",

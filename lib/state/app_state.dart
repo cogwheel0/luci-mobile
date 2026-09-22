@@ -8,6 +8,7 @@ import 'package:luci_mobile/services/router_service.dart';
 import 'package:luci_mobile/services/throughput_service.dart';
 import 'package:luci_mobile/models/client.dart';
 import 'package:luci_mobile/models/station_info.dart';
+import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/models/dashboard_preferences.dart';
 import 'package:luci_mobile/models/glinet_data.dart';
@@ -489,6 +490,9 @@ class AppState extends ChangeNotifier {
     // Invalidate any in-flight requests from the previously selected router
     _sessionToken++;
     final token = _sessionToken;
+    // The old router's dashboard must not be read as the new one's: the
+    // event feed would take its uptime as a baseline and report a reboot.
+    _dashboardData = null;
     _cancelRebootPolling();
     // Cancelling the poll removes the only path that clears this flag, so
     // reset it here or the new router gets no throughput timer.
@@ -1701,19 +1705,8 @@ class AppState extends ChangeNotifier {
   ///
   /// Returns `null` when the response cannot be parsed.
   Map<String, dynamic>? _resolveUciSections(dynamic result, String configName) {
-    if (result is! List || result.length < 2) return null;
-    final outer = result[1];
-    if (outer is! Map) return null;
-    // Real API: sections under 'values'
-    if (outer['values'] is Map) {
-      return Map<String, dynamic>.from(outer['values'] as Map);
-    }
-    // Mock: sections under the config name key (e.g. 'wireless', 'firewall')
-    if (outer[configName] is Map) {
-      return Map<String, dynamic>.from(outer[configName] as Map);
-    }
-    // Flat map — sections directly at result[1]
-    return Map<String, dynamic>.from(outer);
+    if (result is! List || result.length < 2 || result[1] is! Map) return null;
+    return uciValuesOf(result, config: configName);
   }
 
   bool _isUciDisabled(dynamic value) => value is List

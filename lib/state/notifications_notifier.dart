@@ -19,6 +19,7 @@ class NotificationSettings {
     this.permissionDenied = false,
     this.schedulingFailed = false,
     this.needsRouter = false,
+    this.saveFailed = false,
   });
 
   final bool enabled;
@@ -38,18 +39,25 @@ class NotificationSettings {
   /// reads the router from storage, so without one every run returns early.
   final bool needsRouter;
 
-  /// Switched off for exactly one reason, or none. The three reasons are
-  /// mutually exclusive, and each exit path used to spell all of them out.
+  /// True when the device's storage refused the setting itself. Not the
+  /// platform refusing background work, which [schedulingFailed] says, and
+  /// which would be the wrong thing to tell the user here.
+  final bool saveFailed;
+
+  /// Switched off for exactly one reason, or none. The reasons are mutually
+  /// exclusive, and each exit path used to spell all of them out.
   NotificationSettings off({
     bool permissionDenied = false,
     bool schedulingFailed = false,
     bool needsRouter = false,
+    bool saveFailed = false,
   }) => NotificationSettings(
     enabled: false,
     kinds: kinds,
     permissionDenied: permissionDenied,
     schedulingFailed: schedulingFailed,
     needsRouter: needsRouter,
+    saveFailed: saveFailed,
   );
 
   NotificationSettings copyWith({
@@ -58,12 +66,14 @@ class NotificationSettings {
     bool? permissionDenied,
     bool? schedulingFailed,
     bool? needsRouter,
+    bool? saveFailed,
   }) => NotificationSettings(
     enabled: enabled ?? this.enabled,
     kinds: kinds ?? this.kinds,
     permissionDenied: permissionDenied ?? this.permissionDenied,
     schedulingFailed: schedulingFailed ?? this.schedulingFailed,
     needsRouter: needsRouter ?? this.needsRouter,
+    saveFailed: saveFailed ?? this.saveFailed,
   );
 }
 
@@ -144,17 +154,23 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
       await _store.writeValue(BackgroundKeys.enabled, 'true');
       await _store.deleteValue(BackgroundKeys.schedulingFailed);
     } catch (e, stack) {
+      // Storage, not the platform, refused - so it is not recorded as a
+      // scheduling failure, which the next launch would repeat as a claim
+      // that the device cannot poll in the background.
       Logger.exception('Turning notifications on failed', e, stack);
       await _cancel();
       try {
-        await disableBackgroundPoll(_store, failed: true);
+        await disableBackgroundPoll(_store);
       } catch (e, stack) {
-        Logger.exception('Could not record the failure', e, stack);
+        Logger.exception('Could not switch the poll off in storage', e, stack);
       }
-      state = AsyncValue.data(current.off(schedulingFailed: true));
+      state = AsyncValue.data(current.off(saveFailed: true));
       return;
     }
-    state = AsyncValue.data(current.copyWith(enabled: true));
+    // A fresh value, not copyWith: every "off because" flag is cleared.
+    state = AsyncValue.data(
+      NotificationSettings(enabled: true, kinds: current.kinds),
+    );
   }
 
   Future<void> setKind(RouterEventKind kind, bool on) async {

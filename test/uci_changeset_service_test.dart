@@ -54,6 +54,9 @@ class _RecordingApi extends MockApiService {
   Object? revertError;
   Object? changesError;
 
+  /// Sections whose delete throws.
+  Set<String> deleteErrorsFor = const {};
+
   /// Like [changesError], but only once `apply` has been called - the read
   /// before apply succeeds, the session-liveness probes after it fail.
   Object? changesErrorAfterApply;
@@ -106,6 +109,7 @@ class _RecordingApi extends MockApiService {
     BuildContext? context,
   }) async {
     calls.add('delete $config.$section${option == null ? '' : '.$option'}');
+    if (deleteErrorsFor.contains(section)) throw Exception('timeout');
     return [0, 'success'];
   }
 
@@ -1029,6 +1033,70 @@ void _foreignChangeRegressions() {
         ownedSections: staged.ownedSections,
       );
       expect(outcome.reason, RollbackReason.foreignChanges);
+    });
+
+    // Options such as `mode ap` or `device radio0` are the same on every
+    // section of the type; only the identifying option says whether two
+    // adds are about the same thing.
+    test('a leftover about something else is not swept', () async {
+      final h = _build();
+      h.api.changes = {
+        'wireless': [
+          ['add', 'cfg0a', 'wifi-iface'],
+          ['set', 'cfg0a', 'device', 'radio0'],
+          ['set', 'cfg0a', 'mode', 'ap'],
+          ['set', 'cfg0a', 'ssid', 'Guest'],
+          ['set', 'cfg0a', 'key', 'first-try'],
+        ],
+      };
+
+      await h.service.stage(_session, const [
+        UciAdd(
+          'wireless',
+          type: 'wifi-iface',
+          values: {'device': 'radio0', 'mode': 'ap', 'ssid': 'IoT'},
+        ),
+      ]);
+      expect(h.api.calls.where((c) => c.startsWith('delete')), isEmpty);
+
+      // The same SSID with a corrected key is the same edit, retried.
+      await h.service.stage(_session, const [
+        UciAdd(
+          'wireless',
+          type: 'wifi-iface',
+          values: {
+            'device': 'radio0',
+            'mode': 'ap',
+            'ssid': 'Guest',
+            'key': 'second-try',
+          },
+        ),
+      ]);
+      expect(h.api.calls, contains('delete wireless.cfg0a'));
+    });
+
+    test('a sweep that fails part-way still owns what it deleted', () async {
+      final h = _build();
+      h.api.changes = {
+        'dhcp': [
+          ['add', 'cfg0a', 'host'],
+          ['set', 'cfg0a', 'mac', 'AA:BB:CC:11:22:33'],
+          ['add', 'cfg0b', 'host'],
+          ['set', 'cfg0b', 'mac', 'AA:BB:CC:11:22:33'],
+        ],
+      };
+      h.api.deleteErrorsFor = const {'cfg0b'};
+
+      final staged = await h.service.stage(_session, const [
+        UciAdd(
+          'dhcp',
+          type: 'host',
+          values: {'mac': 'AA:BB:CC:11:22:33', 'ip': '192.168.1.9'},
+        ),
+      ]);
+
+      expect(staged.ownedSections, contains('dhcp|cfg0a'));
+      expect(staged.ownedSections, isNot(contains('dhcp|cfg0b')));
     });
 
     test('a section adopted earlier in the batch is never swept', () async {

@@ -100,6 +100,25 @@ void main() {
       expect(guest.hidden, isTrue);
       expect(home.looksLikeGuest, isFalse);
     });
+
+    // UCI spells booleans several ways; a hand-written `disabled 'yes'` is
+    // a disabled network, not an enabled one.
+    test('booleans in every UCI spelling are read', () {
+      final radios = WirelessPlanner.parse({
+        'radio0': {'.type': 'wifi-device', 'disabled': 'yes'},
+        'net0': {
+          '.type': 'wifi-iface',
+          'device': 'radio0',
+          'mode': 'ap',
+          'ssid': 'x',
+          'hidden': 'on',
+          'isolate': 'off',
+        },
+      });
+      expect(radios.single.disabled, isTrue);
+      expect(radios.single.networks.single.hidden, isTrue);
+      expect(radios.single.networks.single.isolate, isFalse);
+    });
   });
 
   group('security mapping', () {
