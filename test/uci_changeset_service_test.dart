@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -510,6 +512,35 @@ void main() {
 
       expect(outcome.reason, RollbackReason.stateUnknown);
       expect(outcome.stillStaged, {'dhcp'});
+    });
+
+    // An apply that disrupts the link it arrived on usually gets no reply.
+    // The router applied it and started its rollback timer, so treating the
+    // silence as a refusal would leave the change live, unconfirmed, and
+    // silently reverted a minute later.
+    test('an apply that never answered is confirmed, not failed', () async {
+      final h = _build();
+      h.api.applyError = const SocketException('connection reset');
+
+      final outcome = await h.service.apply(_session);
+
+      expect(outcome.phase, ApplyPhase.confirmed);
+      expect(h.api.confirmCount, 1);
+      expect(h.api.calls.where((c) => c.startsWith('revert')), isEmpty);
+    });
+
+    // Without rollback there is no timer to confirm against, so silence
+    // really is a failure.
+    test('an unchecked apply that never answered is a failure', () async {
+      final h = _build();
+      h.api.applyError = const SocketException('connection reset');
+
+      final outcome = await h.service.apply(
+        _session,
+        mode: ApplyMode.unchecked,
+      );
+
+      expect(outcome.phase, ApplyPhase.failed);
     });
 
     test('a rejected apply tells the progress listener it failed', () async {

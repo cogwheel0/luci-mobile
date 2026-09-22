@@ -108,19 +108,22 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
     // The dashboard asks for a tab by name; honour it after this frame so the
     // request can be cleared without rebuilding mid-build.
-    if (appState.requestedTab != null && appState.requestedTab != _selected) {
+    if (appState.requestedTab != null) {
       final requested = appState.requestedTab!;
       final requestedInterface = appState.requestedInterfaceToScroll;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        // Cleared whatever happens: a request left standing replays on the
+        // next mount, jumping the user to a tab they asked for before
+        // logging out - or latches when it names the tab already showing.
+        appState.requestedTab = null;
+        appState.requestedInterfaceToScroll = null;
+        if (!mounted || requested == _selected) return;
         setState(() {
           _selected = requested;
           if (requestedInterface != null) {
             _pendingInterface = requestedInterface;
           }
         });
-        appState.requestedTab = null;
-        appState.requestedInterfaceToScroll = null;
       });
     }
 

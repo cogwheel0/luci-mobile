@@ -549,10 +549,22 @@ class _RadioSheetState extends State<_RadioSheet> {
   /// The widths to offer: the band's list, plus whatever the radio is set to
   /// now if that is not in it, so the dropdown never shows a width the radio
   /// is not using.
-  List<String> get _htmodes {
-    final known = WirelessPlanner.htmodesFor(widget.radio.band);
-    final current = widget.radio.htmode;
-    if (current == null || known.contains(current)) return known;
+  List<String> get _htmodes => _offering(
+    WirelessPlanner.htmodesFor(widget.radio.band),
+    widget.radio.htmode,
+  );
+
+  /// The channels to offer, on the same rule. The curated list omits some
+  /// legal channels, and a radio whose band could not be read gets the
+  /// 2.4 GHz list - either way, rendering channel 144 as "Automatic" told
+  /// the user the radio was auto-selecting when it was pinned.
+  List<String> get _channels =>
+      _offering(WirelessPlanner.channelsFor(widget.radio.band), _channel);
+
+  static List<String> _offering(List<String> known, String? current) {
+    if (current == null || current == 'auto' || known.contains(current)) {
+      return known;
+    }
     return [current, ...known];
   }
 
@@ -565,7 +577,7 @@ class _RadioSheetState extends State<_RadioSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final channels = WirelessPlanner.channelsFor(widget.radio.band);
+    final channels = _channels;
     final htmodes = _htmodes;
 
     return Padding(
@@ -594,7 +606,7 @@ class _RadioSheetState extends State<_RadioSheet> {
             const SizedBox(height: LuciSpacing.lg),
 
             DropdownButtonFormField<String>(
-              initialValue: channels.contains(_channel) ? _channel : 'auto',
+              initialValue: _channel,
               decoration: InputDecoration(labelText: l10n.channel),
               items: [
                 for (final c in channels)

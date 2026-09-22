@@ -380,15 +380,29 @@ class AppState extends ChangeNotifier {
     if (token == null || token.isEmpty) return null;
     if (address == null || address.isEmpty) return null;
 
+    // The router this session is *on*, which is not always the selected one:
+    // a switch whose login failed leaves the previous router's credentials in
+    // place, and labelling them with the newly selected router would have
+    // every feature screen read and write the old router under the new one's
+    // name - reservations, block rules and applies included.
+    final owner = _routerOnAddress(address) ?? router;
     return RouterSession(
-      routerId: router?.id ?? address,
+      routerId: owner?.id ?? address,
       ipAddress: address,
       sysauth: token,
       useHttps: _authService?.useHttps ?? false,
       token: _sessionToken,
-      fallbackAddress: router?.inactiveAddress,
-      fallbackUseHttps: router?.inactiveUseHttps,
+      fallbackAddress: owner?.inactiveAddress,
+      fallbackUseHttps: owner?.inactiveUseHttps,
     );
+  }
+
+  /// The saved router reachable at [address], if any.
+  model.Router? _routerOnAddress(String address) {
+    for (final r in _routerService?.routers ?? const <model.Router>[]) {
+      if (r.ipAddress == address || r.alternateAddress == address) return r;
+    }
+    return null;
   }
 
   bool get isAuthenticated => _authService?.isAuthenticated ?? false;
@@ -456,6 +470,9 @@ class AppState extends ChangeNotifier {
   }
 
   /// Tells an enabled background poll where the selected router now is.
+  ///
+  /// Called after every path that can settle on a different address: the
+  /// router switch, the dashboard's failover, and auto-login.
   Future<void> _pointBackgroundPollAtSelectedRouter() async {
     final router = _routerService?.selectedRouter;
     if (router == null) return;
@@ -679,6 +696,7 @@ class AppState extends ChangeNotifier {
                       activeAddressIndex: 1,
                     );
               await updateRouter(updatedRouter);
+              await _pointBackgroundPollAtSelectedRouter();
               if (result.usedAddressIndex != router.activeAddressIndex) {
                 Logger.info(
                   'Switched to ${result.usedAddressIndex == 0 ? "primary" : "alternate"} address',
@@ -1155,7 +1173,14 @@ class AppState extends ChangeNotifier {
           e is DioException &&
           (status == 401 || status == 403 || isRouterUnreachable(e));
       final router = _routerService?.selectedRouter;
+      // Not while an apply is awaiting confirmation: rpcd binds the pending
+      // rollback to the session that called `uci.apply`, so a new login here
+      // makes the confirm fail and the router revert the user's change. The
+      // reset connection a router serves while it reloads after that apply is
+      // exactly what `retryable` now catches, so this fetch is the one most
+      // likely to be in flight.
       if (retryable &&
+          !_criticalSection &&
           !isRetryAfterFallback &&
           router != null &&
           router.hasFallback &&
@@ -2839,6 +2864,7 @@ class AppState extends ChangeNotifier {
           await updateRouter(
             router.copyWith(activeAddressIndex: result.usedAddressIndex),
           );
+          await _pointBackgroundPollAtSelectedRouter();
         }
         return true;
       }

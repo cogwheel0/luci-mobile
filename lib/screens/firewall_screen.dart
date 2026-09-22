@@ -423,6 +423,22 @@ class _ForwardSheetState extends State<_ForwardSheet> {
     text: widget.existing?.destPort ?? '',
   );
   late String _protocol = widget.existing?.protocol ?? 'tcp';
+
+  static String _protoLabel(String proto) => switch (proto) {
+    'tcp' => 'TCP',
+    'udp' => 'UDP',
+    'tcp udp' => 'TCP + UDP',
+    _ => proto.toUpperCase(),
+  };
+
+  /// The protocols to offer: the usual three, plus whatever this forward is
+  /// set to now. A redirect written in LuCI can say `all`, `esp` or a
+  /// spelling from an older firewall, and a dropdown handed a value it does
+  /// not list asserts in debug and renders blank in release.
+  List<String> get _protocols =>
+      const ['tcp', 'udp', 'tcp udp'].contains(_protocol)
+      ? const ['tcp', 'udp', 'tcp udp']
+      : [_protocol, 'tcp', 'udp', 'tcp udp'];
   late String _srcZone =
       widget.existing?.sourceZone ?? widget.state.wanZone ?? 'wan';
 
@@ -523,13 +539,9 @@ class _ForwardSheetState extends State<_ForwardSheet> {
                   child: DropdownButtonFormField<String>(
                     initialValue: _protocol,
                     decoration: InputDecoration(labelText: l10n.protocol),
-                    items: const [
-                      DropdownMenuItem(value: 'tcp', child: Text('TCP')),
-                      DropdownMenuItem(value: 'udp', child: Text('UDP')),
-                      DropdownMenuItem(
-                        value: 'tcp udp',
-                        child: Text('TCP + UDP'),
-                      ),
+                    items: [
+                      for (final p in _protocols)
+                        DropdownMenuItem(value: p, child: Text(_protoLabel(p))),
                     ],
                     onChanged: (v) =>
                         setState(() => _protocol = v ?? _protocol),

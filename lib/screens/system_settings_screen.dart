@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
@@ -117,6 +118,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final gate = ref.watch(featureProvider(RouterFeature.systemSettings));
+    final session = ref.watch(sessionProvider);
     final async = ref.watch(systemSettingsProvider);
 
     return Scaffold(
@@ -149,7 +151,12 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
             dirty: _plan(settings).isNotEmpty,
             valid: isValidHostname(_hostname.text.trim()),
             onSave: () => _save(settings),
-            onChangePassword: _busy ? null : _changePassword,
+            // Reviewer mode answers from fixtures, so a "password changed"
+            // there would rewrite the saved profile while the real router
+            // kept the old one - locking the user out of their own router.
+            onChangePassword: _busy || (session?.reviewerMode ?? false)
+                ? null
+                : _changePassword,
           );
         },
       ),

@@ -259,6 +259,10 @@ class EventLog {
 
   final SecureStorageService _storage;
 
+  /// Appends are read-modify-write on one key, and both in-app callers fire
+  /// them without awaiting; two overlapping ones would lose a poll's events.
+  Future<void> _writes = Future.value();
+
   static const int maxEntries = 100;
 
   /// The key the app writes.
@@ -357,6 +361,19 @@ class EventLog {
   /// picks those events up on its next [load]. Returns the full feed so
   /// callers do not have to re-read.
   Future<List<RouterEvent>> append(
+    String routerId,
+    List<RouterEvent> events, {
+    bool fromBackground = false,
+  }) {
+    final queued = _writes.then(
+      (_) => _append(routerId, events, fromBackground: fromBackground),
+    );
+    // Errors must not poison the queue for every later append.
+    _writes = queued.then((_) {}, onError: (_) {});
+    return queued;
+  }
+
+  Future<List<RouterEvent>> _append(
     String routerId,
     List<RouterEvent> events, {
     bool fromBackground = false,

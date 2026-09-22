@@ -317,12 +317,15 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       await _apply(ClientConfigPlanner.planUnblock(existing: rule));
       return;
     }
+    // Only a rule that has to be *created* needs a zone; re-enabling one
+    // just sets its flag, and refusing there left the switch snapping back
+    // with nothing said.
     final zone = detail.zone;
-    if (zone == null) return;
+    if (zone == null && rule == null) return;
     await _apply(
       ClientConfigPlanner.planBlock(
         mac: mac,
-        zone: zone,
+        zone: zone ?? '',
         displayName: _displayName(detail),
         existing: rule,
       ),

@@ -530,6 +530,27 @@ void main() {
       expect(await log.load('r1'), hasLength(1));
     });
 
+    // Both in-app callers fire appends without awaiting them; two
+    // overlapping read-modify-writes on one key would lose a poll's events.
+    test('overlapping appends do not lose events', () async {
+      final storage = _MemoryStorage();
+      final log = EventLog(storage);
+      RouterEvent joined(String mac, int seconds) => RouterEvent(
+        kind: RouterEventKind.clientJoined,
+        at: _at.add(Duration(seconds: seconds)),
+        routerId: 'r1',
+        subject: mac,
+        subjectKey: mac,
+      );
+
+      await Future.wait([
+        log.append('r1', [joined('AA:BB:CC:11:22:33', 0)]),
+        log.append('r1', [joined('DD:EE:FF:44:55:66', 1)]),
+      ]);
+
+      expect(await log.load('r1'), hasLength(2));
+    });
+
     test('clearing empties both copies', () async {
       final storage = _MemoryStorage();
       final log = EventLog(storage);

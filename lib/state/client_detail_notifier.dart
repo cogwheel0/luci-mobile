@@ -140,7 +140,12 @@ class ClientDetailLoader {
     final api = ref.watch(apiServiceProvider);
     if (api == null) return const ClientDetail();
 
-    final appState = ref.read(appStateProvider);
+    // Watched, not read: a detail page opened before the first dashboard
+    // fetch lands - or right after a router switch clears it - would
+    // otherwise cache a client with no subnets, no zone and no pools for
+    // the rest of the session, which greys out blocking and lets the
+    // reservation dialog accept an address the router would never serve.
+    final appState = ref.watch(appStateProvider);
     final alias = await ref
         .read(clientAliasStoreProvider)
         .aliasFor(session.routerId, mac);
@@ -271,7 +276,7 @@ class ClientDetailLoader {
   Future<({StationInfo? station, List<String> networks, bool failed})>
   _findStation(RouterSession session, IApiService api) async {
     const none = (station: null, networks: <String>[], failed: false);
-    final wireless = ref.read(appStateProvider).dashboardData?['wireless'];
+    final wireless = ref.watch(appStateProvider).dashboardData?['wireless'];
     if (wireless is! Map) return none;
 
     final aps = <({String ifname, List<String> networks})>[];

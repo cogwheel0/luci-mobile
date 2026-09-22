@@ -617,7 +617,22 @@ class UciChangesetService {
         timeoutSeconds: rollback ? timeout.inSeconds : 0,
         context: context?.mounted == true ? context : null,
       );
-    } catch (e, stack) {
+    } on Object catch (e, stack) {
+      // A reply that never came back is not a refusal. The router very
+      // likely applied the change and started its rollback timer - that is
+      // what an apply which disrupts the link it arrived on looks like - so
+      // reverting and reporting failure would leave the change live and
+      // silently reverted a minute later, with nothing ever confirming it.
+      if (rollback && isRouterUnreachable(e)) {
+        Logger.warning('uci.apply did not answer; assuming it landed: $e');
+        return _awaitConfirmation(
+          session,
+          staged: staged,
+          timeout: timeout,
+          rollbackVerified: rollbackVerified,
+          onPhase: onPhase,
+        );
+      }
       Logger.exception('uci.apply failed', e, stack);
       // `uci.revert` is not granted by the stock ACL and reverts one config
       // at a time, so it can be refused outright or stop partway. Whatever
@@ -639,6 +654,23 @@ class UciChangesetService {
       return ApplyOutcome(phase: ApplyPhase.confirmed, applied: staged);
     }
 
+    return _awaitConfirmation(
+      session,
+      staged: staged,
+      timeout: timeout,
+      rollbackVerified: rollbackVerified,
+      onPhase: onPhase,
+    );
+  }
+
+  /// Waits out the router's rollback window, confirming as soon as it can.
+  Future<ApplyOutcome> _awaitConfirmation(
+    RouterSession session, {
+    required UciChangeSet staged,
+    required Duration timeout,
+    required bool rollbackVerified,
+    required void Function(ApplyPhase phase, Duration remaining)? onPhase,
+  }) async {
     final startedAt = _clock();
     final deadline = startedAt.add(timeout);
     final hardStop = deadline.subtract(_confirmGuardBand);

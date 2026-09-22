@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/models/client.dart';
 import 'package:luci_mobile/screens/client_detail_screen.dart';
 import 'package:luci_mobile/state/event_feed_notifier.dart';
-import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
@@ -60,6 +60,9 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
 
   void _computeClientsFuture() {
     final appState = ref.read(appStateProvider);
+    // The router this fetch belongs to, so an answer that arrives after a
+    // switch is not folded into the next router's feed.
+    final routerId = ref.read(sessionProvider)?.routerId;
     // Falls back to the cheaper single-router path when there is nothing to
     // aggregate. The stored preference is left alone, so adding a second
     // router later restores the user's choice rather than resetting it.
@@ -88,6 +91,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                   reachable: true,
                   dashboardData: appState.dashboardData,
                   clients: clients,
+                  routerId: routerId,
                 ),
           );
           return clients;
@@ -106,6 +110,7 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                     reachable: false,
                     dashboardData: appState.dashboardData,
                     clients: const [],
+                    routerId: routerId,
                   ),
             );
           }

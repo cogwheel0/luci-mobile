@@ -34,13 +34,20 @@ class EventFeedNotifier extends AsyncNotifier<List<RouterEvent>> {
   ///
   /// Called after the dashboard refreshes, so the feed costs no extra RPCs —
   /// it is entirely derived from data the app already had.
+  /// [routerId] is the router the caller's data came from. A clients fetch
+  /// that was in flight across a router switch resolves against the new
+  /// session, and folding it in would make the other router's devices the
+  /// new one's baseline - reporting every one of them as having left on the
+  /// next poll.
   Future<void> observe({
     required bool reachable,
     required Map<String, dynamic>? dashboardData,
     required List<Client> clients,
+    String? routerId,
   }) async {
     final session = ref.read(sessionProvider);
     if (session == null) return;
+    if (routerId != null && routerId != session.routerId) return;
 
     final now = DateTime.now();
     var current = EventDeriver.observe(
@@ -65,7 +72,9 @@ class EventFeedNotifier extends AsyncNotifier<List<RouterEvent>> {
     final merged = await ref
         .read(eventLogProvider)
         .append(session.routerId, events);
-    if (!ref.mounted) return;
+    // The session can change while storage is written; the feed on screen
+    // then belongs to another router.
+    if (!ref.mounted || ref.read(sessionProvider) != session) return;
     state = AsyncValue.data(merged);
   }
 
@@ -73,7 +82,7 @@ class EventFeedNotifier extends AsyncNotifier<List<RouterEvent>> {
     final session = ref.read(sessionProvider);
     if (session == null) return;
     await ref.read(eventLogProvider).clear(session.routerId);
-    if (!ref.mounted) return;
+    if (!ref.mounted || ref.read(sessionProvider) != session) return;
     state = const AsyncValue.data([]);
   }
 }
