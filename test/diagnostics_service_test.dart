@@ -60,6 +60,19 @@ void main() {
     expect(api.lastParams?['command'], '/bin/ping');
   });
 
+  // A body with no exit status is a run we cannot vouch for; calling it a
+  // success turns "the log could not be read" into "the log is empty".
+  test('a reply with no exit status is not a success', () async {
+    final api = _ExecApi()..reply = [0, {}];
+
+    final result = await DiagnosticsService(
+      api,
+    ).run(_session, DiagnosticTool.ping, '10.0.0.9');
+
+    expect(result.succeeded, isFalse);
+    expect(result.exitCode, -1);
+  });
+
   test('an RPC-level refusal is still an error', () async {
     final api = _ExecApi()
       ..reply = const RpcException(object: 'file', method: 'exec', status: 6);

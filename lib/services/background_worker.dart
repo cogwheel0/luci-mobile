@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 
 import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 
+import 'package:luci_mobile/l10n/app_localizations.dart';
 import 'package:luci_mobile/models/router_event.dart';
 import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
@@ -321,9 +323,10 @@ Future<void> runBackgroundPoll({
   );
   if (events.isEmpty) return;
 
+  final l10n = await _localizations();
   await (notifications ?? NotificationService()).show([
-    for (final event in events) (event: event, text: _describe(event)),
-  ]);
+    for (final event in events) (event: event, text: _describe(l10n, event)),
+  ], channelName: l10n.notifyChannelName);
 }
 
 Future<RouterObservation?> _observe(
@@ -489,22 +492,41 @@ Future<Set<RouterEventKind>> readNotificationKinds(
   }
 }
 
-/// Notification text.
+/// The localizations for the device's language.
 ///
-/// The background isolate has no BuildContext and therefore no
-/// localizations, so these are deliberately plain English. Localizing them
-/// would mean loading the delegate off-thread for one string — the honest
-/// trade is to keep the in-app feed, which *is* localized, as the place
-/// events are read properly.
-String _describe(RouterEvent event) => switch (event.kind) {
-  RouterEventKind.wanDown => 'Internet connection lost',
-  RouterEventKind.wanUp => 'Internet connection restored',
-  RouterEventKind.rebooted => 'The router restarted',
-  RouterEventKind.clientJoined => '${event.subject ?? "A device"} joined',
-  RouterEventKind.clientLeft => '${event.subject ?? "A device"} left',
-  RouterEventKind.routerUnreachable => 'The router stopped responding',
-  RouterEventKind.routerBack => 'The router is back',
-};
+/// The isolate has no BuildContext, but the delegate does not need one: it
+/// loads from the bundle. Without this the lock screen said "Internet
+/// connection lost" in English while the in-app feed said the same thing
+/// in the user's language, from strings that were already translated.
+Future<AppLocalizations> _localizations() async {
+  final system = PlatformDispatcher.instance.locale;
+  final supported = AppLocalizations.supportedLocales;
+  final exact = supported.where(
+    (l) =>
+        l.languageCode == system.languageCode &&
+        l.countryCode == system.countryCode,
+  );
+  final byLanguage = supported.where(
+    (l) => l.languageCode == system.languageCode,
+  );
+  final locale =
+      exact.firstOrNull ?? byLanguage.firstOrNull ?? const Locale('en');
+  return AppLocalizations.delegate.load(locale);
+}
+
+/// Notification text, in the same words the in-app feed uses.
+String _describe(AppLocalizations l10n, RouterEvent event) =>
+    switch (event.kind) {
+      RouterEventKind.wanDown => l10n.eventWanDown,
+      RouterEventKind.wanUp => l10n.eventWanUp,
+      RouterEventKind.rebooted => l10n.eventRebooted,
+      RouterEventKind.clientJoined => l10n.eventClientJoined(
+        event.subject ?? '?',
+      ),
+      RouterEventKind.clientLeft => l10n.eventClientLeft(event.subject ?? '?'),
+      RouterEventKind.routerUnreachable => l10n.eventRouterUnreachable,
+      RouterEventKind.routerBack => l10n.eventRouterBack,
+    };
 
 typedef IApiServiceFactory = IApiService Function();
 

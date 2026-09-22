@@ -108,6 +108,11 @@ class WolService {
     }
     if (result is! List || result.isEmpty || result.first != 0) return false;
     final data = result.length > 1 ? result[1] : null;
-    return data is! Map || data['code'] == 0;
+    // `-D` was passed so etherwake would say what it sent; a reply with no
+    // exit status at all means nothing ran that we can vouch for, and this
+    // return value is the only signal the user gets - nothing acknowledges
+    // a magic packet.
+    if (data is! Map) return false;
+    return data['code'] == 0;
   }
 }

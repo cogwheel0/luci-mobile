@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/l10n/app_localizations.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/router_event.dart';
@@ -110,11 +111,12 @@ class NotificationsScreen extends ConsumerWidget {
     );
   }
 
-  static String _label(dynamic l10n, RouterEventKind kind) => switch (kind) {
-    RouterEventKind.wanDown => l10n.notifyWanDown as String,
-    RouterEventKind.wanUp => l10n.notifyWanUp as String,
-    RouterEventKind.rebooted => l10n.notifyRebooted as String,
-    RouterEventKind.clientJoined => l10n.notifyClientJoined as String,
-    _ => kind.name,
-  };
+  static String _label(AppLocalizations l10n, RouterEventKind kind) =>
+      switch (kind) {
+        RouterEventKind.wanDown => l10n.notifyWanDown,
+        RouterEventKind.wanUp => l10n.notifyWanUp,
+        RouterEventKind.rebooted => l10n.notifyRebooted,
+        RouterEventKind.clientJoined => l10n.notifyClientJoined,
+        _ => kind.name,
+      };
 }

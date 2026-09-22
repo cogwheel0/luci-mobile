@@ -42,6 +42,41 @@ void main() {
           ..sort((a, b) => a.path.compareTo(b.path));
   });
 
+  /// The placeholders an ICU message uses, e.g. `{configs}`.
+  Set<String> placeholders(String message) =>
+      RegExp(r'\{(\w+)\}').allMatches(message).map((m) => m.group(1)!).toSet();
+
+  Map<String, String> messages(File file) {
+    final decoded = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+    return {
+      for (final e in decoded.entries)
+        if (!e.key.startsWith('@')) e.key: e.value.toString(),
+    };
+  }
+
+  // A key can be present in every locale and still be broken: gen_l10n
+  // generates the method signature from the *template*, so a translation
+  // that drops a placeholder compiles and renders a sentence with the value
+  // missing, which no comparison of key names can see.
+  test("every locale uses the template's placeholders", () {
+    final template = messages(File('$arbDir/$templateFile'));
+    final problems = <String>[];
+
+    for (final file in translations) {
+      final name = file.uri.pathSegments.last;
+      messages(file).forEach((key, value) {
+        final wanted = placeholders(template[key] ?? '');
+        final got = placeholders(value);
+        if (wanted.difference(got).isNotEmpty ||
+            got.difference(wanted).isNotEmpty) {
+          problems.add('$name/$key: expected $wanted, found $got');
+        }
+      });
+    }
+
+    expect(problems, isEmpty, reason: problems.join('\n'));
+  });
+
   test('the template defines at least one message', () {
     expect(templateKeys, isNotEmpty);
   });

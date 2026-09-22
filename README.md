@@ -28,8 +28,21 @@ LuCI Mobile is an open-source Flutter client for OpenWrt routers. It talks to Lu
 - Lists clients for every saved router or only the selected router. Search by hostname, IP address, MAC address, or vendor.
 - Shows wired and wireless interface details, traffic totals, addresses, radio state, and channel information.
 - Scans nearby Wi-Fi networks and can connect a router radio as a station.
+- Edits wireless networks and radios: SSID, security, channel, width and country code.
+- Reserves a DHCP address for a client, or blocks one with a firewall rule.
+- Wakes a sleeping device over the network.
+- Manages port forwards, traffic rules, zones and static routes.
+- Edits the hostname, timezone and description, and changes the router password.
+- Starts, stops and restarts services, and configures SQM, adblock, UPnP and DDNS.
+- Runs ping, traceroute and nslookup from the router, and reads its system and kernel logs.
+- Keeps an activity feed of what changed, and can notify about it in the background.
+- Shows traffic history per client where the router records it.
 - Reboots a router after confirmation.
 - Follows the system theme or uses a selected light or dark theme.
+
+Configuration changes go through the router's own apply-with-rollback
+protocol: if the phone cannot confirm a change in time, the router puts the
+previous configuration back by itself.
 
 Credentials and router profiles are stored through `flutter_secure_storage`. The app asks before trusting a self-signed HTTPS certificate. It does not include analytics, tracking, or advertising SDKs.
 
@@ -39,9 +52,9 @@ Credentials and router profiles are stored through `flutter_secure_storage`. The
 | --- | --- | --- | --- |
 | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_01.png" alt="Router dashboard" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_02.png" alt="Router login" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_03.png" alt="Connected clients" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_04.png" alt="Expanded client details" width="200"/> |
 
-| Interfaces | Interface details | More |
+| Interfaces | Interface details | Settings |
 | --- | --- | --- |
-| <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_05.png" alt="Router interfaces" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_06.png" alt="Expanded interface details" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_07.png" alt="Router and app actions" width="200"/> |
+| <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_05.png" alt="Router interfaces" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_06.png" alt="Expanded interface details" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_07.png" alt="Router and app settings" width="200"/> |
 
 ## Install
 

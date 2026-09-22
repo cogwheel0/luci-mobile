@@ -216,6 +216,37 @@ void main() {
       );
     });
 
+    // fw4 silently applies only one of two forwards whose external ports
+    // overlap, so the guard has to compare ranges, not the text of them.
+    test('an overlapping range counts as already forwarded', () {
+      const existing = [
+        PortForward(
+          section: 'cfg01',
+          sourceZone: 'wan',
+          sourcePort: '8000-8100',
+          protocol: 'tcp',
+          destIp: '192.168.1.10',
+        ),
+      ];
+      expect(
+        FirewallPlanner.portAlreadyForwarded(existing, '8080', 'tcp'),
+        isTrue,
+      );
+      expect(
+        FirewallPlanner.portAlreadyForwarded(existing, '8050-8200', 'tcp'),
+        isTrue,
+      );
+      expect(
+        FirewallPlanner.portAlreadyForwarded(existing, '9000', 'tcp'),
+        isFalse,
+      );
+      // A different protocol is a different claim.
+      expect(
+        FirewallPlanner.portAlreadyForwarded(existing, '8080', 'udp'),
+        isFalse,
+      );
+    });
+
     test('a forward being edited does not clash with itself', () {
       final existing = FirewallPlanner.portForwards(_firewall);
       expect(
@@ -352,6 +383,24 @@ void _portForwardZoneRegression() {
   // The edit sheet offers a source-zone dropdown. Leaving `src` out of the
   // update meant changing it reported success and did nothing.
   group('editing a port forward', () {
+    // A router whose internal zone is not called `lan` had every forward
+    // written against a zone fw4 does not know: applied, confirmed, and
+    // silently dropped.
+    test('writes the destination zone it was given', () {
+      final add =
+          FirewallPlanner.planCreatePortForward(
+                name: 'Plex',
+                sourceZone: 'wan',
+                sourcePort: '32400',
+                destIp: '192.168.1.10',
+                destPort: '32400',
+                protocol: 'tcp',
+                destZone: 'home',
+              ).single
+              as UciAdd;
+      expect(add.values['dest'], 'home');
+    });
+
     test('writes the source zone', () {
       final ops = FirewallPlanner.planUpdatePortForward(
         existing: const PortForward(
@@ -373,6 +422,8 @@ void _portForwardZoneRegression() {
       final values = ops.whereType<UciSet>().first.values;
       expect(values['src'], 'guest');
       expect(values['src_dport'], '8080');
+      // Not touched when the caller did not say.
+      expect(values.containsKey('dest'), isFalse);
     });
   });
 }

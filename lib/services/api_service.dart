@@ -1469,7 +1469,7 @@ class RealApiService implements IApiService {
     required String action,
     BuildContext? context,
   }) async {
-    _requireRpcSuccess(
+    final result = _requireRpcSuccess(
       await callWithContext(
         ipAddress,
         sysauth,
@@ -1481,6 +1481,11 @@ class RealApiService implements IApiService {
       ),
       'rc.init',
     );
+    // rpcd answers `{"result": <bool>}`: an init script that exits non-zero
+    // comes back with ubus status 0 and `result: false`, which reporting as
+    // success would tell the user a service started when it did not.
+    final data = result.length > 1 ? result[1] : null;
+    if (data is Map) return data['result'] != false;
     return true;
   }
 

@@ -104,12 +104,26 @@ class FirewallPlanner {
     String? exceptSection,
   }) {
     final wanted = uciList(protocol).toSet();
+    final range = _portRange(port);
+    if (range == null) return false;
     return existing.any((f) {
       if (f.section == exceptSection) return false;
-      if (f.sourcePort != port) return false;
-      final theirs = uciList(f.protocol).toSet();
-      return theirs.intersection(wanted).isNotEmpty;
+      final theirs = _portRange(f.sourcePort ?? '');
+      if (theirs == null) return false;
+      // Ranges, not strings: `8000-8100` already claims `8080`, and fw4
+      // silently applies only one of two forwards that overlap.
+      if (range.$2 < theirs.$1 || theirs.$2 < range.$1) return false;
+      return uciList(f.protocol).toSet().intersection(wanted).isNotEmpty;
     });
+  }
+
+  /// The inclusive port range [raw] covers, or null when it is not one.
+  static (int, int)? _portRange(String raw) {
+    if (!isValidPort(raw)) return null;
+    final parts = raw.trim().split('-');
+    final from = int.parse(parts.first.trim());
+    final to = int.parse(parts.last.trim());
+    return (from, to);
   }
 
   // -------------------------------------------------------------- planning
@@ -154,15 +168,17 @@ class FirewallPlanner {
     required String destIp,
     required String destPort,
     required String protocol,
+    String? destZone,
   }) => [
     UciSet(
       'firewall',
       section: existing.section,
       values: {
         'name': name,
-        // The edit sheet offers a zone dropdown; leaving `src` out meant
-        // changing it reported success and did nothing.
+        // The edit sheet offers zone dropdowns; leaving these out meant
+        // changing one reported success and did nothing.
         'src': sourceZone,
+        'dest': ?destZone,
         'src_dport': sourcePort,
         'dest_ip': destIp,
         'dest_port': destPort,

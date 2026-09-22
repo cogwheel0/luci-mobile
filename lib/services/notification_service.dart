@@ -17,6 +17,10 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin;
 
   static const channelId = 'router_events';
+
+  /// Only a fallback. Android shows this in system settings as the label of
+  /// the category the user can switch off, so the caller passes the
+  /// localized name; this is what is left if none was given.
   static const channelName = 'Router events';
 
   bool _ready = false;
@@ -67,7 +71,10 @@ class NotificationService {
   ///
   /// Each uses the event's own id so the same event arriving twice — a
   /// re-run of the same poll window — replaces rather than stacks.
-  Future<void> show(List<({RouterEvent event, String text})> items) async {
+  Future<void> show(
+    List<({RouterEvent event, String text})> items, {
+    String channelName = NotificationService.channelName,
+  }) async {
     if (items.isEmpty) return;
     await init();
     for (final item in items) {

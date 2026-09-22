@@ -34,6 +34,17 @@ class FirewallState {
   /// actually avoid.
   final Set<String> sectionNames;
 
+  /// The zone a port forward should be sent to, if one is obvious.
+  ///
+  /// The first zone that does not face the internet, which on a stock
+  /// router is `lan` and on a renamed one is whatever the user called it.
+  String get lanZone {
+    for (final z in zones) {
+      if (!z.looksLikeWan) return z.name;
+    }
+    return zones.isEmpty ? 'lan' : zones.first.name;
+  }
+
   /// The zone a port forward should arrive on, if one is obvious.
   String? get wanZone {
     for (final z in zones) {

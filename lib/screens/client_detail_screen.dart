@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/client.dart';
@@ -78,7 +79,13 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
         child: ListView(
           padding: const EdgeInsets.all(LuciSpacing.md),
           children: [
-            _IdentityCard(client: client, displayName: displayName),
+            _IdentityCard(
+              client: client,
+              displayName: displayName,
+              onRename: _busy
+                  ? null
+                  : () => _rename(detailAsync.value, displayName),
+            ),
             if (!_isOwnedBySelectedRouter) _crossRouterBanner(context),
             const SizedBox(height: LuciSpacing.md),
             ...detailAsync.when(
@@ -330,6 +337,40 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     );
   }
 
+  /// Renames the client: an on-device label, and optionally the DHCP
+  /// hostname the router itself hands out.
+  ///
+  /// The label costs nothing and touches no router config, which is why it
+  /// is the default; the hostname is a real change to `dhcp` and goes
+  /// through the usual apply.
+  Future<void> _rename(ClientDetail? detail, String current) async {
+    final result = await showDialog<_RenameResult>(
+      context: context,
+      builder: (_) => _RenameDialog(
+        initialName: detail?.alias ?? '',
+        hint: current,
+        // Only offered where it can actually be written.
+        canSetHostname:
+            detail != null &&
+            _isOwnedBySelectedRouter &&
+            !detail.dhcpUnavailable,
+      ),
+    );
+    if (result == null || !mounted) return;
+
+    final alias = result.name.isEmpty ? null : result.name;
+    await ref.read(clientMutationsProvider(mac)).setAlias(alias);
+    if (!mounted || !result.alsoSetHostname) return;
+
+    await _apply(
+      ClientConfigPlanner.planDhcpName(
+        mac: mac,
+        name: alias,
+        existing: detail?.host,
+      ),
+    );
+  }
+
   Future<String?> _askForIp(ClientDetail detail) => showDialog<String>(
     context: context,
     builder: (dialogContext) => _ReservationDialog(
@@ -362,10 +403,15 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
 // --------------------------------------------------------------------- cards
 
 class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({required this.client, required this.displayName});
+  const _IdentityCard({
+    required this.client,
+    required this.displayName,
+    this.onRename,
+  });
 
   final Client client;
   final String displayName;
+  final VoidCallback? onRename;
 
   @override
   Widget build(BuildContext context) {
@@ -395,6 +441,11 @@ class _IdentityCard extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: context.l10n.displayName,
+            onPressed: onRename,
           ),
         ],
       ),
@@ -717,6 +768,104 @@ class _ReservationDialogState extends State<_ReservationDialog> {
               ? null
               : () => Navigator.of(context).pop(_controller.text.trim()),
           child: Text(context.l10n.saveAction),
+        ),
+      ],
+    );
+  }
+}
+
+/// What the rename dialog came back with.
+class _RenameResult {
+  const _RenameResult({required this.name, required this.alsoSetHostname});
+  final String name;
+  final bool alsoSetHostname;
+}
+
+/// Asks for a name for this client.
+class _RenameDialog extends StatefulWidget {
+  const _RenameDialog({
+    required this.initialName,
+    required this.hint,
+    required this.canSetHostname,
+  });
+
+  final String initialName;
+
+  /// What the client is called now, so an empty field is not a mystery.
+  final String hint;
+  final bool canSetHostname;
+
+  @override
+  State<_RenameDialog> createState() => _RenameDialogState();
+}
+
+class _RenameDialogState extends State<_RenameDialog> {
+  late final TextEditingController _name = TextEditingController(
+    text: widget.initialName,
+  );
+  bool _alsoHostname = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  /// dnsmasq will not start on a name it cannot use as a DNS label, and the
+  /// router stays reachable while it is down - so the rollback timer never
+  /// catches it. Only enforced when the name is going to the router.
+  bool get _valid {
+    final name = _name.text.trim();
+    if (!_alsoHostname) return true;
+    return name.isEmpty || isValidHostname(name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return AlertDialog(
+      title: Text(l10n.clientDetails),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _name,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: l10n.displayName,
+              hintText: widget.hint,
+              helperText: _alsoHostname
+                  ? l10n.dhcpHostnameHint
+                  : l10n.displayNameHint,
+              errorText: _valid ? null : l10n.invalidHostname,
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          if (widget.canSetHostname)
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.setDhcpHostname),
+              value: _alsoHostname,
+              onChanged: (v) => setState(() => _alsoHostname = v ?? false),
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.cancel),
+        ),
+        FilledButton(
+          onPressed: _valid
+              ? () => Navigator.of(context).pop(
+                  _RenameResult(
+                    name: _name.text.trim(),
+                    alsoSetHostname: _alsoHostname,
+                  ),
+                )
+              : null,
+          child: Text(l10n.saveAction),
         ),
       ],
     );

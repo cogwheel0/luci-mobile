@@ -433,6 +433,12 @@ class _ForwardSheetState extends State<_ForwardSheet> {
   late String _srcZone =
       widget.existing?.sourceZone ?? widget.state.wanZone ?? 'wan';
 
+  /// Where the traffic is sent. Defaulting to `lan` and never asking meant
+  /// that on a router whose internal zone is named anything else the rule
+  /// was written against a zone fw4 does not know: applied, confirmed,
+  /// reported as done, and silently dropped.
+  late String _destZone = widget.existing?.destZone ?? widget.state.lanZone;
+
   @override
   void dispose() {
     _name.dispose();
@@ -553,6 +559,18 @@ class _ForwardSheetState extends State<_ForwardSheet> {
             ),
             const SizedBox(height: LuciSpacing.md),
 
+            DropdownButtonFormField<String>(
+              initialValue: widget.state.zoneNames.contains(_destZone)
+                  ? _destZone
+                  : null,
+              decoration: InputDecoration(labelText: l10n.destinationZone),
+              items: [
+                for (final z in widget.state.zoneNames)
+                  DropdownMenuItem(value: z, child: Text(z)),
+              ],
+              onChanged: (v) => setState(() => _destZone = v ?? _destZone),
+            ),
+            const SizedBox(height: LuciSpacing.md),
             TextField(
               controller: _destIp,
               keyboardType: TextInputType.number,
@@ -616,6 +634,7 @@ class _ForwardSheetState extends State<_ForwardSheet> {
             destIp: _destIp.text.trim(),
             destPort: _destPort.text.trim(),
             protocol: _protocol,
+            destZone: _destZone,
             takenSections: widget.taken,
           )
         : FirewallPlanner.planUpdatePortForward(
@@ -626,6 +645,7 @@ class _ForwardSheetState extends State<_ForwardSheet> {
             destIp: _destIp.text.trim(),
             destPort: _destPort.text.trim(),
             protocol: _protocol,
+            destZone: _destZone,
           );
     Navigator.of(context).pop(ops);
   }

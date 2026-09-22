@@ -121,9 +121,13 @@ class DiagnosticsService {
       return const DiagnosticResult(output: '', exitCode: -1);
     }
     final data = raw[1] as Map;
+    final code = data['code'];
     return DiagnosticResult(
       output: data['stdout']?.toString() ?? '',
-      exitCode: (data['code'] as num?)?.toInt() ?? 0,
+      // Unknown, not zero: a body carrying no exit status is a run we
+      // cannot vouch for, and calling it a success turns "the log could
+      // not be read" into "the log is empty".
+      exitCode: code is num ? code.toInt() : -1,
       stderr: data['stderr']?.toString(),
     );
   }

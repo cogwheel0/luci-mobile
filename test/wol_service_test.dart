@@ -8,6 +8,7 @@ import 'package:luci_mobile/state/router_session.dart';
 
 class _ConfigApi extends MockApiService {
   Map<String, dynamic>? etherwake;
+  Object? execReply;
   Object readError = Exception('timeout');
   int reads = 0;
   List<String>? sentParams;
@@ -39,10 +40,11 @@ class _ConfigApi extends MockApiService {
     BuildContext? context,
   }) async {
     sentParams = (params?['params'] as List).cast<String>();
-    return [
-      0,
-      {'code': 0, 'stdout': 'sent'},
-    ];
+    return execReply ??
+        [
+          0,
+          {'code': 0, 'stdout': 'sent'},
+        ];
   }
 }
 
@@ -73,6 +75,18 @@ void main() {
 
     expect(await WolService(api).wake(session, 'aa:bb:cc:dd:ee:ff'), isTrue);
     expect(api.sentParams, ['-D', 'aa:bb:cc:dd:ee:ff']);
+  });
+
+  // Nothing acknowledges a magic packet, so this return value is the only
+  // signal the user gets: a reply carrying no exit status is not a send.
+  test('a reply with no exit status is not reported as sent', () async {
+    final api = _ConfigApi()
+      ..etherwake = {
+        'setup': {'.type': 'etherwake', 'interface': 'br-lan'},
+      }
+      ..execReply = [0, 'sent'];
+
+    expect(await WolService(api).wake(session, 'aa:bb:cc:dd:ee:ff'), isFalse);
   });
 
   // A router without luci-app-wol has no config; that answer is kept, so a

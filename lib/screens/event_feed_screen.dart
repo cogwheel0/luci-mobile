@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:luci_mobile/l10n/app_localizations.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/router_event.dart';
@@ -119,15 +120,20 @@ class _EventRow extends StatelessWidget {
     RouterEventKind.rebooted => Icons.restart_alt,
   };
 
-  static String _title(dynamic l10n, RouterEvent e) => switch (e.kind) {
-    RouterEventKind.routerUnreachable => l10n.eventRouterUnreachable as String,
-    RouterEventKind.routerBack => l10n.eventRouterBack as String,
-    RouterEventKind.wanDown => l10n.eventWanDown as String,
-    RouterEventKind.wanUp => l10n.eventWanUp as String,
-    RouterEventKind.clientJoined =>
-      l10n.eventClientJoined(e.subject ?? '?') as String,
-    RouterEventKind.clientLeft =>
-      l10n.eventClientLeft(e.subject ?? '?') as String,
-    RouterEventKind.rebooted => l10n.eventRebooted as String,
-  };
+  /// Typed, not `dynamic`: a key that loses its translation has to be a
+  /// compile error, not a blank row - the same rule `addon_strings.dart`
+  /// writes down and for the same reason. Nothing here is covered by a
+  /// widget test.
+  static String _title(AppLocalizations l10n, RouterEvent e) =>
+      switch (e.kind) {
+        RouterEventKind.routerUnreachable => l10n.eventRouterUnreachable,
+        RouterEventKind.routerBack => l10n.eventRouterBack,
+        RouterEventKind.wanDown => l10n.eventWanDown,
+        RouterEventKind.wanUp => l10n.eventWanUp,
+        RouterEventKind.clientJoined => l10n.eventClientJoined(
+          e.subject ?? '?',
+        ),
+        RouterEventKind.clientLeft => l10n.eventClientLeft(e.subject ?? '?'),
+        RouterEventKind.rebooted => l10n.eventRebooted,
+      };
 }
