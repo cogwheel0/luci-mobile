@@ -73,6 +73,15 @@ class WolService {
       }
       _interfaceByRouter[session.routerId] = (value: found);
       return found;
+    } on RpcException catch (e) {
+      // No config at all is an answer - luci-app-wol is not installed - and
+      // is kept; only a failure to ask is forgotten.
+      if (e.isNotFound) {
+        _interfaceByRouter[session.routerId] = (value: null);
+      } else {
+        Logger.info('Could not read the etherwake config: $e');
+      }
+      return null;
     } catch (e) {
       Logger.info('Could not read the etherwake config: $e');
       return null;

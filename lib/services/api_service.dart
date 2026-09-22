@@ -29,6 +29,10 @@ class RpcException implements Exception {
     this.detail,
   });
 
+  /// True when the router has no such object, method or config.
+  bool get isNotFound =>
+      status == 4 || detail?.toLowerCase().contains('not found') == true;
+
   /// True when the router refused the call for lack of permission.
   ///
   /// rpcd reports this as ubus status 6, but LuCI's `/admin/ubus` proxy turns

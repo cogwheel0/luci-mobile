@@ -967,6 +967,87 @@ void _foreignChangeRegressions() {
       expect(outcome.phase, ApplyPhase.confirmed);
     });
 
+    // libuci keeps a deleted section's rows in the delta and appends the
+    // removal; only the last word counts, or a third attempt would adopt a
+    // section that no longer exists, or try to delete it again.
+    test(
+      'an add that was deleted again is neither adopted nor swept',
+      () async {
+        final h = _build();
+        h.api.changes = {
+          'dhcp': [
+            ['add', 'cfg0a', 'host'],
+            ['set', 'cfg0a', 'mac', 'AA:BB:CC:11:22:33'],
+            ['set', 'cfg0a', 'ip', '192.168.1.50'],
+            ['remove', 'cfg0a'],
+            ['add', 'cfg0b', 'host'],
+            ['set', 'cfg0b', 'mac', 'AA:BB:CC:11:22:33'],
+            ['set', 'cfg0b', 'ip', '192.168.1.51'],
+          ],
+        };
+
+        final staged = await h.service.stage(_session, const [
+          UciAdd(
+            'dhcp',
+            type: 'host',
+            values: {'mac': 'AA:BB:CC:11:22:33', 'ip': '192.168.1.50'},
+          ),
+        ]);
+
+        expect(h.api.calls, isNot(contains('delete dhcp.cfg0a')));
+        expect(h.api.calls, contains('delete dhcp.cfg0b'));
+        expect(staged.sections, {0: 'cfg0a1b2c'});
+      },
+    );
+
+    // A leftover that shares no value with the new add is somebody's other
+    // edit: it stays, and the apply names it rather than destroying it.
+    test('an unrelated leftover add is not swept', () async {
+      final h = _build();
+      h.api.changes = {
+        'dhcp': [
+          ['add', 'cfg0a', 'host'],
+          ['set', 'cfg0a', 'mac', 'AA:BB:CC:11:22:33'],
+          ['set', 'cfg0a', 'ip', '192.168.1.50'],
+        ],
+      };
+
+      final staged = await h.service.stage(_session, const [
+        UciAdd(
+          'dhcp',
+          type: 'host',
+          values: {'mac': 'DD:EE:FF:11:22:33', 'ip': '192.168.1.60'},
+        ),
+      ]);
+      expect(h.api.calls.where((c) => c.startsWith('delete')), isEmpty);
+
+      final outcome = await h.service.apply(
+        _session,
+        ours: const {'dhcp'},
+        baseline: staged.baseline,
+        writtenKeys: staged.writtenKeys,
+        ownedSections: staged.ownedSections,
+      );
+      expect(outcome.reason, RollbackReason.foreignChanges);
+    });
+
+    test('a section adopted earlier in the batch is never swept', () async {
+      final h = _build();
+      h.api.changes = {
+        'firewall': [
+          ['add', 'cfg0a', 'rule'],
+          ['set', 'cfg0a', 'name', 'block-a'],
+        ],
+      };
+
+      await h.service.stage(_session, const [
+        UciAdd('firewall', type: 'rule', values: {'name': 'block-a'}),
+        UciAdd('firewall', type: 'rule', values: {'name': 'block-a'}),
+      ]);
+
+      expect(h.api.calls.where((c) => c.startsWith('delete')), isEmpty);
+    });
+
     test('a leftover add with different values is not adopted', () async {
       final h = _build();
       h.api.changes = {

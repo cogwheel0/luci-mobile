@@ -277,6 +277,7 @@ class UciChangesetService {
             session,
             baseline,
             op,
+            spare: generatedSections.values,
             context: context?.mounted == true ? context : null,
           )) {
             own(op.config, swept);
@@ -346,39 +347,13 @@ class UciChangesetService {
         }
       } catch (e, stack) {
         Logger.exception('Failed to stage UCI operation $i', e, stack);
-        // Only ours: a config that was already dirty belongs to whoever
-        // dirtied it.
-        final safeToRevert = preExisting == null
-            ? <String>{}
-            : touched.difference(preExisting);
-        final leftStaged = touched.difference(safeToRevert);
-        if (leftStaged.isNotEmpty) {
-          Logger.warning(
-            'Leaving ${leftStaged.join(", ")} staged: another client had '
-            'unsaved changes there',
-          );
-        }
-        var revertFailed = false;
-        try {
-          await revert(
-            session,
-            safeToRevert,
-            context: context?.mounted == true ? context : null,
-          );
-        } catch (revertError, revertStack) {
-          revertFailed = true;
-          Logger.exception(
-            'Failed to revert after staging error',
-            revertError,
-            revertStack,
-          );
-        }
+        final backedOut = await _backOut(session, touched, preExisting);
         throw UciStagingException(
           failedIndex: i,
           cause: e,
-          revertedConfigs: safeToRevert,
-          stillStaged: revertFailed ? touched : leftStaged,
-          revertFailed: revertFailed,
+          revertedConfigs: backedOut.reverted,
+          stillStaged: backedOut.stillStaged,
+          revertFailed: backedOut.revertFailed,
         );
       }
     }
@@ -391,17 +366,34 @@ class UciChangesetService {
     );
   }
 
-  /// Deletes every uncommitted add of [op]'s type in its config that the
-  /// baseline holds - the previous, corrected-since attempts at this add -
-  /// and returns the sections it deleted.
+  /// Deletes the uncommitted adds in the baseline that look like earlier,
+  /// corrected-since attempts at [op], and returns the sections it deleted.
+  ///
+  /// "Look like": the same type, and at least one option value in common —
+  /// the MAC of a reservation, the SSID of a network, the target of a rule.
+  /// A leftover that shares nothing is somebody's other edit and is left
+  /// alone; the apply will name it. [spare] are sections this batch has
+  /// already created or adopted, which are never leftovers.
   Future<List<String>> _sweepLeftoverAdds(
     RouterSession session,
     UciChangeSet baseline,
     UciAdd op, {
+    required Iterable<String> spare,
     BuildContext? context,
   }) async {
+    final rows = baseline.forConfig(op.config);
+    final wanted = {
+      for (final e in op.values.entries)
+        if (e.value is! List && e.value != null) e.key: e.value.toString(),
+    };
     final swept = <String>[];
     for (final section in baseline.addedSections(op.config, op.type)) {
+      if (spare.contains(section)) continue;
+      final staged = _stagedOptions(rows, section);
+      final related = wanted.entries.any(
+        (e) => e.value.isNotEmpty && staged[e.key] == e.value,
+      );
+      if (!related) continue;
       Logger.info('Deleting leftover staged ${op.config} section $section');
       await _api.uciDelete(
         session.ipAddress,
@@ -426,17 +418,21 @@ class UciChangesetService {
     };
     // A list value stages as several rows; not worth modelling for a retry.
     if (wanted.length != op.values.length) return null;
-    for (final add in rows) {
-      if (add.op != UciOp.add || add.option != op.type) continue;
-      final staged = {
-        for (final r in rows)
-          if (r.op == UciOp.set && r.section == add.section && r.option != null)
-            r.option!: r.value ?? '',
-      };
-      if (mapEquals(staged, wanted)) return add.section;
+    for (final section in baseline.addedSections(op.config, op.type)) {
+      if (mapEquals(_stagedOptions(rows, section), wanted)) return section;
     }
     return null;
   }
+
+  /// The options staged on [section], last value wins.
+  static Map<String, String> _stagedOptions(
+    List<UciChange> rows,
+    String section,
+  ) => {
+    for (final r in rows)
+      if (r.op == UciOp.set && r.section == section && r.option != null)
+        r.option!: r.value ?? '',
+  };
 
   /// Discards staged changes for [configs].
   ///
@@ -488,22 +484,17 @@ class UciChangesetService {
       // Applying blind would commit whatever is staged - including the
       // unrelated rows the guard below exists to refuse - and a failure
       // after that would have nothing to revert or report. Back out our own
-      // staging instead, and say what could not be cleared. Same policy as
-      // `stage`: with no baseline we do not know what else is in those
-      // configs, and reverting would discard it - so nothing is reverted
-      // and everything we touched is reported as still staged.
-      final safeToRevert = baseline == null || ours == null
-          ? const <String>{}
-          : ours.difference(baseline.configs);
-      final unreverted = {
-        ...(ours ?? const <String>{}).difference(safeToRevert),
-        ...await _revertEach(session, safeToRevert),
-      };
+      // staging instead, and say what could not be cleared.
+      final backedOut = await _backOut(
+        session,
+        ours ?? const <String>{},
+        baseline?.configs,
+      );
       onPhase?.call(ApplyPhase.failed, Duration.zero);
       return ApplyOutcome(
         phase: ApplyPhase.failed,
         applied: const UciChangeSet.empty(),
-        stillStaged: unreverted,
+        stillStaged: backedOut.stillStaged,
         reason: RollbackReason.stateUnknown,
         error: e,
       );
@@ -638,6 +629,37 @@ class UciChangesetService {
       phase: ApplyPhase.rolledBack,
       applied: staged,
       reason: RollbackReason.unreachable,
+    );
+  }
+
+  /// Backs out this app's own staging after a failure.
+  ///
+  /// Only configs that were clean before we started are reverted: a config
+  /// that was already dirty belongs to whoever dirtied it, and `uci.revert`
+  /// is config-wide. With [preExisting] unknown nothing is reverted, since a
+  /// revert could discard an edit the user still wanted. Whatever was left,
+  /// by policy or by refusal, is [stillStaged].
+  Future<({Set<String> reverted, Set<String> stillStaged, bool revertFailed})>
+  _backOut(
+    RouterSession session,
+    Set<String> touched,
+    Set<String>? preExisting,
+  ) async {
+    final safeToRevert = preExisting == null
+        ? const <String>{}
+        : touched.difference(preExisting);
+    final leftStaged = touched.difference(safeToRevert);
+    if (leftStaged.isNotEmpty) {
+      Logger.warning(
+        'Leaving ${leftStaged.join(", ")} staged: it had unsaved changes '
+        'before this operation began',
+      );
+    }
+    final unreverted = await _revertEach(session, safeToRevert);
+    return (
+      reverted: safeToRevert.difference(unreverted),
+      stillStaged: leftStaged.union(unreverted),
+      revertFailed: unreverted.isNotEmpty,
     );
   }
 

@@ -103,16 +103,14 @@ class DiagnosticsService {
       method: 'exec',
       params: {'command': command, 'params': params},
     );
+    // `call` has already turned a non-zero ubus status into an RpcException
+    // with whatever detail the router sent; only the shape is checked here.
     if (raw is! List || raw.isEmpty) {
       throw const RpcException(
         object: 'file',
         method: 'exec',
         detail: 'invalid response',
       );
-    }
-    final status = raw.first;
-    if (status is int && status != 0) {
-      throw RpcException(object: 'file', method: 'exec', status: status);
     }
     return _parseExec(raw);
   }

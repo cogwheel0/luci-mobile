@@ -85,6 +85,18 @@ class ClientConfigPlanner {
     return s.isEmpty ? null : s;
   }
 
+  /// A UCI list option: a real list, or one string of space-separated
+  /// entries, depending on how it was written and which RPC read it.
+  static List<String> uciList(dynamic v) {
+    if (v == null) return const [];
+    if (v is List) return [for (final e in v) e.toString()];
+    return v
+        .toString()
+        .split(RegExp(r'\s+'))
+        .where((e) => e.isNotEmpty)
+        .toList();
+  }
+
   /// A UCI boolean option. UCI accepts several spellings on each side
   /// (`1`/`yes`/`on`/`true`/`enabled` and `0`/`no`/`off`/`false`/
   /// `disabled`); anything unrecognised, or absent, reads as [orElse].
@@ -189,15 +201,19 @@ class ClientConfigPlanner {
     Iterable<String> addresses = const [],
     Iterable<String> wirelessNetworks = const [],
   }) {
-    for (final network in wirelessNetworks) {
-      final onInterface = subnets.where((s) => s.name == network).toList();
-      if (onInterface.isEmpty) continue;
-      // The AP says which interface; the address says which of its subnets.
-      for (final address in addresses) {
-        final hit = subnetContaining(address, onInterface);
-        if (hit != null) return ClientNetwork(network, hit);
-      }
-      return ClientNetwork(network, onInterface.first);
+    // The AP says which interfaces it bridges; the address says which of
+    // them - and which of their subnets - the client is on. Only if no
+    // address matches any of them does the first bridged interface stand.
+    final apSubnets = [
+      for (final network in wirelessNetworks)
+        ...subnets.where((s) => s.name == network),
+    ];
+    for (final address in addresses) {
+      final hit = subnetContaining(address, apSubnets);
+      if (hit != null) return ClientNetwork(hit.name, hit);
+    }
+    if (apSubnets.isNotEmpty) {
+      return ClientNetwork(apSubnets.first.name, apSubnets.first);
     }
     final lanSide = subnets.where((s) => !s.upstream).toList();
     for (final address in addresses) {
@@ -234,7 +250,7 @@ class ClientConfigPlanner {
   static Map<String, DhcpPool> dhcpPools(Map<String, dynamic> dhcpValues) {
     final out = <String, DhcpPool>{};
     for (final entry in sectionsOfType(dhcpValues, 'dhcp')) {
-      if (_str(entry.value['ignore']) == '1') continue;
+      if (uciBool(entry.value['ignore'])) continue;
       final network = _str(entry.value['interface']) ?? entry.key;
       final start = int.tryParse(_str(entry.value['start']) ?? '');
       final limit = int.tryParse(_str(entry.value['limit']) ?? '');
@@ -247,8 +263,9 @@ class ClientConfigPlanner {
   /// Every IPv4 subnet in a `network.interface dump`, in the dump's order.
   ///
   /// [upstreamNetworks] are the networks the firewall puts in an
-  /// internet-facing zone (see the static [upstreamNetworks]); with none
-  /// given, a name starting with `wan` is the only hint.
+  /// internet-facing zone (see the static [upstreamNetworks]). A name
+  /// starting with `wan` counts as well: a firewall that answered but names
+  /// its upstream zone `internet` without NAT would otherwise say nothing.
   static List<InterfaceSubnet> interfaceSubnets(
     Map? interfaceDump, {
     Set<String>? upstreamNetworks,
@@ -262,9 +279,8 @@ class ClientConfigPlanner {
       if (name == null || name.isEmpty || name == 'loopback') continue;
       final addrs = iface['ipv4-address'];
       if (addrs is! List) continue;
-      final upstream = upstreamNetworks == null
-          ? name.startsWith('wan')
-          : upstreamNetworks.contains(name);
+      final upstream =
+          name.startsWith('wan') || (upstreamNetworks?.contains(name) ?? false);
       for (final addr in addrs) {
         if (addr is! Map) continue;
         final base = _parseIpv4(addr['address']?.toString() ?? '');
@@ -297,12 +313,7 @@ class ClientConfigPlanner {
       final facesInternet =
           uciBool(entry.value['masq']) || name.toLowerCase().startsWith('wan');
       if (!facesInternet) continue;
-      final networks = entry.value['network'];
-      out.addAll(
-        networks is List
-            ? networks.map((e) => e.toString())
-            : (_str(networks)?.split(RegExp(r'\s+')) ?? const <String>[]),
-      );
+      out.addAll(uciList(entry.value['network']));
     }
     return out;
   }
@@ -318,11 +329,9 @@ class ClientConfigPlanner {
   ) {
     if (network == null || network.isEmpty) return null;
     for (final entry in sectionsOfType(firewallValues, 'zone')) {
-      final networks = entry.value['network'];
-      final list = networks is List
-          ? networks.map((e) => e.toString()).toList()
-          : (_str(networks)?.split(RegExp(r'\s+')) ?? const <String>[]);
-      if (list.contains(network)) return _str(entry.value['name']);
+      if (uciList(entry.value['network']).contains(network)) {
+        return _str(entry.value['name']);
+      }
     }
     return null;
   }

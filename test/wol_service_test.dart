@@ -1,12 +1,15 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/mock_api_service.dart';
 import 'package:luci_mobile/services/wol_service.dart';
 import 'package:luci_mobile/state/router_session.dart';
 
 class _ConfigApi extends MockApiService {
   Map<String, dynamic>? etherwake;
+  Object readError = Exception('timeout');
+  int reads = 0;
   List<String>? sentParams;
 
   @override
@@ -17,7 +20,8 @@ class _ConfigApi extends MockApiService {
     required String config,
     BuildContext? context,
   }) async {
-    if (etherwake == null) throw Exception('no such config');
+    reads++;
+    if (etherwake == null) throw readError;
     return [
       0,
       {'values': etherwake},
@@ -68,6 +72,20 @@ void main() {
     final api = _ConfigApi();
 
     expect(await WolService(api).wake(session, 'aa:bb:cc:dd:ee:ff'), isTrue);
+    expect(api.sentParams, ['-D', 'aa:bb:cc:dd:ee:ff']);
+  });
+
+  // A router without luci-app-wol has no config; that answer is kept, so a
+  // second wake does not pay for the same failed round trip.
+  test('a missing etherwake config is asked about once', () async {
+    final api = _ConfigApi()
+      ..readError = const RpcException(object: 'uci', method: 'get', status: 4);
+    final wol = WolService(api);
+
+    await wol.wake(session, 'aa:bb:cc:dd:ee:ff');
+    await wol.wake(session, 'aa:bb:cc:dd:ee:ff');
+
+    expect(api.reads, 1);
     expect(api.sentParams, ['-D', 'aa:bb:cc:dd:ee:ff']);
   });
 

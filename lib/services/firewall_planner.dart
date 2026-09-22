@@ -26,15 +26,7 @@ class FirewallPlanner {
   static bool _bool(dynamic v, {bool orElse = true}) =>
       ClientConfigPlanner.uciBool(v, orElse: orElse);
 
-  static List<String> _list(dynamic v) {
-    if (v == null) return const [];
-    if (v is List) return v.map((e) => e.toString()).toList();
-    return v
-        .toString()
-        .split(RegExp(r'\s+'))
-        .where((e) => e.isNotEmpty)
-        .toList();
-  }
+  static List<String> _list(dynamic v) => ClientConfigPlanner.uciList(v);
 
   static Iterable<MapEntry<String, Map<String, dynamic>>> _sections(
     Map<String, dynamic> values,

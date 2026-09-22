@@ -279,7 +279,9 @@ class ClientDetailLoader {
         if (ifname == null) continue;
         aps.add((
           ifname: ifname,
-          networks: _networksOf(config is Map ? config['network'] : null),
+          networks: ClientConfigPlanner.uciList(
+            config is Map ? config['network'] : null,
+          ),
         ));
       }
     }
@@ -311,15 +313,6 @@ class ClientDetailLoader {
       }
     }
     return (station: null, networks: const <String>[], failed: anyFailed);
-  }
-
-  /// A wifi-iface `network` option: a list, or a space-separated string.
-  static List<String> _networksOf(dynamic raw) {
-    if (raw is List) return [for (final n in raw) n.toString()];
-    if (raw is String) {
-      return raw.split(RegExp(r'\s+')).where((n) => n.isNotEmpty).toList();
-    }
-    return const [];
   }
 
   Future<Map<String, dynamic>> _configValues(

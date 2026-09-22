@@ -303,6 +303,13 @@ void main() {
         },
         'lan': {'.type': 'dhcp', 'start': '100', 'limit': '150'},
         'wan': {'.type': 'dhcp', 'interface': 'wan', 'ignore': '1'},
+        'wan6': {
+          '.type': 'dhcp',
+          'interface': 'wan6',
+          'ignore': 'true',
+          'start': '2',
+          'limit': '10',
+        },
       });
       expect(pools.keys, {'guest', 'lan'});
       expect(pools['guest']!.start, 20);
@@ -587,6 +594,36 @@ void main() {
         )?.name,
         'guest',
       );
+    });
+
+    // `option network 'lan guest'`: the AP bridges both, and only the
+    // address says which one this client is on.
+    test('an AP bridged into several networks defers to the address', () {
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
+          addresses: const ['192.168.2.50'],
+          wirelessNetworks: const ['lan', 'guest'],
+        )?.name,
+        'guest',
+      );
+      // With no address at all, the first bridged network stands.
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
+          wirelessNetworks: const ['lan', 'guest'],
+        )?.name,
+        'lan',
+      );
+    });
+
+    test('a wan-named interface is upstream whatever the firewall said', () {
+      final subnets = ClientConfigPlanner.interfaceSubnets(
+        dump,
+        upstreamNetworks: const {},
+      );
+      expect(subnets.firstWhere((s) => s.name == 'wan').upstream, isTrue);
+      expect(subnets.firstWhere((s) => s.name == 'lan').upstream, isFalse);
     });
 
     test('an AP on an interface the dump does not list still names it', () {

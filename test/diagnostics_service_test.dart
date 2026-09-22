@@ -30,6 +30,7 @@ class _ExecApi extends MockApiService {
   }) async {
     lastParams = params;
     if (reply is Exception) throw reply as Exception;
+    if (reply is RpcException) throw reply as RpcException;
     return reply;
   }
 }
@@ -60,7 +61,8 @@ void main() {
   });
 
   test('an RPC-level refusal is still an error', () async {
-    final api = _ExecApi()..reply = [6];
+    final api = _ExecApi()
+      ..reply = const RpcException(object: 'file', method: 'exec', status: 6);
 
     await expectLater(
       DiagnosticsService(api).run(_session, DiagnosticTool.nslookup, 'x'),

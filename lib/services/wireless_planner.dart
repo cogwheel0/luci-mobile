@@ -1,4 +1,5 @@
 import 'package:luci_mobile/models/uci_change.dart';
+import 'package:luci_mobile/services/client_config_planner.dart';
 import 'package:luci_mobile/models/wireless_config.dart';
 
 /// Reads and edits `/etc/config/wireless`.
@@ -30,15 +31,7 @@ class WirelessPlanner {
     return s == '1' || s.toLowerCase() == 'true';
   }
 
-  static List<String> _list(dynamic v) {
-    if (v == null) return const [];
-    if (v is List) return v.map((e) => e.toString()).toList();
-    return v
-        .toString()
-        .split(RegExp(r'\s+'))
-        .where((e) => e.isNotEmpty)
-        .toList();
-  }
+  static List<String> _list(dynamic v) => ClientConfigPlanner.uciList(v);
 
   /// Builds the radio list, each with its SSIDs attached.
   static List<WirelessRadio> parse(Map<String, dynamic> values) {

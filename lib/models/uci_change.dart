@@ -131,15 +131,31 @@ class UciChangeSet {
   List<UciChange> forConfig(String config) =>
       byConfig[config] ?? const <UciChange>[];
 
-  /// True when [section] of [config] is an uncommitted add in this set.
+  /// True when [section] of [config] is a live uncommitted add in this set.
   bool hasAdd(String config, String section) =>
-      forConfig(config).any((c) => c.op == UciOp.add && c.section == section);
+      liveAdds(config).containsKey(section);
 
-  /// The sections that are uncommitted adds of [type] in [config].
+  /// The sections that are live uncommitted adds of [type] in [config].
   List<String> addedSections(String config, String type) => [
-    for (final c in forConfig(config))
-      if (c.op == UciOp.add && c.option == type) c.section,
+    for (final e in liveAdds(config).entries)
+      if (e.value == type) e.key,
   ];
+
+  /// Section -> type for every add in [config] that no later row removed.
+  ///
+  /// libuci keeps the `add` and its options in the delta when the section
+  /// is deleted again, and appends a `remove`; only the last word counts.
+  Map<String, String> liveAdds(String config) {
+    final live = <String, String>{};
+    for (final c in forConfig(config)) {
+      if (c.op == UciOp.add) {
+        live[c.section] = c.option ?? '';
+      } else if (c.op == UciOp.remove && c.option == null) {
+        live.remove(c.section);
+      }
+    }
+    return live;
+  }
 
   /// The subset of this changeset that this operation did not stage.
   ///
