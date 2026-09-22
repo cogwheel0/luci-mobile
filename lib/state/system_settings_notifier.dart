@@ -54,13 +54,7 @@ final systemSettingsProvider = FutureProvider<SystemSettings?>((ref) async {
   final api = ref.watch(apiServiceProvider);
   if (session == null || api == null) return null;
 
-  final raw = await api.uciGetAll(
-    session.ipAddress,
-    session.sysauth,
-    session.useHttps,
-    config: 'system',
-  );
-  final values = uciValuesOf(raw);
+  final values = await uciConfigValues(api, session, 'system');
 
   // The first `system`-typed section is the one LuCI edits; its name is
   // generated, so it has to be discovered rather than assumed.

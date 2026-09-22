@@ -742,7 +742,6 @@ class AppState extends ChangeNotifier {
         final processedDhcpData = _processDhcpLeases(rawDhcpData);
 
         _dashboardData = {
-          'fetchedAt': DateTime.now(),
           'boardInfo': results[0][1],
           'sysInfo': results[1][1],
           'networkDevices': results[2][1],
@@ -1084,7 +1083,6 @@ class AppState extends ChangeNotifier {
       if (token != _sessionToken) return;
 
       _dashboardData = {
-        'fetchedAt': DateTime.now(),
         'boardInfo': boardInfoData,
         'sysInfo': sysInfoData,
         'networkDevices': networkData,

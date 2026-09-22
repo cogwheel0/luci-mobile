@@ -132,21 +132,19 @@ void main() {
     test('round-trips through JSON', () {
       final back = StoredObservation.fromJson(
         StoredObservation(
-          observation: RouterObservation(
+          observation: const RouterObservation(
             reachable: true,
             wanUp: false,
             clientMacs: {'AA:BB:CC:11:22:33'},
             names: {'AA:BB:CC:11:22:33': 'Laptop'},
-            uptime: 4321,
-            uptimeAt: _at,
+            bootTime: 1_700_000_000,
           ),
           at: _at,
         ).toJson(),
       );
       expect(back, isNotNull);
       expect(back!.observation.wanUp, isFalse);
-      expect(back.observation.uptime, 4321);
-      expect(back.observation.uptimeAt?.isAtSameMomentAs(_at), isTrue);
+      expect(back.observation.bootTime, 1_700_000_000);
       expect(back.observation.clientMacs, {'AA:BB:CC:11:22:33'});
       expect(back.observation.names['AA:BB:CC:11:22:33'], 'Laptop');
       expect(back.at.isAtSameMomentAs(_at), isTrue);

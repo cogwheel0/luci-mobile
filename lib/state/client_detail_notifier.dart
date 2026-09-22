@@ -255,7 +255,7 @@ class ClientDetailLoader {
     String config,
   ) async {
     try {
-      return await _configValues(session, api, config);
+      return await uciConfigValues(api, session, config);
     } catch (e, stack) {
       Logger.exception('Client config $config unavailable', e, stack);
       return null;
@@ -322,19 +322,6 @@ class ClientDetailLoader {
     }
     return (station: null, networks: const <String>[], failed: anyFailed);
   }
-
-  Future<Map<String, dynamic>> _configValues(
-    RouterSession session,
-    IApiService api,
-    String config,
-  ) async => uciValuesOf(
-    await api.uciGetAll(
-      session.ipAddress,
-      session.sysauth,
-      session.useHttps,
-      config: config,
-    ),
-  );
 
   /// Addresses the dashboard's lease table holds for this client.
   List<String> _leaseAddresses(dynamic appState) {

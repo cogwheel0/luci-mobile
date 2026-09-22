@@ -21,13 +21,10 @@ final addonProvider = FutureProvider.family<List<AddonSection>, AddonSpec>((
   final api = ref.watch(apiServiceProvider);
   if (session == null || api == null) return const [];
 
-  final raw = await api.uciGetAll(
-    session.ipAddress,
-    session.sysauth,
-    session.useHttps,
-    config: spec.config,
+  return AddonPlanner.sections(
+    spec,
+    await uciConfigValues(api, session, spec.config),
   );
-  return AddonPlanner.sections(spec, uciValuesOf(raw));
 }, retry: (_, _) => null);
 
 final addonMutationsProvider = Provider<AddonMutations>(AddonMutations.new);

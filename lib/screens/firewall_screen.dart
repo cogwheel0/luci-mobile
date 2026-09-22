@@ -100,11 +100,17 @@ class _FirewallScreenState extends ConsumerState<FirewallScreen> {
   }
 
   Future<void> _editForward(FirewallState state, PortForward? existing) async {
+    // Only a new forward needs a name; an edit keeps its section.
+    final taken = existing == null
+        ? await ref.read(firewallMutationsProvider).takenSectionNames(state)
+        : const <String>{};
+    if (!mounted) return;
     final ops = await showModalBottomSheet<List<UciOperation>>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _ForwardSheet(state: state, existing: existing),
+      builder: (_) =>
+          _ForwardSheet(state: state, existing: existing, taken: taken),
     );
     if (ops != null) await _apply(ops);
   }
@@ -377,10 +383,17 @@ class _RoutesTab extends StatelessWidget {
 
 /// Create or edit a port forward.
 class _ForwardSheet extends StatefulWidget {
-  const _ForwardSheet({required this.state, this.existing});
+  const _ForwardSheet({
+    required this.state,
+    this.existing,
+    this.taken = const {},
+  });
 
   final FirewallState state;
   final PortForward? existing;
+
+  /// Section names a new forward must not take.
+  final Set<String> taken;
 
   @override
   State<_ForwardSheet> createState() => _ForwardSheetState();
@@ -590,7 +603,7 @@ class _ForwardSheetState extends State<_ForwardSheet> {
             destIp: _destIp.text.trim(),
             destPort: _destPort.text.trim(),
             protocol: _protocol,
-            takenSections: widget.state.sectionNames,
+            takenSections: widget.taken,
           )
         : FirewallPlanner.planUpdatePortForward(
             existing: widget.existing!,

@@ -265,7 +265,10 @@ void main() {
 
     test('a radio edit writes only the fields that changed', () {
       final radio = WirelessPlanner.parse(_config).first;
-      final ops = WirelessPlanner.planUpdateRadio(radio: radio, channel: '11');
+      final ops = WirelessPlanner.planUpdateRadio(
+        radio: radio,
+        channel: const OptionEdit.set('11'),
+      );
       final set = ops.single as UciSet;
       expect(set.values, {'channel': '11'});
       expect(WirelessPlanner.planUpdateRadio(radio: radio), isEmpty);
@@ -277,14 +280,23 @@ void main() {
       final radio = WirelessPlanner.parse(_config).first;
       final ops = WirelessPlanner.planUpdateRadio(
         radio: radio,
-        clearHtmode: true,
-        clearCountry: true,
+        htmode: const OptionEdit.clear(),
+        country: const OptionEdit.clear(),
       );
       expect(
         ops.whereType<UciRemove>().map((r) => r.option),
         containsAll(['htmode', 'country']),
       );
       expect(ops.whereType<UciSet>(), isEmpty);
+      // Clearing what is not set is nothing to do.
+      final bare = WirelessRadio(section: 'radio9');
+      expect(
+        WirelessPlanner.planUpdateRadio(
+          radio: bare,
+          htmode: const OptionEdit.clear(),
+        ),
+        isEmpty,
+      );
     });
 
     test('deleting an SSID removes its section', () {

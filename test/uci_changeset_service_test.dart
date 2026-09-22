@@ -818,6 +818,7 @@ void _foreignChangeRegressions() {
         UciAdd(
           'dhcp',
           type: 'host',
+          identity: ['mac'],
           values: {'mac': 'AA:BB:CC:11:22:33', 'ip': '192.168.1.51'},
         ),
       ]);
@@ -891,7 +892,12 @@ void _foreignChangeRegressions() {
 
         await expectLater(
           h.service.stage(_session, const [
-            UciAdd('dhcp', type: 'host', values: {'mac': 'AA:BB:CC:11:22:33'}),
+            UciAdd(
+              'dhcp',
+              type: 'host',
+              identity: ['mac'],
+              values: {'mac': 'AA:BB:CC:11:22:33'},
+            ),
             UciSet('firewall', section: 'cfg02', values: {'enabled': '0'}),
           ]),
           throwsA(
@@ -953,6 +959,7 @@ void _foreignChangeRegressions() {
         UciAdd(
           'dhcp',
           type: 'host',
+          identity: ['mac'],
           values: {'mac': 'AA:BB:CC:11:22:33', 'ip': '192.168.1.50'},
         ),
       ]);
@@ -994,6 +1001,7 @@ void _foreignChangeRegressions() {
           UciAdd(
             'dhcp',
             type: 'host',
+            identity: ['mac'],
             values: {'mac': 'AA:BB:CC:11:22:33', 'ip': '192.168.1.50'},
           ),
         ]);
@@ -1020,6 +1028,7 @@ void _foreignChangeRegressions() {
         UciAdd(
           'dhcp',
           type: 'host',
+          identity: ['mac'],
           values: {'mac': 'DD:EE:FF:11:22:33', 'ip': '192.168.1.60'},
         ),
       ]);
@@ -1054,6 +1063,7 @@ void _foreignChangeRegressions() {
         UciAdd(
           'wireless',
           type: 'wifi-iface',
+          identity: ['ssid', 'device'],
           values: {'device': 'radio0', 'mode': 'ap', 'ssid': 'IoT'},
         ),
       ]);
@@ -1064,6 +1074,7 @@ void _foreignChangeRegressions() {
         UciAdd(
           'wireless',
           type: 'wifi-iface',
+          identity: ['ssid', 'device'],
           values: {'device': 'radio1', 'mode': 'ap', 'ssid': 'Guest'},
         ),
       ]);
@@ -1074,6 +1085,7 @@ void _foreignChangeRegressions() {
         UciAdd(
           'wireless',
           type: 'wifi-iface',
+          identity: ['ssid', 'device'],
           values: {
             'device': 'radio0',
             'mode': 'ap',
@@ -1101,6 +1113,7 @@ void _foreignChangeRegressions() {
         UciAdd(
           'dhcp',
           type: 'host',
+          identity: ['mac'],
           values: {'mac': 'AA:BB:CC:11:22:33', 'ip': '192.168.1.9'},
         ),
       ]);
@@ -1125,11 +1138,13 @@ void _foreignChangeRegressions() {
         UciAdd(
           'dhcp',
           type: 'host',
+          identity: ['mac'],
           values: {'mac': 'AA:BB:CC:11:22:33', 'ip': '192.168.1.20'},
         ),
         UciAdd(
           'dhcp',
           type: 'host',
+          identity: ['mac'],
           values: {'mac': 'AA:BB:CC:11:22:33', 'ip': '192.168.1.10'},
         ),
       ]);
@@ -1170,6 +1185,7 @@ void _foreignChangeRegressions() {
         UciAdd(
           'dhcp',
           type: 'host',
+          identity: ['mac'],
           values: {'mac': 'AA:BB:CC:11:22:33', 'ip': '192.168.1.60'},
         ),
       ]);

@@ -54,14 +54,7 @@ class WolService {
     final cached = _interfaceByRouter[session.routerId];
     if (cached != null) return cached.value;
     try {
-      final values = uciValuesOf(
-        await _api.uciGetAll(
-          session.ipAddress,
-          session.sysauth,
-          session.useHttps,
-          config: 'etherwake',
-        ),
-      );
+      final values = await uciConfigValues(_api, session, 'etherwake');
       String? found;
       for (final section in values.values) {
         if (section is! Map || section['.type'] != 'etherwake') continue;

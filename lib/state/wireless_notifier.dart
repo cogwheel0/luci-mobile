@@ -18,13 +18,7 @@ final wirelessConfigProvider = FutureProvider<List<WirelessRadio>>((ref) async {
   final api = ref.watch(apiServiceProvider);
   if (session == null || api == null) return const [];
 
-  final raw = await api.uciGetAll(
-    session.ipAddress,
-    session.sysauth,
-    session.useHttps,
-    config: 'wireless',
-  );
-  return WirelessPlanner.parse(uciValuesOf(raw));
+  return WirelessPlanner.parse(await uciConfigValues(api, session, 'wireless'));
 }, retry: (_, _) => null);
 
 /// Applies wireless edits.

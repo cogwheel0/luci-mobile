@@ -65,7 +65,11 @@ class UciChange {
   String get key => '$config|${op.name}|$section|${option ?? ""}';
 
   /// The section this row belongs to, qualified by config.
-  String get sectionId => '$config|$section';
+  String get sectionId => sectionIdOf(config, section);
+
+  /// The [sectionId] a row on [section] of [config] would carry.
+  static String sectionIdOf(String config, String section) =>
+      '$config|$section';
 
   /// Parses one wire row, or returns null when the row is malformed or uses an
   /// operation this version does not model.
@@ -279,10 +283,19 @@ final class UciAdd extends UciOperation {
     required this.type,
     required this.values,
     this.name,
+    this.identity = const [],
   });
   final String type;
   final Map<String, dynamic> values;
   final String? name;
+
+  /// The options that say which thing this section is about - the MAC of
+  /// a reservation, the SSID and radio of a network. An anonymous add whose
+  /// earlier attempt was left staged by a failed apply is recognised by
+  /// these, so the retry replaces it instead of adding a duplicate. Empty
+  /// means no such recognition; a leftover then stands in the way of the
+  /// apply, which names it.
+  final List<String> identity;
 }
 
 /// Removes a whole section, or one [option] of it.

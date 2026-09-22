@@ -4,12 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/models/firewall_config.dart';
 import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/services/firewall_planner.dart';
-import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/state/feature_providers.dart';
 import 'package:luci_mobile/state/uci_mutation.dart';
-import 'package:luci_mobile/state/router_session.dart';
 import 'package:luci_mobile/utils/logger.dart';
 
 /// Everything the firewall screens render.
@@ -30,7 +28,9 @@ class FirewallState {
 
   /// Every section in the firewall config, of any type — a new section has
   /// to avoid all of them, not just the ones this screen parses, because
-  /// `uci.add` with an existing name silently re-sets that section.
+  /// `uci.add` with an existing name silently re-sets that section. See
+  /// [FirewallMutations.takenSectionNames] for the ones a new section must
+  /// actually avoid.
   final Set<String> sectionNames;
 
   /// The zone a port forward should arrive on, if one is obvious.
@@ -44,47 +44,19 @@ class FirewallState {
   List<String> get zoneNames => [for (final z in zones) z.name];
 }
 
-Future<Map<String, dynamic>> _configValues(
-  IApiService api,
-  RouterSession session,
-  String config,
-) async {
-  final raw = await api.uciGetAll(
-    session.ipAddress,
-    session.sysauth,
-    session.useHttps,
-    config: config,
-  );
-  return uciValuesOf(raw);
-}
-
 final firewallProvider = FutureProvider<FirewallState>((ref) async {
   final session = ref.watch(sessionProvider);
   final api = ref.watch(apiServiceProvider);
   if (session == null || api == null) return const FirewallState();
 
-  final firewall = await _configValues(api, session, 'firewall');
+  final firewall = await uciConfigValues(api, session, 'firewall');
   // Routes live in the network config, not the firewall one. A failure there
   // should not blank the port-forward list.
   var network = const <String, dynamic>{};
   try {
-    network = await _configValues(api, session, 'network');
+    network = await uciConfigValues(api, session, 'network');
   } catch (e, stack) {
     Logger.exception('Static routes unavailable', e, stack);
-  }
-
-  // `uci.get` shows this session's own uncommitted adds too. A section that
-  // is only such an add - a forward whose apply failed and could not be
-  // reverted - must not count as taken: re-adding it under the same name
-  // re-sets it, which is the retry; a `_2` suffix would leave the leftover
-  // in the way of every apply that follows.
-  UciChangeSet? pending;
-  try {
-    pending = await ref
-        .read(uciChangesetServiceProvider)
-        ?.pending(session, config: 'firewall');
-  } catch (e, stack) {
-    Logger.exception('Pending firewall changes unavailable', e, stack);
   }
 
   return FirewallState(
@@ -92,7 +64,7 @@ final firewallProvider = FutureProvider<FirewallState>((ref) async {
     forwards: FirewallPlanner.portForwards(firewall),
     rules: FirewallPlanner.trafficRules(firewall),
     routes: FirewallPlanner.routes(network),
-    sectionNames: FirewallPlanner.takenSectionNames(firewall, pending),
+    sectionNames: firewall.keys.toSet(),
   );
 }, retry: (_, _) => null);
 
@@ -104,6 +76,27 @@ class FirewallMutations {
   FirewallMutations(this.ref);
 
   final Ref ref;
+
+  /// The names a new section must avoid: [FirewallState.sectionNames] less
+  /// this session's own uncommitted adds.
+  ///
+  /// `uci.get` shows those too, and a forward whose apply failed and could
+  /// not be reverted must be re-added under its own name - which re-sets it
+  /// - not as `_2` with the leftover left in the way of every apply that
+  /// follows. Read here, when a forward is about to be created, rather
+  /// than on every load of the screen.
+  Future<Set<String>> takenSectionNames(FirewallState state) async {
+    final session = ref.read(sessionProvider);
+    final service = ref.read(uciChangesetServiceProvider);
+    if (session == null || service == null) return state.sectionNames;
+    UciChangeSet? pending;
+    try {
+      pending = await service.pending(session, config: 'firewall');
+    } catch (e, stack) {
+      Logger.exception('Pending firewall changes unavailable', e, stack);
+    }
+    return FirewallPlanner.takenSectionNames(state.sectionNames, pending);
+  }
 
   Future<ApplyOutcome?> apply(
     List<UciOperation> ops, {

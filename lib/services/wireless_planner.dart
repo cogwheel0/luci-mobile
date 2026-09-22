@@ -2,6 +2,27 @@ import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/services/client_config_planner.dart';
 import 'package:luci_mobile/models/wireless_config.dart';
 
+/// What to do with one option: leave it, set it, or remove it.
+sealed class OptionEdit {
+  const OptionEdit();
+  const factory OptionEdit.keep() = KeepOption;
+  const factory OptionEdit.set(String value) = SetOption;
+  const factory OptionEdit.clear() = ClearOption;
+}
+
+final class KeepOption extends OptionEdit {
+  const KeepOption();
+}
+
+final class SetOption extends OptionEdit {
+  const SetOption(this.value);
+  final String value;
+}
+
+final class ClearOption extends OptionEdit {
+  const ClearOption();
+}
+
 /// Reads and edits `/etc/config/wireless`.
 ///
 /// Pure functions of an already-fetched config, so the rules — which options
@@ -176,6 +197,8 @@ class WirelessPlanner {
     UciAdd(
       'wireless',
       type: 'wifi-iface',
+      // The same SSID on another radio is another network.
+      identity: const ['ssid', 'device'],
       values: {
         'device': radio.section,
         'mode': 'ap',
@@ -196,31 +219,38 @@ class WirelessPlanner {
 
   /// Changes radio-level settings. Only the fields given are written.
   ///
-  /// [clearHtmode] and [clearCountry] remove the option, handing the choice
-  /// back to the driver (or the regulatory default). Distinct from leaving
-  /// the argument null, which means "not touched".
+  /// Each field is an [OptionEdit]: left alone, set, or cleared - the last
+  /// handing the choice back to the driver or the regulatory default. One
+  /// value per field, so "set and clear at once" cannot be expressed.
   static List<UciOperation> planUpdateRadio({
     required WirelessRadio radio,
-    String? channel,
-    String? htmode,
-    String? country,
-    String? txpower,
-    bool clearHtmode = false,
-    bool clearCountry = false,
+    OptionEdit channel = const OptionEdit.keep(),
+    OptionEdit htmode = const OptionEdit.keep(),
+    OptionEdit country = const OptionEdit.keep(),
+    OptionEdit txpower = const OptionEdit.keep(),
   }) {
+    final edits = {
+      'channel': channel,
+      'htmode': htmode,
+      'country': country,
+      'txpower': txpower,
+    };
     final values = <String, String>{
-      'channel': ?channel,
-      if (!clearHtmode) 'htmode': ?htmode,
-      if (!clearCountry) 'country': ?country,
-      'txpower': ?txpower,
+      for (final e in edits.entries)
+        if (e.value case SetOption(:final value)) e.key: value,
+    };
+    final current = {
+      'channel': radio.channel,
+      'htmode': radio.htmode,
+      'country': radio.country,
+      'txpower': radio.txpower,
     };
     return [
       if (values.isNotEmpty)
         UciSet('wireless', section: radio.section, values: values),
-      if (clearHtmode && radio.htmode != null)
-        UciRemove('wireless', section: radio.section, option: 'htmode'),
-      if (clearCountry && radio.country != null)
-        UciRemove('wireless', section: radio.section, option: 'country'),
+      for (final e in edits.entries)
+        if (e.value is ClearOption && current[e.key] != null)
+          UciRemove('wireless', section: radio.section, option: e.key),
     ];
   }
 

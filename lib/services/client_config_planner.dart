@@ -409,6 +409,7 @@ class ClientConfigPlanner {
         UciAdd(
           'dhcp',
           type: 'host',
+          identity: const ['mac'],
           values: {
             'mac': normalized,
             'ip': ip,
@@ -461,7 +462,12 @@ class ClientConfigPlanner {
     }
     if (existing == null) {
       return [
-        UciAdd('dhcp', type: 'host', values: {'mac': normalized, 'name': name}),
+        UciAdd(
+          'dhcp',
+          type: 'host',
+          identity: const ['mac'],
+          values: {'mac': normalized, 'name': name},
+        ),
       ];
     }
     return [

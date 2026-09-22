@@ -15,24 +15,20 @@ class RouterObservation {
     required this.wanUp,
     required this.clientMacs,
     this.names = const {},
-    this.uptime,
-    this.uptimeAt,
+    this.bootTime,
   });
 
   final bool reachable;
   final bool wanUp;
   final Set<String> clientMacs;
 
-  /// Seconds since the router booted, when `system.info` reported it. Going
-  /// backwards between two observations is the only evidence of a reboot
-  /// there is.
-  final int? uptime;
-
-  /// When [uptime] was read from the router - not when this observation
-  /// was made. The foreground feed reads it out of a dashboard payload that
-  /// may be minutes old, and two observations of the same payload must not
-  /// read as a router that failed to gain uptime.
-  final DateTime? uptimeAt;
+  /// When the router booted, in its own clock's epoch seconds: `localtime`
+  /// minus `uptime` from `system.info`. Both numbers come from the router,
+  /// so this stays put while it runs and moves forward when it reboots -
+  /// however stale the payload it was read from, and whatever the phone's
+  /// clock does in between. Null when the router did not say, or its clock
+  /// was not yet set (see [EventDeriver.observe]).
+  final int? bootTime;
 
   /// MAC -> the name to show. A feed that says "AA:BB:CC:11:22:33 joined"
   /// makes the reader do the lookup the app already did.
@@ -40,16 +36,14 @@ class RouterObservation {
 
   String label(String mac) => names[mac] ?? mac;
 
-  /// This observation with [uptime], read at [uptimeAt], in place of its own.
-  RouterObservation withUptime(int? uptime, DateTime? uptimeAt) =>
-      RouterObservation(
-        reachable: reachable,
-        wanUp: wanUp,
-        clientMacs: clientMacs,
-        names: names,
-        uptime: uptime,
-        uptimeAt: uptimeAt,
-      );
+  /// This observation with [bootTime] in place of its own.
+  RouterObservation withBootTime(int? bootTime) => RouterObservation(
+    reachable: reachable,
+    wanUp: wanUp,
+    clientMacs: clientMacs,
+    names: names,
+    bootTime: bootTime,
+  );
 }
 
 /// Derives events by comparing consecutive observations.
@@ -93,7 +87,7 @@ class EventDeriver {
 
     // Before the reachability guard: a reboot is usually *seen* as an
     // outage, and the observation taken while the router was away carries
-    // the last uptime it reported, so the comparison still works when it
+    // the last boot time it reported, so the comparison still works when it
     // comes back.
     if (current.reachable && rebootedBetween(previous, current)) {
       events.add(
@@ -139,32 +133,42 @@ class EventDeriver {
     return events;
   }
 
-  /// Jitter allowed between the uptime a router gained and the time that
-  /// passed between two observations, before the gap reads as a reboot.
+  /// How far a router's boot time may drift between two readings before it
+  /// counts as a reboot. `localtime` and `uptime` are read a moment apart
+  /// and rounded to seconds; NTP nudges the clock by fractions.
   static const Duration rebootSlack = Duration(seconds: 30);
 
-  /// Whether the router's uptime fell short of what it should have gained
-  /// between the two readings.
+  /// A router clock earlier than this is not set yet: OpenWrt boots at its
+  /// build date until NTP answers, and a boot time computed from that
+  /// would jump forward by years once it does.
+  static final DateTime clockSetAfter = DateTime.utc(2020);
+
+  /// Whether the router booted between the two readings: its boot time,
+  /// by its own clock, moved forward.
   ///
-  /// Comparing the raw numbers is not enough: a router that rebooted twice
-  /// in a row, or whose last known uptime was shorter than the gap between
-  /// polls, shows a *larger* uptime after the second reboot. With the time
-  /// between the two readings known, `uptime` should have grown by about
-  /// that much. A reading that is not newer than the previous one is the
-  /// same payload seen twice, and says nothing.
+  /// The phone's clock plays no part, so a correction there is not a
+  /// reboot; and the same payload read twice gives the same boot time,
+  /// which is no reboot either. A boot time moving *backwards* is the
+  /// router's clock being adjusted, and is ignored.
   static bool rebootedBetween(
     RouterObservation previous,
     RouterObservation current,
   ) {
-    final before = previous.uptime;
-    final now = current.uptime;
+    final before = previous.bootTime;
+    final now = current.bootTime;
     if (before == null || now == null) return false;
-    final since = previous.uptimeAt;
-    final until = current.uptimeAt;
-    if (since == null || until == null) return now < before;
-    if (!until.isAfter(since)) return false;
-    final elapsed = until.difference(since);
-    return now + rebootSlack.inSeconds < before + elapsed.inSeconds;
+    return now - before > rebootSlack.inSeconds;
+  }
+
+  /// The router's boot time out of a `system.info` payload, or null when it
+  /// is missing or the router's clock is plainly unset.
+  static int? bootTimeOf(dynamic sysInfo) {
+    if (sysInfo is! Map) return null;
+    final uptime = sysInfo['uptime'];
+    final localtime = sysInfo['localtime'];
+    if (uptime is! num || localtime is! num) return null;
+    if (localtime < clockSetAfter.millisecondsSinceEpoch ~/ 1000) return null;
+    return localtime.toInt() - uptime.toInt();
   }
 
   /// Builds an observation from what the dashboard already fetched.
@@ -172,18 +176,12 @@ class EventDeriver {
     required bool reachable,
     required Map<String, dynamic>? dashboardData,
     required List<Client> clients,
-    DateTime? uptimeAt,
   }) {
     final wan = dashboardData?['wan'];
-    final sysInfo = dashboardData?['sysInfo'];
-    final uptime = sysInfo is Map ? sysInfo['uptime'] : null;
     return RouterObservation(
       reachable: reachable,
       wanUp: wan is Map ? wan['up'] == true : false,
-      uptime: uptime is num ? uptime.toInt() : null,
-      // The dashboard stamps its payload; a poll that fetched `system.info`
-      // itself says so.
-      uptimeAt: uptimeAt ?? dashboardData?['fetchedAt'] as DateTime?,
+      bootTime: bootTimeOf(dashboardData?['sysInfo']),
       clientMacs: {
         for (final c in clients)
           if (c.macAddress != 'N/A') c.macAddress.toUpperCase(),

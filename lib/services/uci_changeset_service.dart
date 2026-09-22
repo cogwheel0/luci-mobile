@@ -247,7 +247,7 @@ class UciChangesetService {
     // for a later operation in the same batch to adopt or sweep again.
     final consumed = <String>{};
     void own(String config, String section) =>
-        ownedSections.add('$config|$section');
+        ownedSections.add(UciChange.sectionIdOf(config, section));
     // An option written to a section that is still an uncommitted add: the
     // whole section is ours, its `add` row and earlier options included.
     void wrote(UciOperation op, String section) {
@@ -380,24 +380,9 @@ class UciChangesetService {
     );
   }
 
-  /// The options that say which thing a section of each type is about.
-  ///
-  /// Two `host` sections with the same MAC are two attempts at one
-  /// reservation; two `wifi-iface`s with the same SSID on different radios
-  /// are two networks. Matching on any shared option would make `mode ap` -
-  /// constant across every section of the type - relate everything to
-  /// everything. Only the anonymous adds the planners make are listed: block
-  /// rules and port forwards are added under a name, and a named re-add
-  /// re-sets the section, so they never reach the sweep.
-  static const Map<String, List<String>> _identityOptions = {
-    'host': ['mac'],
-    'wifi-iface': ['ssid', 'device'],
-    'route': ['target', 'interface', 'gateway'],
-  };
-
   /// Deletes the uncommitted adds in the baseline that are earlier,
   /// corrected-since attempts at [op] - the same type, about the same thing
-  /// (see [_identityOptions]) - calling [onSwept] after each delete, so a
+  /// by [UciAdd.identity] - calling [onSwept] after each delete, so a
   /// failure part-way leaves what was already deleted accounted for.
   ///
   /// A leftover about something else is somebody's other edit and is left
@@ -411,8 +396,8 @@ class UciChangesetService {
     required void Function(String section) onSwept,
     BuildContext? context,
   }) async {
-    final identity = _identityOptions[op.type];
-    if (identity == null) return;
+    final identity = op.identity;
+    if (identity.isEmpty) return;
     final wanted = {
       for (final option in identity) option: op.values[option]?.toString(),
     };
@@ -571,8 +556,11 @@ class UciChangesetService {
     }
 
     final rollback = mode == ApplyMode.checked;
-    // Only promise a countdown the router can actually honour.
-    onPhase?.call(ApplyPhase.applying, rollback ? timeout : Duration.zero);
+    // Only promise a countdown the router is known to honour. Rollback may
+    // still be *requested* without that knowledge - it costs nothing if the
+    // router ignores it - but counting down to it would promise a revert.
+    final countdown = rollback && rollbackVerified;
+    onPhase?.call(ApplyPhase.applying, countdown ? timeout : Duration.zero);
     try {
       await _api.uciApply(
         session.ipAddress,
@@ -609,6 +597,7 @@ class UciChangesetService {
     final hardStop = deadline.subtract(_confirmGuardBand);
 
     Duration remaining() {
+      if (!countdown) return Duration.zero;
       final left = deadline.difference(_clock());
       return left.isNegative ? Duration.zero : left;
     }
@@ -754,6 +743,21 @@ class UciChangesetService {
     return error.status == 5 ? RollbackReason.deadlineMissed : null;
   }
 }
+
+/// Reads and unwraps one config: `uci.get` for [config] on [session].
+Future<Map<String, dynamic>> uciConfigValues(
+  IApiService api,
+  RouterSession session,
+  String config,
+) async => uciValuesOf(
+  await api.uciGetAll(
+    session.ipAddress,
+    session.sysauth,
+    session.useHttps,
+    config: config,
+  ),
+  config: config,
+);
 
 /// The `values` map out of a `uci.get` envelope (`[status, {values: {...}}]`).
 ///

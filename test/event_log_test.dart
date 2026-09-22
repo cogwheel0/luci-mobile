@@ -28,13 +28,21 @@ RouterObservation obs({
   bool reachable = true,
   bool wanUp = true,
   Set<String> clients = const {'AA:BB:CC:11:22:33'},
-  int? uptime,
+  int? bootTime,
 }) => RouterObservation(
   reachable: reachable,
   wanUp: wanUp,
   clientMacs: clients,
-  uptime: uptime,
+  bootTime: bootTime,
 );
+
+/// A `system.info` payload for a router booted at [bootTime] whose clock now
+/// reads [localtime], both in epoch seconds.
+Map<String, dynamic> sysInfo({required int bootTime, required int localtime}) =>
+    {'uptime': localtime - bootTime, 'localtime': localtime};
+
+/// Epoch seconds of a moment well after the router's clock is set.
+final _epoch = DateTime.utc(2026, 9, 20, 12).millisecondsSinceEpoch ~/ 1000;
 
 List<RouterEvent> diff(RouterObservation? prev, RouterObservation now) =>
     EventDeriver.diff(previous: prev, current: now, routerId: 'r1', at: _at);
@@ -70,80 +78,73 @@ void main() {
       expect(diff(obs(wanUp: false), obs()).single.kind, RouterEventKind.wanUp);
     });
 
-    // The router has no event stream; uptime going backwards is the only
-    // evidence of a reboot there is.
-    test('uptime going backwards is a reboot', () {
+    // The router has no event stream. Its boot time, by its own clock,
+    // moving forward is the only evidence of a reboot there is - and it
+    // holds however stale the payload, whatever the phone's clock does, and
+    // however many reboots in a row.
+    test('a boot time that moved forward is a reboot', () {
       expect(
-        diff(obs(uptime: 90000), obs(uptime: 120)).single.kind,
+        diff(obs(bootTime: _epoch), obs(bootTime: _epoch + 600)).single.kind,
         RouterEventKind.rebooted,
       );
-      expect(diff(obs(uptime: 100), obs(uptime: 200)), isEmpty);
+      // A running router keeps its boot time, give or take rounding.
+      expect(diff(obs(bootTime: _epoch), obs(bootTime: _epoch + 5)), isEmpty);
+      // The router's clock being adjusted backwards is not a reboot.
+      expect(diff(obs(bootTime: _epoch), obs(bootTime: _epoch - 900)), isEmpty);
       // Unknown on either side is not evidence of anything.
-      expect(diff(obs(uptime: 100), obs()), isEmpty);
-      expect(diff(obs(), obs(uptime: 5)), isEmpty);
+      expect(diff(obs(bootTime: _epoch), obs()), isEmpty);
+      expect(diff(obs(), obs(bootTime: _epoch)), isEmpty);
     });
 
-    // A reboot is usually seen as an outage. The observation taken while the
-    // router was away carries the last uptime it reported, so the comparison
-    // still happens when it comes back - alongside "router back".
-    // Raw numbers are not enough: after two reboots in a row the second
-    // uptime can exceed the first. What the router should have gained is
-    // the time that passed.
-    test('a reboot is judged against the time that passed', () {
-      RouterObservation at(int uptime, DateTime? when) => RouterObservation(
-        reachable: true,
-        wanUp: true,
-        clientMacs: const {},
-        uptime: uptime,
-        uptimeAt: when,
-      );
-      final earlier = _at.subtract(const Duration(minutes: 15));
-      // 600s read 15 minutes ago; now 900s. Should be ~1500s: rebooted.
-      expect(
-        EventDeriver.rebootedBetween(at(600, earlier), at(900, _at)),
-        isTrue,
-      );
-      // 600s then 1495s: within the slack, just a running router.
-      expect(
-        EventDeriver.rebootedBetween(at(600, earlier), at(1495, _at)),
-        isFalse,
-      );
-      // Without a time on either reading, only going backwards counts.
-      expect(
-        EventDeriver.rebootedBetween(at(600, null), at(900, _at)),
-        isFalse,
-      );
-      expect(EventDeriver.rebootedBetween(at(600, null), at(30, _at)), isTrue);
+    test('two reboots in a row are both seen', () {
+      final first = obs(bootTime: _epoch);
+      final second = obs(bootTime: _epoch + 600);
+      final third = obs(bootTime: _epoch + 900);
+      expect(diff(first, second).single.kind, RouterEventKind.rebooted);
+      expect(diff(second, third).single.kind, RouterEventKind.rebooted);
     });
 
-    // The foreground feed reads uptime out of a dashboard payload that may
-    // be minutes old. Two polls of the same payload are one reading, not a
-    // router that stopped gaining uptime.
+    // The foreground feed reads out of a dashboard payload that may be
+    // minutes old. The same payload seen twice is the same boot time.
     test('the same dashboard payload seen twice is not a reboot', () {
-      final fetched = _at.subtract(const Duration(minutes: 5));
       final payload = {
-        'fetchedAt': fetched,
-        'sysInfo': {'uptime': 600},
+        'sysInfo': sysInfo(bootTime: _epoch, localtime: _epoch + 600),
       };
       RouterObservation seen() => EventDeriver.observe(
         reachable: true,
         dashboardData: payload,
         clients: const [],
       );
-      expect(seen().uptimeAt, fetched);
-      expect(EventDeriver.rebootedBetween(seen(), seen()), isFalse);
+      expect(seen().bootTime, _epoch);
       expect(diff(seen(), seen()), isEmpty);
     });
 
-    test('a reboot seen through an outage is still a reboot', () {
-      final away = obs(reachable: false).withUptime(90000, null);
+    // OpenWrt boots at its build date until NTP answers; a boot time
+    // computed from that would jump forward by years once it does.
+    test('a router whose clock is not set yet reports no boot time', () {
       expect(
-        diff(away, obs(uptime: 30)).map((e) => e.kind),
+        EventDeriver.bootTimeOf(sysInfo(bootTime: 1000, localtime: 90000)),
+        isNull,
+      );
+      expect(EventDeriver.bootTimeOf({'uptime': 5}), isNull);
+      expect(EventDeriver.bootTimeOf(null), isNull);
+    });
+
+    // A reboot is usually seen as an outage. The observation taken while the
+    // router was away carries the last boot time it reported, so the
+    // comparison still happens when it comes back - alongside "router back".
+    test('a reboot seen through an outage is still a reboot', () {
+      final away = obs(reachable: false).withBootTime(_epoch);
+      expect(
+        diff(away, obs(bootTime: _epoch + 600)).map((e) => e.kind),
         containsAll([RouterEventKind.routerBack, RouterEventKind.rebooted]),
       );
       // Going away is not a reboot, whatever the stale payload says.
       expect(
-        diff(obs(uptime: 90000), obs(reachable: false, uptime: 10)).single.kind,
+        diff(
+          obs(bootTime: _epoch),
+          obs(reachable: false, bootTime: _epoch + 600),
+        ).single.kind,
         RouterEventKind.routerUnreachable,
       );
     });
@@ -241,17 +242,15 @@ void main() {
   });
 
   group('observing', () {
-    test('reads the uptime the dashboard already fetched', () {
+    test('reads the boot time out of the dashboard payload', () {
       final o = EventDeriver.observe(
         reachable: true,
         dashboardData: {
-          'sysInfo': {'uptime': 1234},
+          'sysInfo': sysInfo(bootTime: _epoch, localtime: _epoch + 1234),
         },
         clients: const [],
-        uptimeAt: _at,
       );
-      expect(o.uptime, 1234);
-      expect(o.uptimeAt, _at);
+      expect(o.bootTime, _epoch);
     });
 
     test('reads WAN state and client MACs from the dashboard payload', () {

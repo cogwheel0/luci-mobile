@@ -254,6 +254,8 @@ class FirewallPlanner {
     UciAdd(
       'network',
       type: 'route',
+      // The same target via another interface or gateway is another route.
+      identity: const ['target', 'interface', 'gateway'],
       values: {
         'interface': interface,
         'target': target,
@@ -274,9 +276,9 @@ class FirewallPlanner {
   /// be re-added under its own name - which re-sets it - not as `_2` with
   /// the leftover left in the way of every apply that follows.
   static Set<String> takenSectionNames(
-    Map<String, dynamic> firewallValues,
+    Set<String> sectionNames,
     UciChangeSet? pending,
-  ) => firewallValues.keys.toSet().difference(
+  ) => sectionNames.difference(
     pending?.liveAdds('firewall').keys.toSet() ?? const {},
   );
 

@@ -648,20 +648,21 @@ class _RadioSheetState extends State<_RadioSheet> {
                     final radio = widget.radio;
                     final country = _country.text.trim().toUpperCase();
                     final htmode = _htmode;
+                    // Each field: unchanged, a new value, or emptied.
+                    OptionEdit edit(String? was, String? now) => now == was
+                        ? const OptionEdit.keep()
+                        : now == null
+                        ? const OptionEdit.clear()
+                        : OptionEdit.set(now);
                     Navigator.of(context).pop(
                       WirelessPlanner.planUpdateRadio(
                         radio: radio,
-                        channel: _channel != (radio.channel ?? 'auto')
-                            ? _channel
-                            : null,
-                        htmode: htmode != null && htmode != radio.htmode
-                            ? htmode
-                            : null,
-                        clearHtmode: htmode == null && radio.htmode != null,
-                        country: country.isNotEmpty && country != radio.country
-                            ? country
-                            : null,
-                        clearCountry: country.isEmpty && radio.country != null,
+                        channel: edit(radio.channel ?? 'auto', _channel),
+                        htmode: edit(radio.htmode, htmode),
+                        country: edit(
+                          radio.country,
+                          country.isEmpty ? null : country,
+                        ),
                       ),
                     );
                   },

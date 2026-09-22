@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
@@ -40,35 +41,50 @@ Future<void> ensureScheduled({
   SecureStorageService? storage,
   Future<void> Function(Duration) delay = Future.delayed,
 }) {
-  final work = _ensureScheduled(storage ?? SecureStorageService(), delay);
-  _startup = work;
-  return work;
+  final settled = Completer<void>();
+  _settled = settled;
+  return _ensureScheduled(storage ?? SecureStorageService(), delay, settled);
 }
 
-Future<void>? _startup;
+Completer<void>? _settled;
 
-/// Completes once startup has settled the stored switch. The settings
-/// screen reads that switch, and reading it while [ensureScheduled] is
-/// still deciding could show "on" over a poll that is about to be turned
-/// off.
-Future<void> get backgroundStartup => _startup ?? Future.value();
+/// Completes once startup knows whether the stored switch stands - never
+/// with an error. The settings screen reads that switch, and reading it
+/// while [ensureScheduled] is still deciding could show "on" over a poll
+/// that is about to be turned off. In the normal case this is one storage
+/// read and one registration; only a registration that hiccups holds it
+/// for the retry.
+Future<void> get backgroundStartup => _settled?.future ?? Future.value();
 
 Future<void> _ensureScheduled(
   SecureStorageService store,
   Future<void> Function(Duration) delay,
+  Completer<void> settled,
 ) async {
-  if (await store.readValue(BackgroundKeys.enabled) != 'true') return;
-  if (await schedulePoll(keepExisting: true)) return;
-  // The plugin channel is not always ready the instant the app starts; one
-  // hiccup must not switch off a setting the user turned on.
-  await delay(const Duration(seconds: 2));
-  if (await schedulePoll(keepExisting: true)) return;
-  // Refused twice: the switch must not keep reading "on" over a poll that
-  // will never run, and the credentials it would have used have no reader.
-  // A task registered by an earlier launch may still exist; it goes too,
-  // rather than waking the app every 15 minutes to bail out.
-  await cancelPoll();
-  await disableBackgroundPoll(store, failed: true);
+  try {
+    if (await store.readValue(BackgroundKeys.enabled) != 'true') return;
+    if (await schedulePoll(keepExisting: true)) return;
+    // The plugin channel is not always ready the instant the app starts;
+    // one hiccup must not switch off a setting the user turned on.
+    await delay(const Duration(seconds: 2));
+    if (await schedulePoll(keepExisting: true)) return;
+    // Refused twice: the switch must not keep reading "on" over a poll
+    // that will never run, and the credentials it would have used have no
+    // reader. A task registered by an earlier launch may still exist; it
+    // goes too, rather than waking the app every 15 minutes to bail out.
+    await cancelPoll();
+    await disableBackgroundPoll(store, failed: true);
+  } catch (e, stack) {
+    // Storage refusing at startup is logged, not surfaced: the settings
+    // screen must still show its switch.
+    Logger.exception(
+      'Settling the background poll at startup failed',
+      e,
+      stack,
+    );
+  } finally {
+    settled.complete();
+  }
 }
 
 /// Turns the poll off in storage. With [failed], records that it was the
@@ -174,7 +190,7 @@ Future<void> runBackgroundPoll({
     return;
   }
 
-  final current = await _observe(api, router, sysauth, at: now);
+  final current = await _observe(api, router, sysauth);
   if (current == null) return;
 
   final stored = await _readObservation(store, router.id);
@@ -211,13 +227,12 @@ Future<void> runBackgroundPoll({
 Future<RouterObservation?> _observe(
   IApiService api,
   MonitoredRouter router,
-  String sysauth, {
-  required DateTime at,
-}) async {
+  String sysauth,
+) async {
   try {
     // The calls the dashboard makes, and no more: a background poll should
     // cost the router as little as the foreground one does. `system.info`
-    // is there for its uptime, which is how a reboot is noticed.
+    // is there for its uptime and clock, which is how a reboot is noticed.
     final results = await Future.wait([
       api.call(
         router.ipAddress,
@@ -263,7 +278,6 @@ Future<RouterObservation?> _observe(
         if (sysInfo is Map) 'sysInfo': sysInfo,
       },
       clients: clientsFromLeases(leases is List ? leases : const []),
-      uptimeAt: at,
     );
   } catch (e, stack) {
     Logger.exception('Background observation failed', e, stack);
