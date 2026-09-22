@@ -251,6 +251,7 @@
   "networkExample": "например, lan, wwan",
   "wifiChangesWarning": "Изменения будут применены немедленно. Wi-Fi ненадолго перезапустится.",
   "applying": "Применение...",
+  "applyingWithoutRollback": "Этот роутер не может сам отменить изменение — оно вступает в силу сразу.",
   "saveChanges": "Сохранить изменения",
   "interfaceRemoved": "\"{ssid}\" удалено.",
   "removeInterfaceFailed": "Не удалось удалить интерфейс.",

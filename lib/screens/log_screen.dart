@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:luci_mobile/design/luci_design_system.dart';
@@ -91,18 +90,11 @@ class _LogScreenState extends ConsumerState<LogScreen> {
             tooltip: l10n.copy,
             onPressed: _entries.isEmpty
                 ? null
-                : () {
-                    Clipboard.setData(
-                      ClipboardData(
-                        text: _entries.map((e) => e.raw).join('\n'),
-                      ),
-                    );
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(l10n.copiedToClipboard(l10n.systemLog)),
-                      ),
-                    );
-                  },
+                : () => copyToClipboard(
+                    context,
+                    _entries.map((e) => e.raw).join('\n'),
+                    label: l10n.systemLog,
+                  ),
           ),
           IconButton(
             icon: const Icon(Icons.refresh),

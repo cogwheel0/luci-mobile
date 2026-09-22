@@ -251,6 +251,7 @@
   "networkExample": "např. lan, wwan",
   "wifiChangesWarning": "Změny se projeví okamžitě. WiFi se krátce restartuje.",
   "applying": "Aplikace změn...",
+  "applyingWithoutRollback": "Tento router změnu sám nevrátí, takže se projeví okamžitě.",
   "saveChanges": "Uložit změny",
   "interfaceRemoved": "„{ssid}“ odstraněno",
   "removeInterfaceFailed": "Odstranění rozhraní se nezdařilo",

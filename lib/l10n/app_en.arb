@@ -393,6 +393,7 @@
   "networkExample": "e.g., lan, wwan",
   "wifiChangesWarning": "Changes will be applied immediately. WiFi will briefly restart.",
   "applying": "Applying...",
+  "applyingWithoutRollback": "This router cannot undo the change by itself, so it takes effect immediately.",
   "saveChanges": "Save Changes",
   "interfaceRemoved": "\"{ssid}\" removed",
   "@interfaceRemoved": {

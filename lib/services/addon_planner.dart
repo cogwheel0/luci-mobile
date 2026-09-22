@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/models/addon_spec.dart';
 import 'package:luci_mobile/models/uci_change.dart';
 
@@ -21,32 +22,17 @@ class AddonSection {
   /// option -> value. A list option arrives as `List<String>`.
   final Map<String, Object> values;
 
-  String text(String option) {
-    final v = values[option];
-    if (v is String) return v;
-    if (v is List) return v.join(', ');
-    return '';
-  }
+  // Through the shared readers, so an add-on option is read exactly as the
+  // same option would be on any other screen. The private copies these
+  // replaced disagreed with them: a flag rpcd returned as a one-element
+  // list read as off here and on everywhere else, and a list joined with
+  // commas round-tripped commas back into the config.
+  String text(String option) => uciText(values[option]) ?? '';
 
-  /// UCI has no booleans; `1`, `true`, `yes`, `on` and `enabled` all mean on.
-  bool flag(String option, {bool orElse = false}) {
-    final v = values[option];
-    if (v is! String) return orElse;
-    return const {
-      '1',
-      'true',
-      'yes',
-      'on',
-      'enabled',
-    }.contains(v.toLowerCase());
-  }
+  bool flag(String option, {bool orElse = false}) =>
+      uciBool(values[option], orElse: orElse);
 
-  List<String> list(String option) {
-    final v = values[option];
-    if (v is List) return [for (final e in v) e.toString()];
-    if (v is String && v.isNotEmpty) return [v];
-    return const [];
-  }
+  List<String> list(String option) => uciList(values[option]);
 }
 
 /// Reads and writes add-on configs.

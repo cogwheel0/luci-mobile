@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/main.dart';
-import 'package:flutter/services.dart';
 import 'package:luci_mobile/models/glinet_data.dart';
 import 'package:luci_mobile/models/interface.dart';
 import 'package:luci_mobile/utils/wifi_utils.dart';
@@ -1030,10 +1029,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             context,
             context.l10n.ipAddress,
             interface.ipAddress!,
-            onTap: () => _copyToClipboard(
+            onTap: () => copyToClipboard(
               context,
               interface.ipAddress!,
-              context.l10n.ipAddress,
+              label: context.l10n.ipAddress,
             ),
           ),
         if (interface.ipv6Addresses != null &&
@@ -1043,8 +1042,11 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               context,
               context.l10n.ipv6Address,
               ipv6,
-              onTap: () =>
-                  _copyToClipboard(context, ipv6, context.l10n.ipv6Address),
+              onTap: () => copyToClipboard(
+                context,
+                ipv6,
+                label: context.l10n.ipv6Address,
+              ),
             ),
           ),
         if (interface.gateway != null)
@@ -1052,10 +1054,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             context,
             context.l10n.gateway,
             interface.gateway!,
-            onTap: () => _copyToClipboard(
+            onTap: () => copyToClipboard(
               context,
               interface.gateway!,
-              context.l10n.gatewayIp,
+              label: context.l10n.gatewayIp,
             ),
           ),
         if (interface.dnsServers.isNotEmpty)
@@ -1063,10 +1065,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             context,
             context.l10n.dns,
             interface.dnsServers.join(', '),
-            onTap: () => _copyToClipboard(
+            onTap: () => copyToClipboard(
               context,
               interface.dnsServers.join(', '),
-              context.l10n.dnsServers,
+              label: context.l10n.dnsServers,
             ),
           ),
         // Add WireGuard peer information if this is a WireGuard interface
@@ -1310,16 +1312,6 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  void _copyToClipboard(BuildContext context, String text, String label) {
-    Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(context.l10n.copiedToClipboard(label)),
-        duration: const Duration(seconds: 2),
       ),
     );
   }

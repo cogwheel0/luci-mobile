@@ -10,11 +10,21 @@ import 'package:luci_mobile/services/uci_changeset_service.dart';
 class ApplyProgress extends ChangeNotifier {
   ApplyPhase _phase = ApplyPhase.applying;
   Duration _remaining = Duration.zero;
+  bool _protected = true;
 
   ApplyPhase get phase => _phase;
   Duration get remaining => _remaining;
 
+  /// Whether the router was asked to undo this change by itself.
+  ///
+  /// The service only promises a window it asked for, so an `applying`
+  /// phase with no time on it means rollback was not requested - the
+  /// router's ACL denies it. That is worth saying while the change is
+  /// going in, not discovering afterwards.
+  bool get rollbackProtected => _protected;
+
   void update(ApplyPhase phase, Duration remaining) {
+    if (phase == ApplyPhase.applying) _protected = remaining > Duration.zero;
     if (phase == _phase && remaining == _remaining) return;
     _phase = phase;
     _remaining = remaining;
@@ -97,6 +107,15 @@ class LuciApplyProgressDialog extends StatelessWidget {
                     style: LuciTextStyles.cardSubtitle(context),
                   ),
                 ],
+                // Said while it is going in, because afterwards there is
+                // nothing to be done about it.
+                if (!progress.rollbackProtected) ...[
+                  const SizedBox(height: LuciSpacing.md),
+                  Text(
+                    context.l10n.applyingWithoutRollback,
+                    style: LuciTextStyles.cardSubtitle(context),
+                  ),
+                ],
               ],
             );
           },
@@ -110,6 +129,35 @@ class LuciApplyProgressDialog extends StatelessWidget {
         ApplyPhase.awaitingConfirm => context.l10n.confirmingChange,
         _ => context.l10n.applying,
       };
+}
+
+/// Runs an apply behind the progress dialog and reports the outcome.
+///
+/// The ceremony around every configuration change: the countdown dialog,
+/// the outcome message, and disposing the progress object afterwards. One
+/// copy, because when each screen had its own the wording drifted, and so
+/// did the guard against starting a second apply over the first.
+Future<ApplyOutcome?> runApply(
+  BuildContext context, {
+  required Future<ApplyOutcome?> Function(ApplyProgress progress) work,
+}) async {
+  final progress = ApplyProgress();
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    final outcome = await LuciApplyProgressDialog.run<ApplyOutcome?>(
+      context,
+      progress: progress,
+      work: () => work(progress),
+    );
+    if (context.mounted) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(applyOutcomeMessage(context, outcome))),
+      );
+    }
+    return outcome;
+  } finally {
+    progress.dispose();
+  }
 }
 
 /// What to tell the user about an apply that has finished.

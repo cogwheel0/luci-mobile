@@ -8,7 +8,6 @@ import 'package:luci_mobile/models/firewall_config.dart';
 import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/firewall_planner.dart';
-import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/state/firewall_notifier.dart';
 import 'package:luci_mobile/widgets/luci_apply_progress.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
@@ -130,22 +129,14 @@ class _FirewallScreenState extends ConsumerState<FirewallScreen> {
   Future<void> _apply(List<UciOperation> ops) async {
     if (ops.isEmpty || _busy) return;
     setState(() => _busy = true);
-    final messenger = ScaffoldMessenger.of(context);
-    final progress = ApplyProgress();
     try {
-      final outcome = await LuciApplyProgressDialog.run<ApplyOutcome?>(
+      await runApply(
         context,
-        progress: progress,
-        work: () => ref
+        work: (progress) => ref
             .read(firewallMutationsProvider)
             .apply(ops, onPhase: progress.update),
       );
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text(applyOutcomeMessage(context, outcome))),
-      );
     } finally {
-      progress.dispose();
       if (mounted) setState(() => _busy = false);
     }
   }

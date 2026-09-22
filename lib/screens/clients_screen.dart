@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/models/client.dart';
@@ -710,10 +709,10 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
           detailRow(
             context.l10n.ipAddress,
             client.ipAddress,
-            onTap: () => _copyToClipboard(
+            onTap: () => copyToClipboard(
               context,
               client.ipAddress,
-              context.l10n.ipAddress,
+              label: context.l10n.ipAddress,
             ),
             semanticsLabel: context.l10n.detailSemantics(
               context.l10n.ipAddress,
@@ -725,8 +724,11 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
               (ipv6) => detailRow(
                 context.l10n.ipv6Address,
                 ipv6,
-                onTap: () =>
-                    _copyToClipboard(context, ipv6, context.l10n.ipv6Address),
+                onTap: () => copyToClipboard(
+                  context,
+                  ipv6,
+                  label: context.l10n.ipv6Address,
+                ),
                 semanticsLabel: context.l10n.detailSemantics(
                   context.l10n.ipv6Address,
                   ipv6,
@@ -736,10 +738,10 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
           detailRow(
             context.l10n.macAddress,
             client.macAddress,
-            onTap: () => _copyToClipboard(
+            onTap: () => copyToClipboard(
               context,
               client.macAddress,
-              context.l10n.macAddress,
+              label: context.l10n.macAddress,
             ),
             semanticsLabel: context.l10n.detailSemantics(
               context.l10n.macAddress,
@@ -815,15 +817,5 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
     if (seconds == null || seconds == 0) return context.l10n.unlimited;
     if (seconds < 0) return context.l10n.expired;
     return Client.formatDuration(seconds);
-  }
-
-  void _copyToClipboard(BuildContext context, String text, String label) {
-    Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(context.l10n.copiedToClipboard(label)),
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 }

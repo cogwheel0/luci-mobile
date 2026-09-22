@@ -251,6 +251,7 @@
   "networkExample": "例: lan、wwan",
   "wifiChangesWarning": "変更はすぐに適用されます。 WiFi が一時的に再起動します。",
   "applying": "適用中...",
+  "applyingWithoutRollback": "このルーターは変更を自動で元に戻せないため、すぐに反映されます。",
   "saveChanges": "変更を保存",
   "interfaceRemoved": "「{ssid}」が削除されました",
   "removeInterfaceFailed": "インターフェースの削除に失敗しました",

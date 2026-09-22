@@ -360,22 +360,17 @@ class ClientConfigPlanner {
   static int _toInt(List<int> octets) =>
       (octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3];
 
-  static int _networkAddress(InterfaceSubnet subnet) {
-    final bits = subnet.prefix.clamp(0, 32);
-    final mask = bits == 0 ? 0 : (0xFFFFFFFF << (32 - bits)) & 0xFFFFFFFF;
-    return _toInt(subnet.base) & mask;
-  }
+  static int _networkAddress(InterfaceSubnet subnet) =>
+      _toInt(subnet.base) & _prefixMask(subnet.prefix);
 
   static bool _sameSubnet(List<int> a, List<int> b, int prefix) {
-    var bits = prefix.clamp(0, 32);
-    for (var i = 0; i < 4; i++) {
-      if (bits <= 0) break;
-      final take = bits >= 8 ? 8 : bits;
-      final mask = take == 8 ? 0xFF : (0xFF << (8 - take)) & 0xFF;
-      if ((a[i] & mask) != (b[i] & mask)) return false;
-      bits -= take;
-    }
-    return true;
+    final mask = _prefixMask(prefix);
+    return _toInt(a) & mask == _toInt(b) & mask;
+  }
+
+  static int _prefixMask(int prefix) {
+    final bits = prefix.clamp(0, 32);
+    return bits == 0 ? 0 : (0xFFFFFFFF << (32 - bits)) & 0xFFFFFFFF;
   }
 
   // -------------------------------------------------------------- planning

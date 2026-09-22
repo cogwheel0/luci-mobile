@@ -78,26 +78,18 @@ class _AddonScreenState extends ConsumerState<AddonScreen> {
     if (ops.isEmpty || _busy) return;
 
     setState(() => _busy = true);
-    final messenger = ScaffoldMessenger.of(context);
-    final progress = ApplyProgress();
     try {
-      final outcome = await LuciApplyProgressDialog.run<ApplyOutcome?>(
+      final outcome = await runApply(
         context,
-        progress: progress,
-        work: () => ref
+        work: (progress) => ref
             .read(addonMutationsProvider)
             .apply(widget.spec, ops, onPhase: progress.update),
       );
-      if (!mounted) return;
       if (outcome?.phase == ApplyPhase.confirmed) {
         // The saved values are now the router's, so the form is clean again.
         _edits.remove(section.name);
       }
-      messenger.showSnackBar(
-        SnackBar(content: Text(applyOutcomeMessage(context, outcome))),
-      );
     } finally {
-      progress.dispose();
       if (mounted) setState(() => _busy = false);
     }
   }

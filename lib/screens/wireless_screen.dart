@@ -7,7 +7,6 @@ import 'package:luci_mobile/models/router_capabilities.dart';
 import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/models/wireless_config.dart';
 import 'package:luci_mobile/services/api_service.dart';
-import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/services/wireless_planner.dart';
 import 'package:luci_mobile/state/feature_providers.dart';
 import 'package:luci_mobile/state/wireless_notifier.dart';
@@ -114,22 +113,14 @@ class _WirelessScreenState extends ConsumerState<WirelessScreen> {
   Future<void> _apply(List<UciOperation> ops) async {
     if (ops.isEmpty || _busy) return;
     setState(() => _busy = true);
-    final messenger = ScaffoldMessenger.of(context);
-    final progress = ApplyProgress();
     try {
-      final outcome = await LuciApplyProgressDialog.run<ApplyOutcome?>(
+      await runApply(
         context,
-        progress: progress,
-        work: () => ref
+        work: (progress) => ref
             .read(wirelessMutationsProvider)
             .apply(ops, onPhase: progress.update),
       );
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text(applyOutcomeMessage(context, outcome))),
-      );
     } finally {
-      progress.dispose();
       if (mounted) setState(() => _busy = false);
     }
   }

@@ -33,6 +33,27 @@ const _adblock = {
 };
 
 void main() {
+  // The add-on form reads UCI through the same helpers as every other
+  // screen. Its own copies disagreed: a flag rpcd returned as a one-element
+  // list read as off here and on everywhere else, and a list joined with
+  // commas round-tripped commas back into the config.
+  test('an option is read as it is read everywhere else', () {
+    const section = AddonSection(
+      name: 'cfg01',
+      label: 'cfg01',
+      values: {
+        'enabled': ['1'],
+        'servers': ['a', 'b'],
+        'one': 'x',
+      },
+    );
+    expect(section.flag('enabled'), isTrue);
+    expect(section.list('servers'), ['a', 'b']);
+    expect(section.list('one'), ['x']);
+    expect(section.text('servers'), 'a b');
+    expect(section.flag('missing', orElse: true), isTrue);
+  });
+
   group('reading add-on configs', () {
     test('only sections of the spec type are returned', () {
       final sections = AddonPlanner.sections(AddonCatalog.sqm, _sqm);

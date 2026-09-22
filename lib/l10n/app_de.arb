@@ -251,6 +251,7 @@
   "networkExample": "z. B. lan, wwan",
   "wifiChangesWarning": "Änderungen werden sofort übernommen. WLAN wird kurzzeitig neu gestartet.",
   "applying": "Wird angewendet...",
+  "applyingWithoutRollback": "Dieser Router kann die Änderung nicht selbst rückgängig machen; sie wird sofort wirksam.",
   "saveChanges": "Änderungen speichern",
   "interfaceRemoved": "„{ssid}“ entfernt",
   "removeInterfaceFailed": "Schnittstelle konnte nicht entfernt werden",

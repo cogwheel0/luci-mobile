@@ -251,6 +251,7 @@
   "networkExample": "ad esempio, lan, wwan",
   "wifiChangesWarning": "Le modifiche verranno applicate immediatamente. Il WiFi si riavvierà brevemente.",
   "applying": "Applicazione in corso...",
+  "applyingWithoutRollback": "Questo router non può annullare la modifica da solo, quindi ha effetto immediato.",
   "saveChanges": "Salva modifiche",
   "interfaceRemoved": "\"{ssid}\" rimosso",
   "removeInterfaceFailed": "Impossibile rimuovere l'interfaccia",

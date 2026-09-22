@@ -251,6 +251,7 @@
   "networkExample": "bijvoorbeeld lan, wwan",
   "wifiChangesWarning": "Wijzigingen worden onmiddellijk toegepast. WiFi wordt kortstondig opnieuw opgestart.",
   "applying": "Wordt toegepast...",
+  "applyingWithoutRollback": "Deze router kan de wijziging niet zelf ongedaan maken; ze is meteen van kracht.",
   "saveChanges": "Wijzigingen opslaan",
   "interfaceRemoved": "\"{ssid}\" verwijderd",
   "removeInterfaceFailed": "Kan de interface niet verwijderen",

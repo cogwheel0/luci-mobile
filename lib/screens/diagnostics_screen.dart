@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:luci_mobile/design/luci_design_system.dart';
@@ -156,18 +155,11 @@ class _OutputBlock extends StatelessWidget {
               child: IconButton(
                 icon: const Icon(Icons.copy, size: 18),
                 tooltip: context.l10n.copy,
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: text));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        context.l10n.copiedToClipboard(
-                          context.l10n.diagnostics,
-                        ),
-                      ),
-                    ),
-                  );
-                },
+                onPressed: () => copyToClipboard(
+                  context,
+                  text,
+                  label: context.l10n.diagnostics,
+                ),
               ),
             ),
             SelectableText(

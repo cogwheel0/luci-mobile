@@ -251,6 +251,7 @@
   "networkExample": "例如：lan、wwan",
   "wifiChangesWarning": "更改將立即套用。 WiFi 將短暫重啟。",
   "applying": "正在套用...",
+  "applyingWithoutRollback": "此路由器無法自行還原變更，變更將立即生效。",
   "saveChanges": "儲存變更",
   "interfaceRemoved": "“{ssid}”已刪除",
   "removeInterfaceFailed": "刪除介面失敗",

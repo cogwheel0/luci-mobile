@@ -251,6 +251,7 @@
   "networkExample": "예: lan, wwan",
   "wifiChangesWarning": "변경사항은 즉시 적용됩니다. WiFi가 잠시 다시 시작됩니다.",
   "applying": "적용 중...",
+  "applyingWithoutRollback": "이 라우터는 변경을 스스로 되돌릴 수 없으므로 즉시 적용됩니다.",
   "saveChanges": "변경 사항 저장",
   "interfaceRemoved": "'{ssid}'이(가) 삭제되었습니다.",
   "removeInterfaceFailed": "인터페이스를 제거하지 못했습니다.",

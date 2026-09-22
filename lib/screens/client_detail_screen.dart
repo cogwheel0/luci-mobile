@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:luci_mobile/design/luci_design_system.dart';
@@ -12,7 +11,6 @@ import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/wol_service.dart';
 import 'package:luci_mobile/services/client_config_planner.dart';
-import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/state/client_detail_notifier.dart';
 import 'package:luci_mobile/state/feature_providers.dart';
@@ -343,27 +341,19 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   );
 
   Future<void> _apply(List<UciOperation> ops) async {
-    if (ops.isEmpty) return;
+    if (ops.isEmpty || _busy) return;
     setState(() => _busy = true);
-    final messenger = ScaffoldMessenger.of(context);
-    final progress = ApplyProgress();
     try {
       // The dialog stays up for the whole rollback window, counting down. The
       // router reverts by itself if we cannot confirm in time, and the user
       // should be able to see that coming rather than stare at a dead switch.
-      final outcome = await LuciApplyProgressDialog.run<ApplyOutcome?>(
+      await runApply(
         context,
-        progress: progress,
-        work: () => ref
+        work: (progress) => ref
             .read(clientMutationsProvider(mac))
             .applyOperations(ops, onPhase: progress.update),
       );
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text(applyOutcomeMessage(context, outcome))),
-      );
     } finally {
-      progress.dispose();
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -438,7 +428,10 @@ class _SignalCard extends StatelessWidget {
         if (s.txRateKbps != null)
           (context.l10n.uploadRate, _rate(s.txRateKbps!)),
         if (s.connectedSeconds != null)
-          (context.l10n.connectedFor, _duration(s.connectedSeconds!)),
+          (
+            context.l10n.connectedFor,
+            Client.formatDuration(s.connectedSeconds!),
+          ),
       ],
     );
   }
@@ -446,13 +439,6 @@ class _SignalCard extends StatelessWidget {
   static String _rate(int kbps) => kbps >= 1000
       ? '${(kbps / 1000).toStringAsFixed(1)} Mbit/s'
       : '$kbps kbit/s';
-
-  static String _duration(int seconds) {
-    final d = Duration(seconds: seconds);
-    if (d.inDays > 0) return '${d.inDays}d ${d.inHours % 24}h';
-    if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes % 60}m';
-    return '${d.inMinutes}m';
-  }
 }
 
 class _TrafficCard extends StatelessWidget {
@@ -531,12 +517,7 @@ class _SectionCard extends StatelessWidget {
             for (final (label, value) in rows)
               InkWell(
                 onTap: copyable
-                    ? () {
-                        Clipboard.setData(ClipboardData(text: value));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('$label: $value')),
-                        );
-                      }
+                    ? () => copyToClipboard(context, value, label: label)
                     : null,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: LuciSpacing.xs),
