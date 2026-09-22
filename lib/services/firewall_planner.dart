@@ -14,84 +14,63 @@ class FirewallPlanner {
   /// Sections this app creates and therefore owns.
   static const String ownedPrefix = 'luci_mobile_';
 
-  static String? _str(dynamic v) {
-    if (v == null) return null;
-    if (v is List) {
-      return v.isEmpty ? null : v.map((e) => e.toString()).join(' ');
-    }
-    final s = v.toString().trim();
-    return s.isEmpty ? null : s;
-  }
-
-  static Iterable<MapEntry<String, Map<String, dynamic>>> _sections(
-    Map<String, dynamic> values,
-    String type,
-  ) sync* {
-    for (final entry in values.entries) {
-      final s = entry.value;
-      if (s is Map && s['.type'] == type) {
-        yield MapEntry(entry.key, Map<String, dynamic>.from(s));
-      }
-    }
-  }
-
   // --------------------------------------------------------------- reading
 
   static List<FirewallZone> zones(Map<String, dynamic> values) => [
-    for (final e in _sections(values, 'zone'))
+    for (final e in uciSections(values, 'zone'))
       FirewallZone(
         section: e.key,
-        name: _str(e.value['name']) ?? e.key,
-        input: _str(e.value['input']) ?? 'REJECT',
-        output: _str(e.value['output']) ?? 'ACCEPT',
-        forward: _str(e.value['forward']) ?? 'REJECT',
+        name: uciText(e.value['name']) ?? e.key,
+        input: uciText(e.value['input']) ?? 'REJECT',
+        output: uciText(e.value['output']) ?? 'ACCEPT',
+        forward: uciText(e.value['forward']) ?? 'REJECT',
         masq: uciBool(e.value['masq'], orElse: false),
         networks: uciList(e.value['network']),
       ),
   ];
 
   static List<PortForward> portForwards(Map<String, dynamic> values) => [
-    for (final e in _sections(values, 'redirect'))
+    for (final e in uciSections(values, 'redirect'))
       // `dnat` is the default target for a redirect; only DNAT entries are
       // port forwards. SNAT redirects are a different feature.
-      if ((_str(e.value['target']) ?? 'dnat').toLowerCase() == 'dnat')
+      if ((uciText(e.value['target']) ?? 'dnat').toLowerCase() == 'dnat')
         PortForward(
           section: e.key,
-          name: _str(e.value['name']),
+          name: uciText(e.value['name']),
           enabled: uciBool(e.value['enabled'], orElse: true),
-          protocol: _str(e.value['proto']) ?? 'tcp udp',
-          sourceZone: _str(e.value['src']) ?? 'wan',
-          sourcePort: _str(e.value['src_dport']),
-          destZone: _str(e.value['dest']) ?? 'lan',
-          destIp: _str(e.value['dest_ip']),
-          destPort: _str(e.value['dest_port']),
+          protocol: uciText(e.value['proto']) ?? 'tcp udp',
+          sourceZone: uciText(e.value['src']) ?? 'wan',
+          sourcePort: uciText(e.value['src_dport']),
+          destZone: uciText(e.value['dest']) ?? 'lan',
+          destIp: uciText(e.value['dest_ip']),
+          destPort: uciText(e.value['dest_port']),
         ),
   ];
 
   static List<TrafficRule> trafficRules(Map<String, dynamic> values) => [
-    for (final e in _sections(values, 'rule'))
+    for (final e in uciSections(values, 'rule'))
       TrafficRule(
         section: e.key,
-        name: _str(e.value['name']),
+        name: uciText(e.value['name']),
         enabled: uciBool(e.value['enabled'], orElse: true),
-        source: _str(e.value['src']),
-        dest: _str(e.value['dest']),
-        sourceMac: _str(e.value['src_mac']),
-        target: _str(e.value['target']) ?? 'REJECT',
-        protocol: _str(e.value['proto']),
-        destPort: _str(e.value['dest_port']),
+        source: uciText(e.value['src']),
+        dest: uciText(e.value['dest']),
+        sourceMac: uciText(e.value['src_mac']),
+        target: uciText(e.value['target']) ?? 'REJECT',
+        protocol: uciText(e.value['proto']),
+        destPort: uciText(e.value['dest_port']),
       ),
   ];
 
   static List<StaticRoute> routes(Map<String, dynamic> networkValues) => [
-    for (final e in _sections(networkValues, 'route'))
+    for (final e in uciSections(networkValues, 'route'))
       StaticRoute(
         section: e.key,
-        interface: _str(e.value['interface']) ?? 'lan',
-        target: _str(e.value['target']) ?? '',
-        netmask: _str(e.value['netmask']),
-        gateway: _str(e.value['gateway']),
-        metric: _str(e.value['metric']),
+        interface: uciText(e.value['interface']) ?? 'lan',
+        target: uciText(e.value['target']) ?? '',
+        netmask: uciText(e.value['netmask']),
+        gateway: uciText(e.value['gateway']),
+        metric: uciText(e.value['metric']),
         disabled: uciBool(e.value['disabled'], orElse: false),
       ),
   ];

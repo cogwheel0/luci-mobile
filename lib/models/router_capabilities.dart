@@ -170,22 +170,33 @@ class RouterCapabilities {
   }
 
   /// `fnmatch`-style matching: `*` for any run, `?` for one character.
+  ///
+  /// Called for every ACL entry on every feature check, which happens on
+  /// every rebuild that watches capabilities; so the plain cases return at
+  /// once and a pattern is compiled once, not per call.
   @visibleForTesting
   static bool globMatches(String pattern, String value) {
+    if (pattern == '*') return true;
     if (!pattern.contains('*') && !pattern.contains('?')) {
       return pattern == value;
     }
-    final regex = StringBuffer('^');
-    for (final ch in pattern.split('')) {
-      regex.write(switch (ch) {
-        '*' => '.*',
-        '?' => '.',
-        _ => RegExp.escape(ch),
-      });
-    }
-    regex.write(r'$');
-    return RegExp(regex.toString()).hasMatch(value);
+    return _globs
+        .putIfAbsent(pattern, () {
+          final regex = StringBuffer('^');
+          for (final ch in pattern.split('')) {
+            regex.write(switch (ch) {
+              '*' => '.*',
+              '?' => '.',
+              _ => RegExp.escape(ch),
+            });
+          }
+          regex.write(r'$');
+          return RegExp(regex.toString());
+        })
+        .hasMatch(value);
   }
+
+  static final Map<String, RegExp> _globs = {};
 
   /// A boolean out of `luci.getFeatures`, or null when it was not reported.
   bool? feature(String name) {
@@ -303,7 +314,8 @@ class RouterCapabilities {
   }
 
   FeatureAvailability _requireUbus(String object, List<String> functions) {
-    var verified = true;
+    // No ACL at all: permitted by assumption, and known to be one.
+    var verified = ubusAcl != null;
     for (final fn in functions) {
       if (!allows(object, fn)) {
         return const FeatureAvailability.unavailable(

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/services/client_config_planner.dart';
 import 'package:luci_mobile/services/mock_api_service.dart';
 
@@ -26,13 +27,13 @@ void main() {
       final dhcp = await uciValues(api, 'dhcp');
       expect(dhcp.keys, contains('lan'));
       expect(
-        ClientConfigPlanner.sectionsOfType(dhcp, 'host'),
+        uciSections(dhcp, 'host'),
         isNotEmpty,
         reason: 'dhcp fixture should contain static leases',
       );
 
       final firewall = await uciValues(api, 'firewall');
-      expect(ClientConfigPlanner.sectionsOfType(firewall, 'zone'), isNotEmpty);
+      expect(uciSections(firewall, 'zone'), isNotEmpty);
       expect(dhcp.keys, isNot(contains('radio0')));
     });
 

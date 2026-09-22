@@ -193,6 +193,7 @@ void main() {
       );
       expect(caps.allows('uci', 'apply'), isTrue);
       expect(caps.of(RouterFeature.uciApplyRollback).available, isTrue);
+      expect(caps.of(RouterFeature.uciApplyRollback).verified, isFalse);
       expect(caps.of(RouterFeature.clientBlocking).available, isTrue);
     });
 

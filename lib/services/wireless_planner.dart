@@ -39,13 +39,6 @@ class WirelessPlanner {
   /// SSIDs are at most 32 bytes.
   static const int maxSsidBytes = 32;
 
-  static String? _str(dynamic v) {
-    if (v == null) return null;
-    if (v is List) return v.isEmpty ? null : v.first.toString();
-    final s = v.toString().trim();
-    return s.isEmpty ? null : s;
-  }
-
   /// Builds the radio list, each with its SSIDs attached.
   static List<WirelessRadio> parse(Map<String, dynamic> values) {
     final radios = <String, WirelessRadio>{};
@@ -58,24 +51,24 @@ class WirelessPlanner {
         case 'wifi-device':
           radios[entry.key] = WirelessRadio(
             section: entry.key,
-            band: _str(s['band']) ?? _hwmodeToBand(_str(s['hwmode'])),
-            channel: _str(s['channel']),
-            htmode: _str(s['htmode']),
-            country: _str(s['country']),
-            txpower: _str(s['txpower']),
+            band: uciText(s['band']) ?? _hwmodeToBand(uciText(s['hwmode'])),
+            channel: uciText(s['channel']),
+            htmode: uciText(s['htmode']),
+            country: uciText(s['country']),
+            txpower: uciText(s['txpower']),
             disabled: uciBool(s['disabled']),
           );
         case 'wifi-iface':
-          final device = _str(s['device']);
+          final device = uciText(s['device']);
           if (device == null) continue;
           networks.add(
             WirelessNetwork(
               section: entry.key,
               device: device,
-              ssid: _str(s['ssid']),
-              mode: _str(s['mode']) ?? 'ap',
-              encryption: _str(s['encryption']),
-              key: _str(s['key']),
+              ssid: uciText(s['ssid']),
+              mode: uciText(s['mode']) ?? 'ap',
+              encryption: uciText(s['encryption']),
+              key: uciText(s['key']),
               network: uciList(s['network']),
               hidden: uciBool(s['hidden']),
               isolate: uciBool(s['isolate']),

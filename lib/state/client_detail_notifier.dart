@@ -86,8 +86,6 @@ class ClientDetail {
   /// `uci.get firewall` failed, so the blocking controls are disabled.
   final bool firewallUnavailable;
 
-  bool get configUnavailable => dhcpUnavailable || firewallUnavailable;
-
   bool get isBlocked => blockRule != null && blockRule!.enabled;
   bool get hasReservation => host?.hasReservation ?? false;
 

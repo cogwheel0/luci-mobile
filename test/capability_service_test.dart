@@ -298,7 +298,10 @@ void main() {
       expect(caps.probeFailed, isFalse);
       expect(caps.ubusAcl, isNull);
       expect(caps.allows('uci', 'apply'), isTrue);
-      expect(caps.of(RouterFeature.uciApplyRollback).available, isTrue);
+      final rollback = caps.of(RouterFeature.uciApplyRollback);
+      expect(rollback.available, isTrue);
+      // Permitted by assumption is not permitted by measurement.
+      expect(rollback.verified, isFalse);
     });
   });
 

@@ -35,7 +35,9 @@ enum UciOp {
 /// One staged-but-unapplied change, as reported by `uci.changes`.
 ///
 /// Row shapes rpcd emits:
-/// - `["add", section, type]` — a new section
+/// - `["add", section, type]` — a new anonymous section
+/// - `["set", section, type]` — a new *named* section: libuci stages a
+///   `uci_set` of the type, so it is read here as an add, type in [option]
 /// - `["set", section, option, value]` — an option assignment
 /// - `["remove", section]` — a whole section
 /// - `["remove", section, option]` — a single option
@@ -77,8 +79,12 @@ class UciChange {
     if (row.isEmpty) return null;
     final op = UciOp.fromWire(row[0]);
     if (op == null || row.length < 2) return null;
+    // A three-element `set` carries a type, not an option: it creates a
+    // named section, and everything that reasons about uncommitted adds
+    // must see it as one.
+    final namedAdd = op == UciOp.set && row.length == 3;
     return UciChange(
-      op: op,
+      op: namedAdd ? UciOp.add : op,
       config: config,
       section: row[1],
       option: row.length > 2 ? row[2] : null,

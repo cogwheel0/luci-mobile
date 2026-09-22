@@ -967,11 +967,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
       // Categorize UCI entries
       uciValues.forEach((key, value) {
-        final typedValue = value as Map?;
-        if (typedValue?['.type'] == 'wifi-device') {
-          uciRadios[key] = typedValue!;
-        } else if (typedValue?['.type'] == 'wifi-iface') {
-          uciInterfaces[key] = typedValue!;
+        // The bare-body fallback can hand over a map whose values are not
+        // sections at all; those are skipped, not cast.
+        if (value is! Map) return;
+        if (value['.type'] == 'wifi-device') {
+          uciRadios[key] = value;
+        } else if (value['.type'] == 'wifi-iface') {
+          uciInterfaces[key] = value;
         }
       });
 

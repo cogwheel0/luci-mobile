@@ -609,6 +609,9 @@ class _RadioSheetState extends State<_RadioSheet> {
 
             DropdownButtonFormField<String?>(
               initialValue: _htmode,
+              // A null value renders nothing on its own; the hint is what
+              // shows for "no width set".
+              hint: Text(l10n.channelAuto),
               decoration: InputDecoration(labelText: l10n.channelWidth),
               items: [
                 // No width at all is the driver's own choice - and the only

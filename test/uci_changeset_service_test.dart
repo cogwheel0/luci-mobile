@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/services/api_service.dart';
+import 'package:luci_mobile/services/firewall_planner.dart';
 import 'package:luci_mobile/services/mock_api_service.dart';
 import 'package:luci_mobile/services/router_liveness_probe.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
@@ -543,6 +544,32 @@ void main() {
   });
 
   group('pending', () {
+    // libuci stages a named section as a `set` of its type, three elements
+    // and no value. Read as anything but an add, a leftover named forward
+    // would be invisible to every retry rule.
+    test('a three-element set row is a named section add', () {
+      final change = UciChange.fromWire('firewall', const [
+        'set',
+        'luci_mobile_plex',
+        'redirect',
+      ]);
+      expect(change!.op, UciOp.add);
+      expect(change.section, 'luci_mobile_plex');
+      expect(change.option, 'redirect');
+      final set = UciChangeSet.fromWire({
+        'firewall': [
+          ['set', 'luci_mobile_plex', 'redirect'],
+          ['set', 'luci_mobile_plex', 'name', 'Plex'],
+        ],
+      });
+      expect(set.hasAdd('firewall', 'luci_mobile_plex'), isTrue);
+      expect(set.addedSections('firewall', 'redirect'), ['luci_mobile_plex']);
+      expect(
+        FirewallPlanner.takenSectionNames({'luci_mobile_plex', 'cfg01'}, set),
+        {'cfg01'},
+      );
+    });
+
     test('parses the router change rows into a changeset', () async {
       final h = _build();
       h.api.changes = {

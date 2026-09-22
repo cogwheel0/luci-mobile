@@ -45,6 +45,30 @@ Map<String, dynamic> uciSectionsOf(dynamic body, {String? config}) {
   return Map<String, dynamic>.from(body);
 }
 
+/// A UCI option as text: trimmed, null when absent or empty, a list joined
+/// with spaces (which is how UCI itself writes a list into a single line).
+String? uciText(dynamic v) {
+  if (v == null) return null;
+  if (v is List) {
+    return v.isEmpty ? null : v.map((e) => e.toString()).join(' ');
+  }
+  final s = v.toString().trim();
+  return s.isEmpty ? null : s;
+}
+
+/// Sections of one `.type` out of a `uci.get` `values` map.
+Iterable<MapEntry<String, Map<String, dynamic>>> uciSections(
+  Map<String, dynamic> values,
+  String type,
+) sync* {
+  for (final entry in values.entries) {
+    final section = entry.value;
+    if (section is! Map) continue;
+    if (section['.type'] != type) continue;
+    yield MapEntry(entry.key, Map<String, dynamic>.from(section));
+  }
+}
+
 /// A UCI list option: a real list, or one string of space-separated
 /// entries, depending on how it was written and which RPC read it.
 List<String> uciList(dynamic v) {

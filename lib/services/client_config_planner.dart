@@ -71,31 +71,12 @@ class ClientConfigPlanner {
         .toList();
   }
 
-  static String? _str(dynamic v) {
-    if (v == null) return null;
-    final s = v.toString().trim();
-    return s.isEmpty ? null : s;
-  }
-
-  /// Sections of one `.type` out of a `uci.get` `values` map.
-  static Iterable<MapEntry<String, Map<String, dynamic>>> sectionsOfType(
-    Map<String, dynamic> values,
-    String type,
-  ) sync* {
-    for (final entry in values.entries) {
-      final section = entry.value;
-      if (section is! Map) continue;
-      if (section['.type'] != type) continue;
-      yield MapEntry(entry.key, Map<String, dynamic>.from(section));
-    }
-  }
-
   // ---------------------------------------------------------------- reading
 
   /// Finds the `dhcp` `host` section covering [mac], if any.
   static ClientDhcpHost? findHost(Map<String, dynamic> dhcpValues, String mac) {
     final target = StationInfo.normalizeMac(mac);
-    for (final entry in sectionsOfType(dhcpValues, 'host')) {
+    for (final entry in uciSections(dhcpValues, 'host')) {
       final macs = macsOf(entry.value['mac']);
       if (!macs.contains(target)) continue;
       const known = {
@@ -111,8 +92,8 @@ class ClientConfigPlanner {
       return ClientDhcpHost(
         section: entry.key,
         macAddresses: macs,
-        ip: _str(entry.value['ip']),
-        name: _str(entry.value['name']),
+        ip: uciText(entry.value['ip']),
+        name: uciText(entry.value['name']),
         otherOptionCount: others,
       );
     }
@@ -124,9 +105,9 @@ class ClientConfigPlanner {
     Map<String, dynamic> dhcpValues, {
     String? exceptSection,
   }) => {
-    for (final entry in sectionsOfType(dhcpValues, 'host'))
-      if (entry.key != exceptSection && _str(entry.value['ip']) != null)
-        _str(entry.value['ip'])!,
+    for (final entry in uciSections(dhcpValues, 'host'))
+      if (entry.key != exceptSection && uciText(entry.value['ip']) != null)
+        uciText(entry.value['ip'])!,
   };
 
   /// Finds a firewall rule blocking [mac].
@@ -135,10 +116,10 @@ class ClientConfigPlanner {
     String mac,
   ) {
     final target = StationInfo.normalizeMac(mac);
-    for (final entry in sectionsOfType(firewallValues, 'rule')) {
+    for (final entry in uciSections(firewallValues, 'rule')) {
       final macs = macsOf(entry.value['src_mac']);
       if (!macs.contains(target)) continue;
-      final rawTarget = _str(entry.value['target'])?.toUpperCase();
+      final rawTarget = uciText(entry.value['target'])?.toUpperCase();
       if (rawTarget != 'REJECT' && rawTarget != 'DROP') continue;
       return ClientBlockRule(
         section: entry.key,
@@ -216,11 +197,11 @@ class ClientConfigPlanner {
   /// name (`config dhcp 'guest_pool'` with `option interface 'guest'`).
   static Map<String, DhcpPool> dhcpPools(Map<String, dynamic> dhcpValues) {
     final out = <String, DhcpPool>{};
-    for (final entry in sectionsOfType(dhcpValues, 'dhcp')) {
+    for (final entry in uciSections(dhcpValues, 'dhcp')) {
       if (uciBool(entry.value['ignore'])) continue;
-      final network = _str(entry.value['interface']) ?? entry.key;
-      final start = int.tryParse(_str(entry.value['start']) ?? '');
-      final limit = int.tryParse(_str(entry.value['limit']) ?? '');
+      final network = uciText(entry.value['interface']) ?? entry.key;
+      final start = int.tryParse(uciText(entry.value['start']) ?? '');
+      final limit = int.tryParse(uciText(entry.value['limit']) ?? '');
       if (start == null || limit == null) continue;
       out[network] = DhcpPool(start: start, limit: limit);
     }
@@ -275,8 +256,8 @@ class ClientConfigPlanner {
   /// network even though it carries the default route.
   static Set<String> upstreamNetworks(Map<String, dynamic> firewallValues) {
     final out = <String>{};
-    for (final entry in sectionsOfType(firewallValues, 'zone')) {
-      final name = _str(entry.value['name']) ?? '';
+    for (final entry in uciSections(firewallValues, 'zone')) {
+      final name = uciText(entry.value['name']) ?? '';
       final facesInternet =
           uciBool(entry.value['masq']) || name.toLowerCase().startsWith('wan');
       if (!facesInternet) continue;
@@ -295,9 +276,9 @@ class ClientConfigPlanner {
     String? network,
   ) {
     if (network == null || network.isEmpty) return null;
-    for (final entry in sectionsOfType(firewallValues, 'zone')) {
+    for (final entry in uciSections(firewallValues, 'zone')) {
       if (uciList(entry.value['network']).contains(network)) {
-        return _str(entry.value['name']);
+        return uciText(entry.value['name']);
       }
     }
     return null;
