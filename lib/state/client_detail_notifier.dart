@@ -42,7 +42,8 @@ class ClientDetail {
     this.pools = const {},
     this.reservedIps = const {},
     this.stationUnavailable = false,
-    this.configUnavailable = false,
+    this.dhcpUnavailable = false,
+    this.firewallUnavailable = false,
   });
 
   /// On-device display name, if the user set one.
@@ -76,9 +77,15 @@ class ClientDetail {
   /// than blanking the page.
   final bool stationUnavailable;
 
-  /// `uci.get` on dhcp/firewall failed, so the write controls cannot be
-  /// trusted and are disabled.
-  final bool configUnavailable;
+  /// `uci.get dhcp` failed, so the reservation controls cannot be trusted
+  /// and are disabled. Kept apart from [firewallUnavailable]: a router that
+  /// answered for one config still gets that config's controls.
+  final bool dhcpUnavailable;
+
+  /// `uci.get firewall` failed, so the blocking controls are disabled.
+  final bool firewallUnavailable;
+
+  bool get configUnavailable => dhcpUnavailable || firewallUnavailable;
 
   bool get isBlocked => blockRule != null && blockRule!.enabled;
   bool get hasReservation => host?.hasReservation ?? false;
@@ -103,7 +110,8 @@ class ClientDetail {
     pools: pools,
     reservedIps: reservedIps,
     stationUnavailable: stationUnavailable,
-    configUnavailable: configUnavailable,
+    dhcpUnavailable: dhcpUnavailable,
+    firewallUnavailable: firewallUnavailable,
   );
 }
 
@@ -153,7 +161,6 @@ class ClientDetailLoader {
     final stationFailed = found.failed;
     final dhcp = configs.dhcp ?? const <String, dynamic>{};
     final firewall = configs.firewall ?? const <String, dynamic>{};
-    final configFailed = configs.dhcp == null || configs.firewall == null;
 
     final host = ClientConfigPlanner.findHost(dhcp, mac);
     final hint = hints[mac];
@@ -206,7 +213,8 @@ class ClientDetailLoader {
         exceptSection: host?.section,
       ),
       stationUnavailable: stationFailed,
-      configUnavailable: configFailed,
+      dhcpUnavailable: configs.dhcp == null,
+      firewallUnavailable: configs.firewall == null,
     );
   }
 

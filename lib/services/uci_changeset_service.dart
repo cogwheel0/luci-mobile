@@ -236,6 +236,9 @@ class UciChangesetService {
       preExisting = null;
     }
 
+    // Sections this batch has created, adopted or deleted: never a leftover
+    // for a later operation in the same batch to adopt or sweep again.
+    final consumed = <String>{};
     void own(String config, String section) =>
         ownedSections.add('$config|$section');
     // An option written to a section that is still an uncommitted add: the
@@ -263,10 +266,11 @@ class UciChangesetService {
       // leftover is deleted first. `uci.delete` of an uncommitted section is
       // what the stock ACL does grant, unlike `uci.revert`.
       if (op is UciAdd && op.name == null && baseline != null) {
-        final adopted = _identicalStagedAdd(baseline, op);
+        final adopted = _identicalStagedAdd(baseline, op, spare: consumed);
         if (adopted != null) {
           Logger.info('Reusing staged ${op.config} section $adopted');
           generatedSections[i] = adopted;
+          consumed.add(adopted);
           own(op.config, adopted);
           continue;
         }
@@ -277,8 +281,11 @@ class UciChangesetService {
             session,
             baseline,
             op,
-            spare: generatedSections.values,
-            onSwept: (swept) => own(op.config, swept),
+            spare: consumed,
+            onSwept: (swept) {
+              consumed.add(swept);
+              own(op.config, swept);
+            },
             context: context?.mounted == true ? context : null,
           );
         } catch (e, stack) {
@@ -331,6 +338,7 @@ class UciChangesetService {
               );
             }
             generatedSections[i] = section;
+            consumed.add(section);
             own(op.config, section);
           case UciRemove():
             await _api.uciDelete(
@@ -418,7 +426,11 @@ class UciChangesetService {
 
   /// The section of a staged anonymous add in [baseline] whose type and
   /// values are exactly [op]'s, or null.
-  static String? _identicalStagedAdd(UciChangeSet baseline, UciAdd op) {
+  static String? _identicalStagedAdd(
+    UciChangeSet baseline,
+    UciAdd op, {
+    required Set<String> spare,
+  }) {
     final rows = baseline.forConfig(op.config);
     final wanted = {
       for (final e in op.values.entries)
@@ -427,6 +439,7 @@ class UciChangesetService {
     // A list value stages as several rows; not worth modelling for a retry.
     if (wanted.length != op.values.length) return null;
     for (final section in baseline.addedSections(op.config, op.type)) {
+      if (spare.contains(section)) continue;
       if (mapEquals(_stagedOptions(rows, section), wanted)) return section;
     }
     return null;

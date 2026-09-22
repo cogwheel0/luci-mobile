@@ -151,7 +151,7 @@ Future<void> runBackgroundPoll({
     return;
   }
 
-  final current = await _observe(api, router, sysauth);
+  final current = await _observe(api, router, sysauth, at: now);
   if (current == null) return;
 
   final stored = await _readObservation(store, router.id);
@@ -188,8 +188,9 @@ Future<void> runBackgroundPoll({
 Future<RouterObservation?> _observe(
   IApiService api,
   MonitoredRouter router,
-  String sysauth,
-) async {
+  String sysauth, {
+  required DateTime at,
+}) async {
   try {
     // The calls the dashboard makes, and no more: a background poll should
     // cost the router as little as the foreground one does. `system.info`
@@ -239,6 +240,7 @@ Future<RouterObservation?> _observe(
         if (sysInfo is Map) 'sysInfo': sysInfo,
       },
       clients: clientsFromLeases(leases is List ? leases : const []),
+      at: at,
     );
   } catch (e, stack) {
     Logger.exception('Background observation failed', e, stack);

@@ -154,7 +154,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       title: context.l10n.staticLeaseSection,
       icon: Icons.bookmark_outline,
       availability: availability,
-      writable: _isOwnedBySelectedRouter && !detail.configUnavailable,
+      writable: _isOwnedBySelectedRouter && !detail.dhcpUnavailable,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -165,7 +165,8 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                 ? Text('${context.l10n.reservedAddress}: ${detail.host!.ip}')
                 : null,
             value: detail.hasReservation,
-            onChanged: _canWrite(availability, detail)
+            onChanged:
+                _canWrite(availability, configReadable: !detail.dhcpUnavailable)
                 ? (want) => _toggleReservation(detail, want)
                 : null,
           ),
@@ -241,7 +242,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       title: context.l10n.accessSection,
       icon: Icons.block_outlined,
       availability: availability,
-      writable: _isOwnedBySelectedRouter && !detail.configUnavailable,
+      writable: _isOwnedBySelectedRouter && !detail.firewallUnavailable,
       // Without a resolvable zone the rule would have to guess `lan`, which
       // is wrong on any guest-VLAN or multi-zone router.
       extraNote: noZone ? context.l10n.noZoneForClient : null,
@@ -253,17 +254,26 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
           style: LuciTextStyles.cardSubtitle(context),
         ),
         value: detail.isBlocked,
-        onChanged: _canWrite(availability, detail) && !noZone
+        onChanged:
+            _canWrite(
+                  availability,
+                  configReadable: !detail.firewallUnavailable,
+                ) &&
+                !noZone
             ? (want) => _toggleBlock(detail, want)
             : null,
       ),
     );
   }
 
-  bool _canWrite(FeatureAvailability availability, ClientDetail detail) =>
+  /// Whether a control backed by [configReadable] may write now.
+  bool _canWrite(
+    FeatureAvailability availability, {
+    required bool configReadable,
+  }) =>
       availability.available &&
       _isOwnedBySelectedRouter &&
-      !detail.configUnavailable &&
+      configReadable &&
       !_busy;
 
   // ---------------------------------------------------------------- actions

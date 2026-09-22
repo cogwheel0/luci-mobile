@@ -1099,6 +1099,36 @@ void _foreignChangeRegressions() {
       expect(staged.ownedSections, isNot(contains('dhcp|cfg0b')));
     });
 
+    // A section this batch already deleted is not there to adopt, whatever
+    // the (stale) baseline still says about it.
+    test('a section swept earlier in the batch is not adopted', () async {
+      final h = _build();
+      h.api.changes = {
+        'dhcp': [
+          ['add', 'cfg0a', 'host'],
+          ['set', 'cfg0a', 'mac', 'AA:BB:CC:11:22:33'],
+          ['set', 'cfg0a', 'ip', '192.168.1.10'],
+        ],
+      };
+
+      final staged = await h.service.stage(_session, const [
+        UciAdd(
+          'dhcp',
+          type: 'host',
+          values: {'mac': 'AA:BB:CC:11:22:33', 'ip': '192.168.1.20'},
+        ),
+        UciAdd(
+          'dhcp',
+          type: 'host',
+          values: {'mac': 'AA:BB:CC:11:22:33', 'ip': '192.168.1.10'},
+        ),
+      ]);
+
+      expect(h.api.calls, contains('delete dhcp.cfg0a'));
+      expect(staged.sections.values, isNot(contains('cfg0a')));
+      expect(h.api.calls.where((c) => c == 'add dhcp host'), hasLength(2));
+    });
+
     test('a section adopted earlier in the batch is never swept', () async {
       final h = _build();
       h.api.changes = {

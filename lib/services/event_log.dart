@@ -16,6 +16,7 @@ class RouterObservation {
     required this.clientMacs,
     this.names = const {},
     this.uptime,
+    this.observedAt,
   });
 
   final bool reachable;
@@ -26,6 +27,10 @@ class RouterObservation {
   /// backwards between two observations is the only evidence of a reboot
   /// there is.
   final int? uptime;
+
+  /// When this was observed, so the next observation knows how much uptime
+  /// the router should have gained since.
+  final DateTime? observedAt;
 
   /// MAC -> the name to show. A feed that says "AA:BB:CC:11:22:33 joined"
   /// makes the reader do the lookup the app already did.
@@ -40,6 +45,7 @@ class RouterObservation {
     clientMacs: clientMacs,
     names: names,
     uptime: uptime,
+    observedAt: observedAt,
   );
 }
 
@@ -86,9 +92,7 @@ class EventDeriver {
     // outage, and the observation taken while the router was away carries
     // the last uptime it reported, so the comparison still works when it
     // comes back.
-    final before = previous.uptime;
-    final now = current.uptime;
-    if (current.reachable && before != null && now != null && now < before) {
+    if (current.reachable && rebootedBetween(previous, current, at)) {
       events.add(
         RouterEvent(kind: RouterEventKind.rebooted, at: at, routerId: routerId),
       );
@@ -132,11 +136,39 @@ class EventDeriver {
     return events;
   }
 
+  /// Jitter allowed between the uptime a router gained and the time that
+  /// passed between two observations, before the gap reads as a reboot.
+  static const Duration rebootSlack = Duration(seconds: 30);
+
+  /// Whether the router's uptime fell short of what it should have gained
+  /// between [previous] (taken at [previous.observedAt]) and [current]
+  /// (taken at [at]).
+  ///
+  /// Comparing the raw numbers is not enough: a router that rebooted twice
+  /// in a row, or whose last known uptime was shorter than the gap between
+  /// polls, shows a *larger* uptime after the second reboot. With the
+  /// elapsed time known, `uptime` should have grown by about that much.
+  static bool rebootedBetween(
+    RouterObservation previous,
+    RouterObservation current,
+    DateTime at,
+  ) {
+    final before = previous.uptime;
+    final now = current.uptime;
+    if (before == null || now == null) return false;
+    final since = previous.observedAt;
+    if (since == null) return now < before;
+    final elapsed = at.difference(since);
+    if (elapsed.isNegative) return now < before;
+    return now + rebootSlack.inSeconds < before + elapsed.inSeconds;
+  }
+
   /// Builds an observation from what the dashboard already fetched.
   static RouterObservation observe({
     required bool reachable,
     required Map<String, dynamic>? dashboardData,
     required List<Client> clients,
+    DateTime? at,
   }) {
     final wan = dashboardData?['wan'];
     final sysInfo = dashboardData?['sysInfo'];
@@ -145,6 +177,7 @@ class EventDeriver {
       reachable: reachable,
       wanUp: wan is Map ? wan['up'] == true : false,
       uptime: uptime is num ? uptime.toInt() : null,
+      observedAt: at,
       clientMacs: {
         for (final c in clients)
           if (c.macAddress != 'N/A') c.macAddress.toUpperCase(),

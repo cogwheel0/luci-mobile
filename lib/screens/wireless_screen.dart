@@ -611,12 +611,12 @@ class _RadioSheetState extends State<_RadioSheet> {
               initialValue: _htmode,
               decoration: InputDecoration(labelText: l10n.channelWidth),
               items: [
-                // An unset width is the driver's own choice; keep it so.
-                if (widget.radio.htmode == null)
-                  DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text(l10n.channelAuto),
-                  ),
+                // No width at all is the driver's own choice - and the only
+                // way back to it once one has been set.
+                DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text(l10n.channelAuto),
+                ),
                 for (final m in htmodes)
                   DropdownMenuItem<String?>(value: m, child: Text(m)),
               ],
@@ -657,9 +657,11 @@ class _RadioSheetState extends State<_RadioSheet> {
                         htmode: htmode != null && htmode != radio.htmode
                             ? htmode
                             : null,
+                        clearHtmode: htmode == null && radio.htmode != null,
                         country: country.isNotEmpty && country != radio.country
                             ? country
                             : null,
+                        clearCountry: country.isEmpty && radio.country != null,
                       ),
                     );
                   },

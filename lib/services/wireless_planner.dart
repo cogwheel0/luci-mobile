@@ -195,21 +195,33 @@ class WirelessPlanner {
   ];
 
   /// Changes radio-level settings. Only the fields given are written.
+  ///
+  /// [clearHtmode] and [clearCountry] remove the option, handing the choice
+  /// back to the driver (or the regulatory default). Distinct from leaving
+  /// the argument null, which means "not touched".
   static List<UciOperation> planUpdateRadio({
     required WirelessRadio radio,
     String? channel,
     String? htmode,
     String? country,
     String? txpower,
+    bool clearHtmode = false,
+    bool clearCountry = false,
   }) {
     final values = <String, String>{
       'channel': ?channel,
-      'htmode': ?htmode,
-      'country': ?country,
+      if (!clearHtmode) 'htmode': ?htmode,
+      if (!clearCountry) 'country': ?country,
       'txpower': ?txpower,
     };
-    if (values.isEmpty) return const [];
-    return [UciSet('wireless', section: radio.section, values: values)];
+    return [
+      if (values.isNotEmpty)
+        UciSet('wireless', section: radio.section, values: values),
+      if (clearHtmode && radio.htmode != null)
+        UciRemove('wireless', section: radio.section, option: 'htmode'),
+      if (clearCountry && radio.country != null)
+        UciRemove('wireless', section: radio.section, option: 'country'),
+    ];
   }
 
   /// The channels worth offering for a band.

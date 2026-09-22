@@ -42,10 +42,12 @@ class EventFeedNotifier extends AsyncNotifier<List<RouterEvent>> {
     final session = ref.read(sessionProvider);
     if (session == null) return;
 
+    final now = DateTime.now();
     var current = EventDeriver.observe(
       reachable: reachable,
       dashboardData: dashboardData,
       clients: clients,
+      at: now,
     );
     // The dashboard data is stale while the router is away, so its uptime
     // is whatever was last reported - which is exactly the number a reboot
@@ -56,7 +58,7 @@ class EventFeedNotifier extends AsyncNotifier<List<RouterEvent>> {
       previous: _previous,
       current: current,
       routerId: session.routerId,
-      at: DateTime.now(),
+      at: now,
     );
     _previous = current;
     if (events.isEmpty) return;

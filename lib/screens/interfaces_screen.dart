@@ -642,17 +642,14 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     final uciInterfaces = <String, Map<String, dynamic>>{};
 
     final uciValues = uciSectionsOf(uciWirelessConfig, config: 'wireless');
-    {
-      uciValues.forEach((key, value) {
-        if (value is! Map) return;
-        if (value['.type'] == 'wifi-device') {
-          uciRadios[key.toString()] = value;
-        } else if (value['.type'] == 'wifi-iface') {
-          uciInterfaces[key.toString()] = Map<String, dynamic>.from(value);
-        }
-      });
-    }
-
+    uciValues.forEach((key, value) {
+      if (value is! Map) return;
+      if (value['.type'] == 'wifi-device') {
+        uciRadios[key.toString()] = value;
+      } else if (value['.type'] == 'wifi-iface') {
+        uciInterfaces[key.toString()] = Map<String, dynamic>.from(value);
+      }
+    });
     final runtimeInterfaces = <String>{};
     if (wirelessData != null) {
       wirelessData.forEach((radioName, radioData) {

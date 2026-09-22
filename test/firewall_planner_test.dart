@@ -295,6 +295,27 @@ void main() {
       );
     });
 
+    // `uci.get` shows this session's uncommitted adds. A forward whose apply
+    // failed and could not be reverted must be re-added under its own name,
+    // which re-sets it; a `_2` would leave the leftover blocking every apply.
+    test('a name that is only an uncommitted add is free to re-add', () {
+      final values = <String, dynamic>{
+        'luci_mobile_plex': {'.type': 'redirect', 'name': 'Plex'},
+        'cfg01': {'.type': 'zone', 'name': 'lan'},
+      };
+      final pending = UciChangeSet.fromWire({
+        'firewall': [
+          ['add', 'luci_mobile_plex', 'redirect'],
+          ['set', 'luci_mobile_plex', 'name', 'Plex'],
+        ],
+      });
+      expect(FirewallPlanner.takenSectionNames(values, pending), {'cfg01'});
+      expect(FirewallPlanner.takenSectionNames(values, null), {
+        'cfg01',
+        'luci_mobile_plex',
+      });
+    });
+
     test('toggling a forward touches only its enabled flag', () {
       final fwd = FirewallPlanner.portForwards(_firewall).first;
       final set =

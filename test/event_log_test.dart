@@ -86,6 +86,48 @@ void main() {
     // A reboot is usually seen as an outage. The observation taken while the
     // router was away carries the last uptime it reported, so the comparison
     // still happens when it comes back - alongside "router back".
+    // Raw numbers are not enough: after two reboots in a row the second
+    // uptime can exceed the first. What the router should have gained is
+    // the time that passed.
+    test('a reboot is judged against the time that passed', () {
+      RouterObservation at(int uptime, DateTime when) => RouterObservation(
+        reachable: true,
+        wanUp: true,
+        clientMacs: const {},
+        uptime: uptime,
+        observedAt: when,
+      );
+      final earlier = _at.subtract(const Duration(minutes: 15));
+      // 600s known 15 minutes ago; now 900s. Should be ~1500s: rebooted.
+      expect(
+        EventDeriver.rebootedBetween(at(600, earlier), at(900, _at), _at),
+        isTrue,
+      );
+      // 600s then 1495s: within the slack, just a running router.
+      expect(
+        EventDeriver.rebootedBetween(at(600, earlier), at(1495, _at), _at),
+        isFalse,
+      );
+      // Without a time on the previous observation, only going backwards
+      // counts.
+      expect(
+        EventDeriver.rebootedBetween(
+          at(600, earlier).withUptime(600),
+          at(900, _at),
+          _at,
+        ),
+        isTrue,
+      );
+      final undated = RouterObservation(
+        reachable: true,
+        wanUp: true,
+        clientMacs: const {},
+        uptime: 600,
+      );
+      expect(EventDeriver.rebootedBetween(undated, at(900, _at), _at), isFalse);
+      expect(EventDeriver.rebootedBetween(undated, at(30, _at), _at), isTrue);
+    });
+
     test('a reboot seen through an outage is still a reboot', () {
       final away = obs(reachable: false).withUptime(90000);
       expect(
@@ -199,8 +241,10 @@ void main() {
           'sysInfo': {'uptime': 1234},
         },
         clients: const [],
+        at: _at,
       );
       expect(o.uptime, 1234);
+      expect(o.observedAt, _at);
     });
 
     test('reads WAN state and client MACs from the dashboard payload', () {

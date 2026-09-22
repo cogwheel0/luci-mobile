@@ -145,6 +145,7 @@ void main() {
       expect(back, isNotNull);
       expect(back!.observation.wanUp, isFalse);
       expect(back.observation.uptime, 4321);
+      expect(back.observation.observedAt?.isAtSameMomentAs(_at), isTrue);
       expect(back.observation.clientMacs, {'AA:BB:CC:11:22:33'});
       expect(back.observation.names['AA:BB:CC:11:22:33'], 'Laptop');
       expect(back.at.isAtSameMomentAs(_at), isTrue);

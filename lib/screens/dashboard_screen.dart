@@ -962,76 +962,74 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     // Now add disabled interfaces from UCI config that aren't in runtime data
     if (uciWirelessConfig != null) {
       final uciValues = uciSectionsOf(uciWirelessConfig, config: 'wireless');
-      {
-        final uciRadios = <String, Map>{};
-        final uciInterfaces = <String, Map>{};
+      final uciRadios = <String, Map>{};
+      final uciInterfaces = <String, Map>{};
 
-        // Categorize UCI entries
-        uciValues.forEach((key, value) {
-          final typedValue = value as Map?;
-          if (typedValue?['.type'] == 'wifi-device') {
-            uciRadios[key] = typedValue!;
-          } else if (typedValue?['.type'] == 'wifi-iface') {
-            uciInterfaces[key] = typedValue!;
+      // Categorize UCI entries
+      uciValues.forEach((key, value) {
+        final typedValue = value as Map?;
+        if (typedValue?['.type'] == 'wifi-device') {
+          uciRadios[key] = typedValue!;
+        } else if (typedValue?['.type'] == 'wifi-iface') {
+          uciInterfaces[key] = typedValue!;
+        }
+      });
+
+      // Add interfaces that aren't in runtime data
+      uciInterfaces.forEach((uciName, config) {
+        if (!addedInterfaces.contains(uciName)) {
+          final ssid = config['ssid'] ?? 'Unnamed';
+          final device = uciString(config['device']);
+          final interfaceId = '$ssid ($device)';
+
+          // Check if this interface should be shown based on preferences
+          if (prefs.enabledWirelessInterfaces.isNotEmpty &&
+              !prefs.enabledWirelessInterfaces.contains(interfaceId)) {
+            return; // Skip this interface
           }
-        });
 
-        // Add interfaces that aren't in runtime data
-        uciInterfaces.forEach((uciName, config) {
-          if (!addedInterfaces.contains(uciName)) {
-            final ssid = config['ssid'] ?? 'Unnamed';
-            final device = uciString(config['device']);
-            final interfaceId = '$ssid ($device)';
+          final isRadioEnabled = uciRadios[device]?['disabled'] != '1';
+          final isIfaceEnabled = config['disabled'] != '1';
+          final isEnabled = isRadioEnabled && isIfaceEnabled;
+          final glInetRadio = glInetData?.radioForDevice(device);
+          final channel = resolveWifiChannel(
+            actual: glInetRadio?.channel,
+            configured: uciRadios[device]?['channel'],
+          );
 
-            // Check if this interface should be shown based on preferences
-            if (prefs.enabledWirelessInterfaces.isNotEmpty &&
-                !prefs.enabledWirelessInterfaces.contains(interfaceId)) {
-              return; // Skip this interface
-            }
-
-            final isRadioEnabled = uciRadios[device]?['disabled'] != '1';
-            final isIfaceEnabled = config['disabled'] != '1';
-            final isEnabled = isRadioEnabled && isIfaceEnabled;
-            final glInetRadio = glInetData?.radioForDevice(device);
-            final channel = resolveWifiChannel(
-              actual: glInetRadio?.channel,
-              configured: uciRadios[device]?['channel'],
-            );
-
-            networkCardWidgets.add(
-              Card(
-                margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  onLongPress: () {
-                    // Navigate to interfaces tab with the specific interface name
-                    final appState = ref.read(appStateProvider);
-                    appState.requestTab(
-                      LuciTab.network,
-                      interfaceToScroll: uciName,
-                    );
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(6.0),
-                    child: _buildWirelessInfoCardContent(
-                      context,
-                      ssid: ssid,
-                      isEnabled: isEnabled,
-                      signal: null, // No signal for disabled interfaces
-                      channel: channel,
-                    ),
+          networkCardWidgets.add(
+            Card(
+              margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onLongPress: () {
+                  // Navigate to interfaces tab with the specific interface name
+                  final appState = ref.read(appStateProvider);
+                  appState.requestTab(
+                    LuciTab.network,
+                    interfaceToScroll: uciName,
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(6.0),
+                  child: _buildWirelessInfoCardContent(
+                    context,
+                    ssid: ssid,
+                    isEnabled: isEnabled,
+                    signal: null, // No signal for disabled interfaces
+                    channel: channel,
                   ),
                 ),
               ),
-            );
-          }
-        });
-      }
+            ),
+          );
+        }
+      });
     }
 
     if (networkCardWidgets.isEmpty) {

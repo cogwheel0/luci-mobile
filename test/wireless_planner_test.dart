@@ -271,6 +271,22 @@ void main() {
       expect(WirelessPlanner.planUpdateRadio(radio: radio), isEmpty);
     });
 
+    // Emptying a field is a choice too: the option goes, and the driver or
+    // the regulatory default takes over. Not the same as leaving it alone.
+    test('a radio option can be cleared, not just changed', () {
+      final radio = WirelessPlanner.parse(_config).first;
+      final ops = WirelessPlanner.planUpdateRadio(
+        radio: radio,
+        clearHtmode: true,
+        clearCountry: true,
+      );
+      expect(
+        ops.whereType<UciRemove>().map((r) => r.option),
+        containsAll(['htmode', 'country']),
+      );
+      expect(ops.whereType<UciSet>(), isEmpty);
+    });
+
     test('deleting an SSID removes its section', () {
       final ops = WirelessPlanner.planDeleteNetwork(home());
       expect((ops.single as UciRemove).section, 'default_radio0');

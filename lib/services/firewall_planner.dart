@@ -268,6 +268,18 @@ class FirewallPlanner {
     UciRemove('network', section: route.section),
   ];
 
+  /// The section names a new section must avoid: everything in the config
+  /// except this session's own uncommitted adds. `uci.get` shows those
+  /// too, and a forward whose apply failed and could not be reverted must
+  /// be re-added under its own name - which re-sets it - not as `_2` with
+  /// the leftover left in the way of every apply that follows.
+  static Set<String> takenSectionNames(
+    Map<String, dynamic> firewallValues,
+    UciChangeSet? pending,
+  ) => firewallValues.keys.toSet().difference(
+    pending?.liveAdds('firewall').keys.toSet() ?? const {},
+  );
+
   /// An owned section name derived from [name] that is not in [taken].
   static String uniqueSectionName(String name, Set<String> taken) {
     final base = '$ownedPrefix${_slug(name)}';

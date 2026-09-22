@@ -156,6 +156,7 @@ class StoredObservation {
             for (final e in names.entries) e.key.toString(): e.value.toString(),
         },
         uptime: uptime is num ? uptime.toInt() : null,
+        observedAt: at,
       ),
     );
   }

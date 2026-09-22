@@ -72,12 +72,31 @@ final firewallProvider = FutureProvider<FirewallState>((ref) async {
     Logger.exception('Static routes unavailable', e, stack);
   }
 
+  // `uci.get` shows this session's own uncommitted adds too. A section that
+  // is only such an add - a forward whose apply failed and could not be
+  // reverted - must not count as taken: re-adding it under the same name
+  // re-sets it, which is the retry; a `_2` suffix would leave the leftover
+  // in the way of every apply that follows.
+  UciChangeSet? pending;
+  try {
+    pending = UciChangeSet.fromWire(
+      await api.uciChanges(
+        session.ipAddress,
+        session.sysauth,
+        session.useHttps,
+        config: 'firewall',
+      ),
+    );
+  } catch (e, stack) {
+    Logger.exception('Pending firewall changes unavailable', e, stack);
+  }
+
   return FirewallState(
     zones: FirewallPlanner.zones(firewall),
     forwards: FirewallPlanner.portForwards(firewall),
     rules: FirewallPlanner.trafficRules(firewall),
     routes: FirewallPlanner.routes(network),
-    sectionNames: firewall.keys.toSet(),
+    sectionNames: FirewallPlanner.takenSectionNames(firewall, pending),
   );
 }, retry: (_, _) => null);
 
