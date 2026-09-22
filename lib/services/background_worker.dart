@@ -198,13 +198,16 @@ Future<void> runBackgroundPoll({
     return;
   }
 
-  final current = await _observe(api, router, sysauth);
+  var current = await _observe(api, router, sysauth, at: now);
   if (current == null) return;
 
   final stored = await _readObservation(store, router.id);
   final baseline = (stored == null || stored.isStale(now))
       ? null
       : stored.observation;
+  // A poll whose `system.info` failed has nothing to say about the clocks;
+  // the last reading stands, so a reboot across the gap is still seen.
+  if (current.uptime == null) current = current.withClocksOf(baseline);
 
   await store.writeValue(
     BackgroundKeys.observation(router.id),
@@ -227,13 +230,7 @@ Future<void> runBackgroundPoll({
 
   final kinds = await readNotificationKinds(store);
   final events = BackgroundMonitor.capped(
-    BackgroundMonitor.notifiable(
-      previous: baseline,
-      current: current,
-      routerId: router.id,
-      at: now,
-      kinds: kinds,
-    ),
+    BackgroundMonitor.notifiable(all, kinds: kinds),
   );
   if (events.isEmpty) return;
 
@@ -245,8 +242,9 @@ Future<void> runBackgroundPoll({
 Future<RouterObservation?> _observe(
   IApiService api,
   MonitoredRouter router,
-  String sysauth,
-) async {
+  String sysauth, {
+  required DateTime at,
+}) async {
   try {
     // The calls the dashboard makes, and no more: a background poll should
     // cost the router as little as the foreground one does. `system.info`
@@ -296,6 +294,7 @@ Future<RouterObservation?> _observe(
         if (sysInfo is Map) 'sysInfo': sysInfo,
       },
       clients: clientsFromLeases(leases is List ? leases : const []),
+      readAt: at,
     );
   } catch (e, stack) {
     Logger.exception('Background observation failed', e, stack);

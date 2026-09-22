@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/models/client_config.dart';
 import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/services/client_config_planner.dart';
@@ -130,21 +131,13 @@ void main() {
         'a' * 64,
         'has.dot',
       ]) {
-        expect(
-          ClientConfigPlanner.isValidHostname(bad),
-          isFalse,
-          reason: 'should reject "$bad"',
-        );
+        expect(isValidHostname(bad), isFalse, reason: 'should reject "$bad"');
       }
     });
 
     test('accepts valid DNS labels', () {
       for (final good in ['laptop', 'Laptop-01', 'a', 'x' * 63, '0abc']) {
-        expect(
-          ClientConfigPlanner.isValidHostname(good),
-          isTrue,
-          reason: 'should accept "$good"',
-        );
+        expect(isValidHostname(good), isTrue, reason: 'should accept "$good"');
       }
     });
   });
@@ -313,8 +306,40 @@ void main() {
       });
       expect(pools.keys, {'guest', 'lan'});
       expect(pools['guest']!.start, 20);
-      expect(pools['guest']!.coversHost(49), isTrue);
-      expect(pools['guest']!.coversHost(50), isFalse);
+      expect(pools['guest']!.coversOffset(49), isTrue);
+      expect(pools['guest']!.coversOffset(50), isFalse);
+    });
+
+    // dnsmasq counts `start` from the network address. On 10.0.0.64/26 with
+    // start 10 the pool begins at .74, not .10.
+    test('the pool is an offset from the network address', () {
+      const small = [
+        InterfaceSubnet(
+          name: 'lan',
+          address: '10.0.0.65',
+          base: [10, 0, 0, 65],
+          prefix: 26,
+        ),
+      ];
+      const pools = {'lan': DhcpPool(start: 10, limit: 20)};
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          '10.0.0.80',
+          subnets: small,
+          alreadyReserved: const {},
+          pools: pools,
+        ),
+        IpCheckResult.insidePool,
+      );
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          '10.0.0.70',
+          subnets: small,
+          alreadyReserved: const {},
+          pools: pools,
+        ),
+        IpCheckResult.ok,
+      );
     });
   });
 
@@ -711,14 +736,14 @@ void main() {
     // NATs, or one named wan. Not the default route.
     test('UCI booleans are read in every spelling', () {
       for (final yes in ['1', 'yes', 'on', 'true', 'enabled', 'YES']) {
-        expect(ClientConfigPlanner.uciBool(yes), isTrue, reason: yes);
+        expect(uciBool(yes), isTrue, reason: yes);
       }
       for (final no in ['0', 'no', 'off', 'false', 'disabled', 'Off']) {
-        expect(ClientConfigPlanner.uciBool(no), isFalse, reason: no);
+        expect(uciBool(no), isFalse, reason: no);
       }
-      expect(ClientConfigPlanner.uciBool(null), isFalse);
-      expect(ClientConfigPlanner.uciBool(null, orElse: true), isTrue);
-      expect(ClientConfigPlanner.uciBool('maybe', orElse: true), isTrue);
+      expect(uciBool(null), isFalse);
+      expect(uciBool(null, orElse: true), isTrue);
+      expect(uciBool('maybe', orElse: true), isTrue);
     });
 
     // `option masq 'no'` is a LAN zone; treating anything but '0' as NAT

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/router_capabilities.dart';

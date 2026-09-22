@@ -29,12 +29,34 @@ RouterObservation obs({
   bool? wanUp = true,
   Set<String> clients = const {'AA:BB:CC:11:22:33'},
   int? bootTime,
+  int? uptime,
+  DateTime? uptimeAt,
 }) => RouterObservation(
   reachable: reachable,
   wanUp: wanUp,
   clientMacs: clients,
   bootTime: bootTime,
+  uptime: uptime,
+  uptimeAt: uptimeAt,
 );
+
+/// A reading of a router booted at [bootTime] (router epoch seconds) taken
+/// [ago] before [_at] by the phone's clock, with its clock reading true.
+RouterObservation reading({
+  required int bootTime,
+  required Duration ago,
+  int clockShift = 0,
+  bool reachable = true,
+}) {
+  final at = _at.subtract(ago);
+  final uptime = at.millisecondsSinceEpoch ~/ 1000 - bootTime;
+  return obs(
+    reachable: reachable,
+    bootTime: bootTime + clockShift,
+    uptime: uptime,
+    uptimeAt: at,
+  );
+}
 
 /// A `system.info` payload for a router booted at [bootTime] whose clock now
 /// reads [localtime], both in epoch seconds.
@@ -82,32 +104,73 @@ void main() {
     // moving forward is the only evidence of a reboot there is - and it
     // holds however stale the payload, whatever the phone's clock does, and
     // however many reboots in a row.
-    test('a boot time that moved forward is a reboot', () {
+    test('uptime going backwards is a reboot on its own', () {
       expect(
-        diff(obs(bootTime: _epoch), obs(bootTime: _epoch + 600)).single.kind,
+        diff(obs(uptime: 90000), obs(uptime: 120)).single.kind,
         RouterEventKind.rebooted,
       );
-      // A running router keeps its boot time, give or take rounding.
-      expect(diff(obs(bootTime: _epoch), obs(bootTime: _epoch + 5)), isEmpty);
-      // The router's clock being adjusted backwards is not a reboot.
-      expect(diff(obs(bootTime: _epoch), obs(bootTime: _epoch - 900)), isEmpty);
       // Unknown on either side is not evidence of anything.
-      expect(diff(obs(bootTime: _epoch), obs()), isEmpty);
-      expect(diff(obs(), obs(bootTime: _epoch)), isEmpty);
+      expect(diff(obs(uptime: 100), obs()), isEmpty);
+      expect(diff(obs(), obs(uptime: 5)), isEmpty);
     });
 
-    test('two reboots in a row are both seen', () {
-      final first = obs(bootTime: _epoch);
-      final second = obs(bootTime: _epoch + 600);
-      final third = obs(bootTime: _epoch + 900);
-      expect(diff(first, second).single.kind, RouterEventKind.rebooted);
-      expect(diff(second, third).single.kind, RouterEventKind.rebooted);
+    // Otherwise two witnesses must agree: the router's boot time moved
+    // forward, and its uptime fell short of the phone-measured gap. A
+    // running router satisfies neither.
+    test('a reboot the uptime does not show needs both clocks to agree', () {
+      final before = reading(bootTime: _epoch, ago: const Duration(hours: 1));
+      final running = reading(bootTime: _epoch, ago: Duration.zero);
+      expect(diff(before, running), isEmpty);
+
+      // Rebooted 10 minutes ago: uptime is larger than it was an hour ago
+      // only because the earlier reading was itself soon after a boot.
+      final early = reading(bootTime: _epoch, ago: const Duration(hours: 1));
+      final rebooted = reading(bootTime: _epoch + 3000, ago: Duration.zero);
+      expect(diff(early, rebooted).single.kind, RouterEventKind.rebooted);
+    });
+
+    // The router's clock changing - DST, a new timezone - moves its boot
+    // time forward without any reboot. The uptime witness says no.
+    test('a router clock change is not a reboot', () {
+      final before = reading(bootTime: _epoch, ago: const Duration(hours: 1));
+      final dst = reading(
+        bootTime: _epoch,
+        ago: Duration.zero,
+        clockShift: 3600,
+      );
+      expect(diff(before, dst), isEmpty);
+    });
+
+    // The phone's clock jumping forward makes the uptime look short of the
+    // gap without any reboot. The boot-time witness says no.
+    test('a phone clock jump is not a reboot', () {
+      final before = obs(
+        bootTime: _epoch,
+        uptime: 1000,
+        uptimeAt: _at.subtract(const Duration(minutes: 1)),
+      );
+      // One minute later by the router, six by the phone.
+      final after = obs(bootTime: _epoch, uptime: 1060, uptimeAt: _at);
+      expect(
+        diff(
+          before,
+          after.withClocksOf(
+            obs(
+              bootTime: _epoch,
+              uptime: 1060,
+              uptimeAt: _at.add(const Duration(minutes: 5)),
+            ),
+          ),
+        ),
+        isEmpty,
+      );
     });
 
     // The foreground feed reads out of a dashboard payload that may be
     // minutes old. The same payload seen twice is the same boot time.
     test('the same dashboard payload seen twice is not a reboot', () {
       final payload = {
+        'fetchedAt': _at.subtract(const Duration(minutes: 5)),
         'sysInfo': sysInfo(bootTime: _epoch, localtime: _epoch + 600),
       };
       RouterObservation seen() => EventDeriver.observe(
@@ -116,6 +179,8 @@ void main() {
         clients: const [],
       );
       expect(seen().bootTime, _epoch);
+      expect(seen().uptime, 600);
+      expect(seen().uptimeAt, payload['fetchedAt']);
       expect(diff(seen(), seen()), isEmpty);
     });
 
@@ -134,17 +199,14 @@ void main() {
     // router was away carries the last boot time it reported, so the
     // comparison still happens when it comes back - alongside "router back".
     test('a reboot seen through an outage is still a reboot', () {
-      final away = obs(reachable: false).withBootTime(_epoch);
+      final away = obs(reachable: false).withClocksOf(obs(uptime: 90000));
       expect(
-        diff(away, obs(bootTime: _epoch + 600)).map((e) => e.kind),
+        diff(away, obs(uptime: 30)).map((e) => e.kind),
         containsAll([RouterEventKind.routerBack, RouterEventKind.rebooted]),
       );
       // Going away is not a reboot, whatever the stale payload says.
       expect(
-        diff(
-          obs(bootTime: _epoch),
-          obs(reachable: false, bootTime: _epoch + 600),
-        ).single.kind,
+        diff(obs(uptime: 90000), obs(reachable: false, uptime: 10)).single.kind,
         RouterEventKind.routerUnreachable,
       );
     });

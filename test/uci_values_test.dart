@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:luci_mobile/services/uci_changeset_service.dart';
+import 'package:luci_mobile/utils/uci_values.dart';
 
 void main() {
   // Three shapes reach the app: rpcd's, the reviewer-mode fixtures', and

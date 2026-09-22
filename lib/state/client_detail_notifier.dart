@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/models/client_config.dart';
 import 'package:luci_mobile/models/station_info.dart';
 import 'package:luci_mobile/models/uci_change.dart';
@@ -287,9 +288,7 @@ class ClientDetailLoader {
         if (ifname == null) continue;
         aps.add((
           ifname: ifname,
-          networks: ClientConfigPlanner.uciList(
-            config is Map ? config['network'] : null,
-          ),
+          networks: uciList(config is Map ? config['network'] : null),
         ));
       }
     }

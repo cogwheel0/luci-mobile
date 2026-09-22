@@ -434,25 +434,56 @@ class UciChangesetService {
     final rows = baseline.forConfig(op.config);
     final wanted = {
       for (final e in op.values.entries)
-        if (e.value is! List) e.key: e.value?.toString() ?? '',
+        if (e.value != null) e.key: _valueKey(e.value),
     };
-    // A list value stages as several rows; not worth modelling for a retry.
-    if (wanted.length != op.values.length) return null;
     for (final section in baseline.addedSections(op.config, op.type)) {
       if (spare.contains(section)) continue;
-      if (mapEquals(_stagedOptions(rows, section), wanted)) return section;
+      final staged = _stagedValues(
+        rows,
+        section,
+      ).map((k, v) => MapEntry(k, _valueKey(v)));
+      if (mapEquals(staged, wanted)) return section;
     }
     return null;
   }
 
-  /// The options staged on [section], last value wins.
+  /// A comparable form of an option value: a list, as staged by one
+  /// `list-add` row per entry, in the order given; anything else as text.
+  static String _valueKey(Object value) =>
+      value is List ? value.map((e) => e.toString()).join('\x00') : '$value';
+
+  /// The options staged on [section]: a `set` row's value, last one wins,
+  /// or the entries of the `list-add` rows for a list option.
+  static Map<String, Object> _stagedValues(
+    List<UciChange> rows,
+    String section,
+  ) {
+    final out = <String, Object>{};
+    for (final r in rows) {
+      if (r.section != section || r.option == null) continue;
+      switch (r.op) {
+        case UciOp.set:
+          out[r.option!] = r.value ?? '';
+        case UciOp.listAdd:
+          final existing = out[r.option!];
+          final list = existing is List<String> ? existing : <String>[];
+          out[r.option!] = list..add(r.value ?? '');
+        case UciOp.remove:
+          out.remove(r.option!);
+        default:
+          break;
+      }
+    }
+    return out;
+  }
+
+  /// The `set` options staged on [section], as text.
   static Map<String, String> _stagedOptions(
     List<UciChange> rows,
     String section,
   ) => {
-    for (final r in rows)
-      if (r.op == UciOp.set && r.section == section && r.option != null)
-        r.option!: r.value ?? '',
+    for (final e in _stagedValues(rows, section).entries)
+      if (e.value is String) e.key: e.value as String,
   };
 
   /// Discards staged changes for [configs].
@@ -776,45 +807,6 @@ class UciChangesetService {
     if (error.isAccessDenied) return RollbackReason.sessionLost;
     return error.status == 5 ? RollbackReason.deadlineMissed : null;
   }
-}
-
-/// Reads and unwraps one config: `uci.get` for [config] on [session].
-Future<Map<String, dynamic>> uciConfigValues(
-  IApiService api,
-  RouterSession session,
-  String config,
-) async => uciValuesOf(
-  await api.uciGetAll(
-    session.ipAddress,
-    session.sysauth,
-    session.useHttps,
-    config: config,
-  ),
-  config: config,
-);
-
-/// The `values` map out of a `uci.get` envelope (`[status, {values: {...}}]`).
-///
-/// One place, because every screen that reads a config had grown its own
-/// copy of this. Anything that is not an envelope at all reads as empty; the
-/// body itself goes through [uciSectionsOf].
-Map<String, dynamic> uciValuesOf(dynamic envelope, {String? config}) {
-  if (envelope is! List || envelope.length < 2) return const {};
-  return uciSectionsOf(envelope[1], config: config);
-}
-
-/// The sections out of a `uci.get` body.
-///
-/// rpcd puts them under `values`; the reviewer-mode fixtures put them under
-/// the config's own name, which is [config]; some builds return them bare.
-Map<String, dynamic> uciSectionsOf(dynamic body, {String? config}) {
-  if (body is! Map) return const {};
-  final values = body['values'];
-  if (values is Map) return Map<String, dynamic>.from(values);
-  if (config != null && body[config] is Map) {
-    return Map<String, dynamic>.from(body[config] as Map);
-  }
-  return Map<String, dynamic>.from(body);
 }
 
 /// Extracts the section id rpcd generated for an anonymous `uci.add`.

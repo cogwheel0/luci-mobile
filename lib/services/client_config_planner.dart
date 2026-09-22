@@ -1,3 +1,4 @@
+import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/models/client_config.dart';
 import 'package:luci_mobile/models/station_info.dart';
 import 'package:luci_mobile/models/uci_change.dart';
@@ -48,15 +49,6 @@ class ClientConfigPlanner {
   /// rule the user wrote in LuCI is never silently destroyed.
   static const String blockRulePrefix = 'luci_mobile_block_';
 
-  /// dnsmasq requires a valid DNS label. A name with a space or underscore
-  /// makes it fail to start, which takes LAN DNS down — and because the router
-  /// stays *reachable*, `uci.apply`'s rollback timer will not catch it.
-  static final RegExp hostnamePattern = RegExp(
-    r'^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$',
-  );
-
-  static bool isValidHostname(String name) => hostnamePattern.hasMatch(name);
-
   /// The section name this app uses for a given MAC's block rule.
   static String blockSectionFor(String mac) =>
       '$blockRulePrefix${StationInfo.normalizeMac(mac).replaceAll(':', '').toLowerCase()}';
@@ -83,31 +75,6 @@ class ClientConfigPlanner {
     if (v == null) return null;
     final s = v.toString().trim();
     return s.isEmpty ? null : s;
-  }
-
-  /// A UCI list option: a real list, or one string of space-separated
-  /// entries, depending on how it was written and which RPC read it.
-  static List<String> uciList(dynamic v) {
-    if (v == null) return const [];
-    if (v is List) return [for (final e in v) e.toString()];
-    return v
-        .toString()
-        .split(RegExp(r'\s+'))
-        .where((e) => e.isNotEmpty)
-        .toList();
-  }
-
-  /// A UCI boolean option. UCI accepts several spellings on each side
-  /// (`1`/`yes`/`on`/`true`/`enabled` and `0`/`no`/`off`/`false`/
-  /// `disabled`); anything unrecognised, or absent, reads as [orElse].
-  static bool uciBool(dynamic v, {bool orElse = false}) {
-    final s = _str(v)?.toLowerCase();
-    if (s == null) return orElse;
-    return switch (s) {
-      '1' || 'yes' || 'on' || 'true' || 'enabled' => true,
-      '0' || 'no' || 'off' || 'false' || 'disabled' => false,
-      _ => orElse,
-    };
   }
 
   /// Sections of one `.type` out of a `uci.get` `values` map.
@@ -361,13 +328,22 @@ class ClientConfigPlanner {
 
     final subnet = subnetContaining(ip, subnets);
     if (subnet == null) return IpCheckResult.outsideSubnet;
-    // `start`/`limit` count hosts within the last octet; on anything wider
-    // than a /24 dnsmasq's arithmetic is not this simple, so do not guess.
+    // dnsmasq counts `start` from the network address, not from zero.
     final pool = pools[subnet.name];
-    if (pool != null && subnet.prefix >= 24 && pool.coversHost(octets[3])) {
+    final offset = _toInt(octets) - _networkAddress(subnet);
+    if (pool != null && pool.coversOffset(offset)) {
       return IpCheckResult.insidePool;
     }
     return IpCheckResult.ok;
+  }
+
+  static int _toInt(List<int> octets) =>
+      (octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3];
+
+  static int _networkAddress(InterfaceSubnet subnet) {
+    final bits = subnet.prefix.clamp(0, 32);
+    final mask = bits == 0 ? 0 : (0xFFFFFFFF << (32 - bits)) & 0xFFFFFFFF;
+    return _toInt(subnet.base) & mask;
   }
 
   static List<int>? _parseIpv4(String raw) {

@@ -51,15 +51,16 @@ class ClientBlockRule {
   final String? target;
 }
 
-/// The dynamic range a `config dhcp` section hands out: [start] hosts from
-/// the interface address, [limit] of them.
+/// The dynamic range a `config dhcp` section hands out: [limit] addresses
+/// from [start] past the network address - an offset, which on a /24 with a
+/// `.0` network is the last octet, and on anything else is not.
 @immutable
 class DhcpPool {
   const DhcpPool({required this.start, required this.limit});
   final int start;
   final int limit;
 
-  bool coversHost(int host) => host >= start && host < start + limit;
+  bool coversOffset(int offset) => offset >= start && offset < start + limit;
 }
 
 /// Why a proposed reservation IP was rejected or flagged.

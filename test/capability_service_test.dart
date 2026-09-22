@@ -276,7 +276,12 @@ void main() {
 
       expect(caps.unprobedFunctions, {'uci.rollback'});
       expect(caps.allows('uci', 'rollback'), isTrue);
-      expect(caps.of(RouterFeature.uciApplyRollback).available, isTrue);
+      final rollback = caps.of(RouterFeature.uciApplyRollback);
+      expect(rollback.available, isTrue);
+      // ...but not on the strength of a measurement, and a countdown to a
+      // rollback must not promise one on a guess.
+      expect(rollback.verified, isFalse);
+      expect(caps.of(RouterFeature.reboot).verified, isTrue);
       // A measured denial still counts.
       expect(caps.allows('system', 'reboot'), isFalse);
     });

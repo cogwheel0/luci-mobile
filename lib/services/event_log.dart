@@ -16,6 +16,8 @@ class RouterObservation {
     required this.clientMacs,
     this.names = const {},
     this.bootTime,
+    this.uptime,
+    this.uptimeAt,
   });
 
   final bool reachable;
@@ -27,13 +29,19 @@ class RouterObservation {
   final bool? wanUp;
   final Set<String> clientMacs;
 
-  /// When the router booted, in its own clock's epoch seconds: `localtime`
-  /// minus `uptime` from `system.info`. Both numbers come from the router,
-  /// so this stays put while it runs and moves forward when it reboots -
-  /// however stale the payload it was read from, and whatever the phone's
-  /// clock does in between. Null when the router did not say, or its clock
-  /// was not yet set (see [EventDeriver.observe]).
+  /// When the router booted, in its own clock's seconds: `localtime` minus
+  /// `uptime` from `system.info`. Stays put while it runs and moves forward
+  /// when it reboots - whatever the phone's clock does in between. It also
+  /// moves when the router's clock does (a DST change, a new timezone),
+  /// which is why [EventDeriver.rebootedBetween] asks the phone's clock to
+  /// agree. Null when the router did not say, or its clock was not set.
   final int? bootTime;
+
+  /// Seconds since boot, and the phone's time when they were read - the
+  /// dashboard's fetch time, not this observation's. Together with
+  /// [bootTime] this is the second witness a reboot needs.
+  final int? uptime;
+  final DateTime? uptimeAt;
 
   /// MAC -> the name to show. A feed that says "AA:BB:CC:11:22:33 joined"
   /// makes the reader do the lookup the app already did.
@@ -41,13 +49,15 @@ class RouterObservation {
 
   String label(String mac) => names[mac] ?? mac;
 
-  /// This observation with [bootTime] in place of its own.
-  RouterObservation withBootTime(int? bootTime) => RouterObservation(
+  /// This observation carrying [other]'s reading of the router's clocks.
+  RouterObservation withClocksOf(RouterObservation? other) => RouterObservation(
     reachable: reachable,
     wanUp: wanUp,
     clientMacs: clientMacs,
     names: names,
-    bootTime: bootTime,
+    bootTime: other?.bootTime,
+    uptime: other?.uptime,
+    uptimeAt: other?.uptimeAt,
   );
 }
 
@@ -152,21 +162,34 @@ class EventDeriver {
   /// would jump forward by years once it does.
   static final DateTime clockSetAfter = DateTime.utc(2020);
 
-  /// Whether the router booted between the two readings: its boot time,
-  /// by its own clock, moved forward.
+  /// Whether the router booted between the two readings.
   ///
-  /// The phone's clock plays no part, so a correction there is not a
-  /// reboot; and the same payload read twice gives the same boot time,
-  /// which is no reboot either. A boot time moving *backwards* is the
-  /// router's clock being adjusted, and is ignored.
+  /// Uptime going backwards is proof on its own. Otherwise two witnesses
+  /// must agree, because each alone has a false positive the other does
+  /// not: the router's boot time moving forward also happens when its
+  /// clock changes (DST, a new timezone), and uptime falling short of the
+  /// phone-measured elapsed time also happens when the *phone's* clock
+  /// jumps. A real reboot shows in both. The same payload read twice is
+  /// one reading, and no evidence of anything.
   static bool rebootedBetween(
     RouterObservation previous,
     RouterObservation current,
   ) {
-    final before = previous.bootTime;
-    final now = current.bootTime;
+    final before = previous.uptime;
+    final now = current.uptime;
     if (before == null || now == null) return false;
-    return now - before > rebootSlack.inSeconds;
+    final since = previous.uptimeAt;
+    final until = current.uptimeAt;
+    if (since != null && until != null && !until.isAfter(since)) return false;
+    if (now < before) return true;
+
+    final booted = previous.bootTime;
+    final bootedNow = current.bootTime;
+    if (booted == null || bootedNow == null) return false;
+    if (bootedNow - booted <= rebootSlack.inSeconds) return false;
+    if (since == null || until == null) return false;
+    final elapsed = until.difference(since).inSeconds;
+    return now + rebootSlack.inSeconds < before + elapsed;
   }
 
   /// The router's boot time out of a `system.info` payload, or null when it
@@ -181,16 +204,24 @@ class EventDeriver {
   }
 
   /// Builds an observation from what the dashboard already fetched.
+  ///
+  /// [readAt] is when `system.info` was read; the dashboard stamps its
+  /// payload with `fetchedAt`, and a poll that read it itself says so.
   static RouterObservation observe({
     required bool reachable,
     required Map<String, dynamic>? dashboardData,
     required List<Client> clients,
+    DateTime? readAt,
   }) {
     final wan = dashboardData?['wan'];
+    final sysInfo = dashboardData?['sysInfo'];
+    final uptime = sysInfo is Map ? sysInfo['uptime'] : null;
     return RouterObservation(
       reachable: reachable,
       wanUp: wan is Map ? wan['up'] == true : null,
-      bootTime: bootTimeOf(dashboardData?['sysInfo']),
+      bootTime: bootTimeOf(sysInfo),
+      uptime: uptime is num ? uptime.toInt() : null,
+      uptimeAt: readAt ?? dashboardData?['fetchedAt'] as DateTime?,
       clientMacs: {
         for (final c in clients)
           if (c.macAddress != 'N/A') c.macAddress.toUpperCase(),

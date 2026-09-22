@@ -48,11 +48,11 @@ class EventFeedNotifier extends AsyncNotifier<List<RouterEvent>> {
       dashboardData: dashboardData,
       clients: clients,
     );
-    // The dashboard data is stale while the router is away, so its boot
-    // time is whatever was last reported - which is exactly the number a
-    // reboot is detected against when the router comes back. Carry it
-    // explicitly rather than trusting the stale payload.
-    if (!reachable) current = current.withBootTime(_previous?.bootTime);
+    // The dashboard data is stale while the router is away, so its clocks
+    // read whatever was last reported - which is exactly what a reboot is
+    // detected against when the router comes back. Carry them explicitly
+    // rather than trusting the stale payload.
+    if (!reachable) current = current.withClocksOf(_previous);
     final events = EventDeriver.diff(
       previous: _previous,
       current: current,

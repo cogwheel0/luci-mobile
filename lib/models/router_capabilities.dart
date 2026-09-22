@@ -65,16 +65,23 @@ enum UnavailableReason {
 
 @immutable
 class FeatureAvailability {
-  const FeatureAvailability.available()
+  const FeatureAvailability.available({this.verified = true})
     : available = true,
       reason = null,
       requiredPackage = null;
 
   const FeatureAvailability.unavailable(this.reason, {this.requiredPackage})
-    : available = false;
+    : available = false,
+      verified = true;
 
   final bool available;
   final UnavailableReason? reason;
+
+  /// False when [available] rests on a permission that could not be
+  /// probed. The feature is offered - hiding every write behind a guess
+  /// would be worse - but nothing that *promises* on the strength of it
+  /// (a rollback countdown, say) may take the promise as measured.
+  final bool verified;
 
   /// The package to install, when [reason] is [UnavailableReason.missingPackage].
   final String? requiredPackage;
@@ -84,15 +91,16 @@ class FeatureAvailability {
       identical(this, other) ||
       other is FeatureAvailability &&
           other.available == available &&
+          other.verified == verified &&
           other.reason == reason &&
           other.requiredPackage == requiredPackage;
 
   @override
-  int get hashCode => Object.hash(available, reason, requiredPackage);
+  int get hashCode => Object.hash(available, verified, reason, requiredPackage);
 
   @override
   String toString() => available
-      ? 'FeatureAvailability.available()'
+      ? 'FeatureAvailability.available(${verified ? '' : 'verified: false'})'
       : 'FeatureAvailability.unavailable(${reason?.name}'
             '${requiredPackage == null ? '' : ', $requiredPackage'})';
 }
@@ -295,14 +303,16 @@ class RouterCapabilities {
   }
 
   FeatureAvailability _requireUbus(String object, List<String> functions) {
+    var verified = true;
     for (final fn in functions) {
       if (!allows(object, fn)) {
         return const FeatureAvailability.unavailable(
           UnavailableReason.noPermission,
         );
       }
+      if (unprobedFunctions.contains('$object.$fn')) verified = false;
     }
-    return const FeatureAvailability.available();
+    return FeatureAvailability.available(verified: verified);
   }
 
   RouterCapabilities copyWith({

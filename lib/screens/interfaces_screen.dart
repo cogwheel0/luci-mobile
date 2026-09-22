@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:flutter/services.dart';
 import 'package:luci_mobile/models/glinet_data.dart';
@@ -13,7 +14,6 @@ import 'package:luci_mobile/widgets/luci_loading_states.dart';
 import 'package:luci_mobile/widgets/luci_refresh_components.dart';
 import 'package:luci_mobile/screens/wifi_scan_screen.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
-import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/utils/format_bytes.dart';
 
 class InterfacesScreen extends ConsumerStatefulWidget {

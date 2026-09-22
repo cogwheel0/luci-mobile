@@ -1,5 +1,5 @@
+import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/models/uci_change.dart';
-import 'package:luci_mobile/services/client_config_planner.dart';
 import 'package:luci_mobile/models/wireless_config.dart';
 
 /// What to do with one option: leave it, set it, or remove it.
@@ -46,11 +46,6 @@ class WirelessPlanner {
     return s.isEmpty ? null : s;
   }
 
-  static bool _bool(dynamic v, {bool orElse = false}) =>
-      ClientConfigPlanner.uciBool(v, orElse: orElse);
-
-  static List<String> _list(dynamic v) => ClientConfigPlanner.uciList(v);
-
   /// Builds the radio list, each with its SSIDs attached.
   static List<WirelessRadio> parse(Map<String, dynamic> values) {
     final radios = <String, WirelessRadio>{};
@@ -68,7 +63,7 @@ class WirelessPlanner {
             htmode: _str(s['htmode']),
             country: _str(s['country']),
             txpower: _str(s['txpower']),
-            disabled: _bool(s['disabled']),
+            disabled: uciBool(s['disabled']),
           );
         case 'wifi-iface':
           final device = _str(s['device']);
@@ -81,10 +76,10 @@ class WirelessPlanner {
               mode: _str(s['mode']) ?? 'ap',
               encryption: _str(s['encryption']),
               key: _str(s['key']),
-              network: _list(s['network']),
-              hidden: _bool(s['hidden']),
-              isolate: _bool(s['isolate']),
-              disabled: _bool(s['disabled']),
+              network: uciList(s['network']),
+              hidden: uciBool(s['hidden']),
+              isolate: uciBool(s['isolate']),
+              disabled: uciBool(s['disabled']),
             ),
           );
       }

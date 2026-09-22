@@ -45,19 +45,25 @@ Future<ApplyOutcome?> applyUciOperations(
   // so interleaving would let one operation commit the other's half-built
   // change set.
   return ref.read(applyLockProvider).run<ApplyOutcome?>(() async {
-    if (!ref.mounted || ref.read(sessionProvider) != queuedFor) return null;
+    if (!ref.mounted) return null;
+    // The wait may have outlived the session the operation was queued on -
+    // an expiry and re-login while another apply held the lock. The same
+    // router's fresh session is the one to stage against; only a different
+    // router means the operations no longer fit.
+    final session = ref.read(sessionProvider);
+    if (session == null || session.routerId != queuedFor.routerId) return null;
 
     appState.beginCriticalSection();
     try {
       // Not through the session guard: it would return null when the
       // session changed while the apply ran, and a change the router has
       // already confirmed does not become "failed" because a re-login
-      // happened during the confirm window. The session was checked before
-      // starting; from here the outcome is the router's word.
+      // happened during the confirm window. The session was checked just
+      // now; from here the outcome is the router's word.
       final ctx = context?.mounted == true ? context : null;
-      final staged = await service.stage(queuedFor, ops, context: ctx);
+      final staged = await service.stage(session, ops, context: ctx);
       return await service.apply(
-        queuedFor,
+        session,
         mode: mode,
         ours: ours,
         baseline: staged.baseline,
@@ -110,7 +116,8 @@ Future<(ApplyMode, bool)> _applyMode(Ref ref) async {
   try {
     final caps = await ref.read(capabilitiesProvider.future);
     final rollback = caps.of(RouterFeature.uciApplyRollback);
-    if (rollback.available) return (ApplyMode.checked, true);
+    // Available on the strength of an unanswered probe is not measured.
+    if (rollback.available) return (ApplyMode.checked, rollback.verified);
     return rollback.reason == UnavailableReason.noPermission
         ? (ApplyMode.unchecked, true)
         : (ApplyMode.checked, false);

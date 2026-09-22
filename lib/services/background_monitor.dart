@@ -34,28 +34,19 @@ class BackgroundMonitor {
 
   static const String taskName = 'luci-mobile-router-poll';
 
-  /// The events from this poll that should be notified.
-  static List<RouterEvent> notifiable({
-    required RouterObservation? previous,
-    required RouterObservation current,
-    required String routerId,
-    required DateTime at,
+  /// The subset of [events] - one poll's derived events, from
+  /// [EventDeriver.diff] - that should be notified.
+  ///
+  /// The deriver already yields nothing for a first poll, and nothing about
+  /// WAN or clients while the router is unreachable; `routerUnreachable`
+  /// itself is kept out of [notifiableKinds].
+  static List<RouterEvent> notifiable(
+    List<RouterEvent> events, {
     Set<RouterEventKind> kinds = notifiableKinds,
-  }) {
-    // An unreachable router tells us nothing trustworthy, and the first
-    // poll of a session has nothing to compare against.
-    if (!current.reachable || previous == null) return const [];
-
-    return [
-      for (final event in EventDeriver.diff(
-        previous: previous,
-        current: current,
-        routerId: routerId,
-        at: at,
-      ))
-        if (kinds.contains(event.kind)) event,
-    ];
-  }
+  }) => [
+    for (final event in events)
+      if (kinds.contains(event.kind)) event,
+  ];
 
   /// Caps how many notifications one poll may post.
   ///
@@ -134,6 +125,8 @@ class StoredObservation {
     'clients': observation.clientMacs.toList(),
     'names': observation.names,
     'bootTime': ?observation.bootTime,
+    'uptime': ?observation.uptime,
+    'uptimeAt': ?observation.uptimeAt?.toIso8601String(),
   };
 
   static StoredObservation? fromJson(Map<String, dynamic> json) {
@@ -142,6 +135,8 @@ class StoredObservation {
     final clients = json['clients'];
     final names = json['names'];
     final bootTime = json['bootTime'];
+    final uptime = json['uptime'];
+    final uptimeAt = DateTime.tryParse(json['uptimeAt'] as String? ?? '');
     return StoredObservation(
       at: at,
       observation: RouterObservation(
@@ -156,6 +151,8 @@ class StoredObservation {
             for (final e in names.entries) e.key.toString(): e.value.toString(),
         },
         bootTime: bootTime is num ? bootTime.toInt() : null,
+        uptime: uptime is num ? uptime.toInt() : null,
+        uptimeAt: uptimeAt,
       ),
     );
   }

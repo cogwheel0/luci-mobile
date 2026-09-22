@@ -19,10 +19,14 @@ List<RouterEvent> notifiable(
   RouterObservation now, {
   Set<RouterEventKind>? kinds,
 }) => BackgroundMonitor.notifiable(
-  previous: prev,
-  current: now,
-  routerId: 'r1',
-  at: _at,
+  prev == null
+      ? const []
+      : EventDeriver.diff(
+          previous: prev,
+          current: now,
+          routerId: 'r1',
+          at: _at,
+        ),
   kinds: kinds ?? notifiableKinds,
 );
 
@@ -148,6 +152,24 @@ void main() {
       expect(back.observation.clientMacs, {'AA:BB:CC:11:22:33'});
       expect(back.observation.names['AA:BB:CC:11:22:33'], 'Laptop');
       expect(back.at.isAtSameMomentAs(_at), isTrue);
+    });
+
+    test('the clocks survive the round trip', () {
+      final back = StoredObservation.fromJson(
+        StoredObservation(
+          observation: RouterObservation(
+            reachable: true,
+            wanUp: true,
+            clientMacs: const {},
+            bootTime: 1_700_000_000,
+            uptime: 4321,
+            uptimeAt: _at,
+          ),
+          at: _at,
+        ).toJson(),
+      );
+      expect(back!.observation.uptime, 4321);
+      expect(back.observation.uptimeAt?.isAtSameMomentAs(_at), isTrue);
     });
 
     test('an unknown WAN state stays unknown through storage', () {

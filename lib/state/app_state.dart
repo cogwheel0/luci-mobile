@@ -3,13 +3,12 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/services/router_service.dart';
 import 'package:luci_mobile/services/throughput_service.dart';
 import 'package:luci_mobile/models/client.dart';
 import 'package:luci_mobile/models/station_info.dart';
-import 'package:luci_mobile/services/client_config_planner.dart';
-import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/models/dashboard_preferences.dart';
 import 'package:luci_mobile/models/glinet_data.dart';
@@ -742,6 +741,7 @@ class AppState extends ChangeNotifier {
         final processedDhcpData = _processDhcpLeases(rawDhcpData);
 
         _dashboardData = {
+          'fetchedAt': DateTime.now(),
           'boardInfo': results[0][1],
           'sysInfo': results[1][1],
           'networkDevices': results[2][1],
@@ -1083,6 +1083,7 @@ class AppState extends ChangeNotifier {
       if (token != _sessionToken) return;
 
       _dashboardData = {
+        'fetchedAt': DateTime.now(),
         'boardInfo': boardInfoData,
         'sysInfo': sysInfoData,
         'networkDevices': networkData,
@@ -2271,9 +2272,7 @@ class AppState extends ChangeNotifier {
           }
           if (section['name']?.toString() == 'wan') {
             wanZoneIndex = zoneIndex;
-            foundInWan = ClientConfigPlanner.uciList(
-              section['network'],
-            ).contains(staNetworkName);
+            foundInWan = uciList(section['network']).contains(staNetworkName);
             break;
           }
           zoneIndex++;

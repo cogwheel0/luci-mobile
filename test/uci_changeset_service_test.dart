@@ -1199,6 +1199,39 @@ void _foreignChangeRegressions() {
       expect(h.api.calls.where((c) => c.startsWith('delete')), isEmpty);
     });
 
+    // A wifi-iface's `network` is a list, staged as one `list-add` row per
+    // entry. Identical is identical; the retry adopts it instead of
+    // deleting and re-adding.
+    test('an identical add carrying a list is adopted', () async {
+      final h = _build();
+      h.api.changes = {
+        'wireless': [
+          ['add', 'cfg0a', 'wifi-iface'],
+          ['set', 'cfg0a', 'device', 'radio0'],
+          ['set', 'cfg0a', 'ssid', 'Guest'],
+          ['list-add', 'cfg0a', 'network', 'lan'],
+          ['list-add', 'cfg0a', 'network', 'guest'],
+        ],
+      };
+
+      final staged = await h.service.stage(_session, const [
+        UciAdd(
+          'wireless',
+          type: 'wifi-iface',
+          identity: ['ssid', 'device'],
+          values: {
+            'device': 'radio0',
+            'ssid': 'Guest',
+            'network': ['lan', 'guest'],
+          },
+        ),
+      ]);
+
+      expect(staged.sections, {0: 'cfg0a'});
+      expect(h.api.calls.where((c) => c.startsWith('delete')), isEmpty);
+      expect(h.api.calls.where((c) => c.startsWith('add')), isEmpty);
+    });
+
     test('a leftover add with different values is not adopted', () async {
       final h = _build();
       h.api.changes = {

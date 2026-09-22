@@ -1,6 +1,6 @@
+import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/models/firewall_config.dart';
 import 'package:luci_mobile/models/uci_change.dart';
-import 'package:luci_mobile/services/client_config_planner.dart';
 
 /// Reads and edits `/etc/config/firewall` and the routes in
 /// `/etc/config/network`.
@@ -22,11 +22,6 @@ class FirewallPlanner {
     final s = v.toString().trim();
     return s.isEmpty ? null : s;
   }
-
-  static bool _bool(dynamic v, {bool orElse = true}) =>
-      ClientConfigPlanner.uciBool(v, orElse: orElse);
-
-  static List<String> _list(dynamic v) => ClientConfigPlanner.uciList(v);
 
   static Iterable<MapEntry<String, Map<String, dynamic>>> _sections(
     Map<String, dynamic> values,
@@ -50,8 +45,8 @@ class FirewallPlanner {
         input: _str(e.value['input']) ?? 'REJECT',
         output: _str(e.value['output']) ?? 'ACCEPT',
         forward: _str(e.value['forward']) ?? 'REJECT',
-        masq: _bool(e.value['masq'], orElse: false),
-        networks: _list(e.value['network']),
+        masq: uciBool(e.value['masq'], orElse: false),
+        networks: uciList(e.value['network']),
       ),
   ];
 
@@ -63,7 +58,7 @@ class FirewallPlanner {
         PortForward(
           section: e.key,
           name: _str(e.value['name']),
-          enabled: _bool(e.value['enabled']),
+          enabled: uciBool(e.value['enabled'], orElse: true),
           protocol: _str(e.value['proto']) ?? 'tcp udp',
           sourceZone: _str(e.value['src']) ?? 'wan',
           sourcePort: _str(e.value['src_dport']),
@@ -78,7 +73,7 @@ class FirewallPlanner {
       TrafficRule(
         section: e.key,
         name: _str(e.value['name']),
-        enabled: _bool(e.value['enabled']),
+        enabled: uciBool(e.value['enabled'], orElse: true),
         source: _str(e.value['src']),
         dest: _str(e.value['dest']),
         sourceMac: _str(e.value['src_mac']),
@@ -97,7 +92,7 @@ class FirewallPlanner {
         netmask: _str(e.value['netmask']),
         gateway: _str(e.value['gateway']),
         metric: _str(e.value['metric']),
-        disabled: _bool(e.value['disabled'], orElse: false),
+        disabled: uciBool(e.value['disabled'], orElse: false),
       ),
   ];
 
@@ -139,11 +134,11 @@ class FirewallPlanner {
     String protocol, {
     String? exceptSection,
   }) {
-    final wanted = ClientConfigPlanner.uciList(protocol).toSet();
+    final wanted = uciList(protocol).toSet();
     return existing.any((f) {
       if (f.section == exceptSection) return false;
       if (f.sourcePort != port) return false;
-      final theirs = ClientConfigPlanner.uciList(f.protocol).toSet();
+      final theirs = uciList(f.protocol).toSet();
       return theirs.intersection(wanted).isNotEmpty;
     });
   }
