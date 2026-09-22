@@ -1,3 +1,4 @@
+import 'package:luci_mobile/utils/ipv4.dart';
 import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/models/client_config.dart';
 import 'package:luci_mobile/models/station_info.dart';
@@ -193,7 +194,7 @@ class ClientConfigPlanner {
     String address,
     Iterable<InterfaceSubnet> subnets,
   ) {
-    final octets = _parseIpv4(address);
+    final octets = parseIpv4(address);
     if (octets == null) return null;
     InterfaceSubnet? best;
     for (final subnet in subnets) {
@@ -243,7 +244,7 @@ class ClientConfigPlanner {
                 (hints.masq.contains(name) && _hasDefaultRoute(iface['route']));
       for (final addr in addrs) {
         if (addr is! Map) continue;
-        final base = _parseIpv4(addr['address']?.toString() ?? '');
+        final base = parseIpv4(addr['address']?.toString() ?? '');
         final mask = addr['mask'];
         final prefix = mask is int
             ? mask
@@ -326,7 +327,7 @@ class ClientConfigPlanner {
     // The value saved is the trimmed one, so every check runs on that;
     // otherwise a pasted space would slip a duplicate past the guard.
     ip = ip.trim();
-    final octets = _parseIpv4(ip);
+    final octets = parseIpv4(ip);
     if (octets == null) return IpCheckResult.malformed;
     if (alreadyReserved.contains(ip)) return IpCheckResult.duplicate;
     if (subnets.isEmpty) return IpCheckResult.ok;
@@ -349,18 +350,6 @@ class ClientConfigPlanner {
     final bits = subnet.prefix.clamp(0, 32);
     final mask = bits == 0 ? 0 : (0xFFFFFFFF << (32 - bits)) & 0xFFFFFFFF;
     return _toInt(subnet.base) & mask;
-  }
-
-  static List<int>? _parseIpv4(String raw) {
-    final parts = raw.trim().split('.');
-    if (parts.length != 4) return null;
-    final out = <int>[];
-    for (final p in parts) {
-      final v = int.tryParse(p);
-      if (v == null || v < 0 || v > 255) return null;
-      out.add(v);
-    }
-    return out;
   }
 
   static bool _sameSubnet(List<int> a, List<int> b, int prefix) {

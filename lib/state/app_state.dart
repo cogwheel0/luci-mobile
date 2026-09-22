@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:luci_mobile/services/background_worker.dart';
+import 'package:luci_mobile/services/background_monitor.dart';
 import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/services/router_service.dart';
@@ -469,6 +471,10 @@ class AppState extends ChangeNotifier {
       );
     }
 
+    // Its address and password must not stay behind in the background
+    // isolate's copy, being polled every quarter of an hour.
+    await forgetBackgroundRouter(id);
+
     final needsSwitch = await _routerService!.removeRouter(id);
     if (needsSwitch && _routerService!.routers.isNotEmpty) {
       await selectRouter(_routerService!.routers.first.id);
@@ -532,6 +538,19 @@ class AppState extends ChangeNotifier {
     // A newer session started while this switch was in flight - it owns the
     // loading and error state now.
     if (token != _sessionToken) return;
+    // A background poll that is on watches whichever router the user is
+    // looking at, not the one selected when they switched it on.
+    if (loginSuccess) {
+      await followSelectedRouter(
+        MonitoredRouter(
+          id: found.id,
+          ipAddress: found.activeAddress,
+          username: found.username,
+          password: found.password,
+          useHttps: found.activeUseHttps,
+        ),
+      );
+    }
     // login() already fetches dashboard data on success; fetching again here
     // would double the RPC burst on every router switch.
     if (!loginSuccess) {
@@ -1116,14 +1135,13 @@ class AppState extends ChangeNotifier {
       // A newer session started; don't surface this fetch's error.
       if (token != _sessionToken) return;
       final status = e is DioException ? e.response?.statusCode : null;
+      // A rejected session is worth retrying on the other address, and so
+      // is any failure to reach the router at all - including the reset
+      // connection a router serves while it reloads after an apply, which
+      // Dio reports as `unknown`.
       final retryable =
           e is DioException &&
-          (status == 401 ||
-              status == 403 ||
-              e.type == DioExceptionType.connectionError ||
-              e.type == DioExceptionType.connectionTimeout ||
-              e.type == DioExceptionType.sendTimeout ||
-              e.type == DioExceptionType.receiveTimeout);
+          (status == 401 || status == 403 || isRouterUnreachable(e));
       final router = _routerService?.selectedRouter;
       if (retryable &&
           !isRetryAfterFallback &&
@@ -1711,9 +1729,11 @@ class AppState extends ChangeNotifier {
     return uciValuesOf(result, config: configName);
   }
 
-  bool _isUciDisabled(dynamic value) => value is List
-      ? value.any(_isUciDisabled)
-      : value == true || value?.toString() == '1';
+  /// UCI spells booleans several ways, and a hand-written `disabled 'yes'`
+  /// disables a radio just as `'1'` does. Reading it as enabled would mean
+  /// a wifi restart silently turned it back on.
+  bool _isUciDisabled(dynamic value) =>
+      value is List ? value.any(_isUciDisabled) : uciBool(value);
 
   /// Restarts a specific radio via UCI disable/enable cycle.
   /// This is more reliable than `wifi reload` which doesn't work on all routers.

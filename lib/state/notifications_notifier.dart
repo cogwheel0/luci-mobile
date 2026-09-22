@@ -193,10 +193,18 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
     } else {
       next.remove(kind);
     }
-    await _store.writeValue(
-      BackgroundKeys.kinds,
-      jsonEncode([for (final k in next) k.name]),
-    );
+    // The switch's callback drops the future, so a keystore failure here
+    // would surface as an unhandled error and the toggle would snap back
+    // with nothing said. Report it by leaving the state alone.
+    try {
+      await _store.writeValue(
+        BackgroundKeys.kinds,
+        jsonEncode([for (final k in next) k.name]),
+      );
+    } catch (e, stack) {
+      Logger.exception('Saving the notification kinds failed', e, stack);
+      return;
+    }
     state = AsyncValue.data(current.copyWith(kinds: next));
   }
 
@@ -206,24 +214,19 @@ class NotificationSettingsNotifier extends AsyncNotifier<NotificationSettings> {
   Future<bool> _saveRouter() async {
     final router = ref.read(appStateProvider).selectedRouter;
     if (router == null) return false;
-    await _store.writeValue(
-      BackgroundKeys.router,
-      jsonEncode(
-        // The address the app last reached the router on, not the primary
-        // one: a profile reached through its fallback would otherwise be
-        // polled at an address that never answers.
-        MonitoredRouter(
-          id: router.id,
-          ipAddress: router.activeAddress,
-          username: router.username,
-          password: router.password,
-          useHttps: router.activeUseHttps,
-        ).toJson(),
+    // The address the app last reached the router on, not the primary one:
+    // a profile reached through its fallback would otherwise be polled at
+    // an address that never answers.
+    await setMonitoredRouter(
+      _store,
+      MonitoredRouter(
+        id: router.id,
+        ipAddress: router.activeAddress,
+        username: router.username,
+        password: router.password,
+        useHttps: router.activeUseHttps,
       ),
     );
-    // A different router means a different baseline; diffing across the
-    // switch would report the other one's clients as having left.
-    await _store.deleteValue(BackgroundKeys.observation(router.id));
     return true;
   }
 

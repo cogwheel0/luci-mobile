@@ -982,8 +982,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             return; // Skip this interface
           }
 
-          final isRadioEnabled = uciRadios[device]?['disabled'] != '1';
-          final isIfaceEnabled = config['disabled'] != '1';
+          final isRadioEnabled = !uciBool(uciRadios[device]?['disabled']);
+          final isIfaceEnabled = !uciBool(config['disabled']);
           final isEnabled = isRadioEnabled && isIfaceEnabled;
           final glInetRadio = glInetData?.radioForDevice(device);
           final channel = resolveWifiChannel(

@@ -93,16 +93,6 @@ class FirewallPlanner {
     return true;
   }
 
-  static bool isValidIpv4(String raw) {
-    final parts = raw.trim().split('.');
-    if (parts.length != 4) return false;
-    for (final p in parts) {
-      final v = int.tryParse(p);
-      if (v == null || v < 0 || v > 255) return false;
-    }
-    return true;
-  }
-
   /// True when [port] on [protocol] is already forwarded by another rule.
   ///
   /// Two forwards claiming the same external port is a configuration the user

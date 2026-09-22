@@ -32,8 +32,10 @@ Future<void> _initBackgroundMonitor() async {
     await ensureScheduled();
   } catch (e, stack) {
     // A device without WorkManager must still get a working app; the
-    // background poll is the only thing lost.
+    // background poll is the only thing lost - and the switch must say so
+    // rather than reading "on" over a task that was never registered.
     Logger.exception('Background monitoring is unavailable', e, stack);
+    await backgroundPollUnavailable();
   } finally {
     // Whatever happened, the settings screen must not wait forever.
     settleBackgroundStartup();

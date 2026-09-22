@@ -146,9 +146,10 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                 onRefresh: () async {
                   // Trigger a refresh by re-fetching dashboard data for selected router
                   await ref.read(appStateProvider).fetchDashboardData();
-                  setState(() {
-                    _computeClientsFuture();
-                  });
+                  // The tab may have been left while the fetch ran; this
+                  // State is disposed then, and `ref` with it.
+                  if (!mounted) return;
+                  setState(_computeClientsFuture);
                 },
                 child: Builder(
                   builder: (context) {

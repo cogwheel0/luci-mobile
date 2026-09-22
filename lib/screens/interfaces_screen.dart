@@ -658,11 +658,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               runtimeInterfaces.add(uciName);
             }
 
-            final isRadioEnabled = uciRadios[radioName]?['disabled'] != '1';
-            final isIfaceEnabled =
-                config['disabled'] != '1' &&
-                config['disabled'] != 1 &&
-                config['disabled'] != true;
+            final isRadioEnabled = !uciBool(uciRadios[radioName]?['disabled']);
+            final isIfaceEnabled = !uciBool(config['disabled']);
             final isEnabled = isRadioEnabled && isIfaceEnabled;
 
             final name = iface['name'] ?? '';

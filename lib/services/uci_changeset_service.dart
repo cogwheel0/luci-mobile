@@ -598,11 +598,12 @@ class UciChangesetService {
     }
 
     final rollback = mode == ApplyMode.checked;
-    // Only promise a countdown the router is known to honour. Rollback may
-    // still be *requested* without that knowledge - it costs nothing if the
-    // router ignores it - but counting down to it would promise a revert.
-    final countdown = rollback && rollbackVerified;
-    onPhase?.call(ApplyPhase.applying, countdown ? timeout : Duration.zero);
+    // A rollback that was asked for is counted down, whether or not the
+    // grant was measured: the router may well honour it, and a revert
+    // arriving with no warning is worse than a countdown that turns out to
+    // have been unnecessary. What is *not* claimed on an unmeasured grant
+    // is that the revert happened - see [ApplyOutcome.rollbackVerified].
+    onPhase?.call(ApplyPhase.applying, rollback ? timeout : Duration.zero);
     try {
       await _api.uciApply(
         session.ipAddress,
@@ -639,7 +640,6 @@ class UciChangesetService {
     final hardStop = deadline.subtract(_confirmGuardBand);
 
     Duration remaining() {
-      if (!countdown) return Duration.zero;
       final left = deadline.difference(_clock());
       return left.isNegative ? Duration.zero : left;
     }
@@ -650,7 +650,7 @@ class UciChangesetService {
     // the backoff after it for longer still. The countdown is meant to
     // explain exactly that wait, so it ticks on its own rather than once
     // per probe.
-    final ticker = onPhase == null || !countdown
+    final ticker = onPhase == null
         ? null
         : Timer.periodic(const Duration(seconds: 1), (_) {
             onPhase(ApplyPhase.awaitingConfirm, remaining());

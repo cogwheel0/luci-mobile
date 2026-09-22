@@ -21,6 +21,7 @@ class RouterEvent {
     required this.at,
     required this.routerId,
     this.subject,
+    this.subjectKey,
   });
 
   final RouterEventKind kind;
@@ -29,6 +30,14 @@ class RouterEvent {
 
   /// What the event is about — an interface name, a client's name or MAC.
   final String? subject;
+
+  /// The stable identity behind [subject], when there is one: a client's
+  /// MAC, where [subject] is the lease name two devices can share. Used to
+  /// tell two records of one thing from two things.
+  final String? subjectKey;
+
+  /// What this event is about, as precisely as it can be said.
+  String get identity => subjectKey ?? subject ?? '';
 
   EventSeverity get severity => switch (kind) {
     RouterEventKind.routerUnreachable ||
@@ -48,6 +57,7 @@ class RouterEvent {
     'at': at.millisecondsSinceEpoch,
     'routerId': routerId,
     if (subject != null) 'subject': subject,
+    if (subjectKey != null) 'subjectKey': subjectKey,
   };
 
   static RouterEvent? fromJson(Map<String, dynamic> json) {
@@ -62,6 +72,7 @@ class RouterEvent {
       at: DateTime.fromMillisecondsSinceEpoch(at),
       routerId: routerId,
       subject: json['subject']?.toString(),
+      subjectKey: json['subjectKey']?.toString(),
     );
   }
 }

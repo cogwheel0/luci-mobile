@@ -343,16 +343,33 @@ void main() {
     // A poll that lands before the first dashboard fetch knows nothing
     // about the WAN. Reading that as "down" would report the internet as
     // restored on the next poll.
-    test('a missing wan block reads as unknown, not down', () {
+    test('no payload at all reads as unknown, not down', () {
       final o = EventDeriver.observe(
         reachable: true,
-        dashboardData: const {},
+        dashboardData: null,
         clients: const [],
       );
       expect(o.wanUp, isNull);
       final known = obs(wanUp: true, clients: const {});
       expect(diff(o, known), isEmpty);
       expect(diff(known, o), isEmpty);
+    });
+
+    // The dashboard puts a `wan` block here only while some interface
+    // carries a default route, so its absence from a payload that *was*
+    // fetched is how the WAN going down looks. Reading that as unknown
+    // made wanDown unreachable.
+    test('a fetched payload with no wan block is the WAN being down', () {
+      final down = EventDeriver.observe(
+        reachable: true,
+        dashboardData: const {'sysInfo': {}},
+        clients: const [],
+      );
+      expect(down.wanUp, isFalse);
+      expect(
+        diff(obs(wanUp: true, clients: const {}), down).single.kind,
+        RouterEventKind.wanDown,
+      );
     });
   });
 
@@ -386,6 +403,46 @@ void main() {
 
     // The app and the background poll each derive against their own
     // baseline, so one join can be recorded by both, seconds apart.
+    // Two devices can hold the same lease name; the MAC is what says
+    // whether two records are about one device.
+    test('two devices with one lease name are two events', () async {
+      final storage = _MemoryStorage();
+      final log = EventLog(storage);
+      RouterEvent joined(String mac, int seconds) => RouterEvent(
+        kind: RouterEventKind.clientJoined,
+        at: _at.add(Duration(seconds: seconds)),
+        routerId: 'r1',
+        subject: 'raspberrypi',
+        subjectKey: mac,
+      );
+
+      await log.append('r1', [
+        joined('AA:BB:CC:11:22:33', 0),
+        joined('DD:EE:FF:44:55:66', 3),
+      ]);
+      expect(await log.load('r1'), hasLength(2));
+    });
+
+    // An echo is measured from the last event kept, not from the last one
+    // suppressed, or a chain of echoes would swallow a real event hours on.
+    test('a chain of echoes cannot swallow a later event', () async {
+      final storage = _MemoryStorage();
+      final log = EventLog(storage);
+      RouterEvent rebooted(int minutes) => RouterEvent(
+        kind: RouterEventKind.rebooted,
+        at: _at.add(Duration(minutes: minutes)),
+        routerId: 'r1',
+      );
+
+      await log.append('r1', [rebooted(0)]);
+      // The other observer's record of the same reboot: suppressed.
+      await log.append('r1', [rebooted(3)], fromBackground: true);
+      expect(await log.load('r1'), hasLength(1));
+      // A real second reboot, more than the window after the one kept.
+      await log.append('r1', [rebooted(6)]);
+      expect(await log.load('r1'), hasLength(2));
+    });
+
     test('the same event seen by both observers is one event', () async {
       final storage = _MemoryStorage();
       final log = EventLog(storage);

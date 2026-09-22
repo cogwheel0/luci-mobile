@@ -247,12 +247,15 @@ class PasswordMutations {
       await _storage.writeValue(
         BackgroundKeys.router,
         jsonEncode(
+          // The address the app actually reaches this router on, as
+          // `_saveRouter` stores it: rewriting the primary one here would
+          // strand a profile that is reached through its fallback.
           MonitoredRouter(
             id: router.id,
-            ipAddress: router.ipAddress,
+            ipAddress: router.activeAddress,
             username: router.username,
             password: router.password,
-            useHttps: router.useHttps,
+            useHttps: router.activeUseHttps,
           ).toJson(),
         ),
       );

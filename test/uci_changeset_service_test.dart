@@ -1442,6 +1442,23 @@ void _foreignChangeRegressions() {
 
     // Rollback requested without a measured grant: the router may well have
     // kept the change. The outcome says so, so the message can too.
+    // Rollback was asked for, so it may well happen: the countdown is
+    // shown. What is not claimed afterwards is that it did happen.
+    test('an unverified rollback is still counted down', () async {
+      final h = _build(reachable: false);
+      final phases = <(ApplyPhase, Duration)>[];
+
+      await h.service.apply(
+        _session,
+        rollbackVerified: false,
+        onPhase: (p, r) => phases.add((p, r)),
+      );
+
+      final awaiting = phases.where((p) => p.$1 == ApplyPhase.awaitingConfirm);
+      expect(awaiting, isNotEmpty);
+      expect(awaiting.first.$2, greaterThan(Duration.zero));
+    });
+
     test('an unverified rollback is reported as such', () async {
       final h = _build(reachable: false);
 

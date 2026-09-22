@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/utils/ipv4.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/firewall_config.dart';
@@ -100,10 +101,21 @@ class _FirewallScreenState extends ConsumerState<FirewallScreen> {
   }
 
   Future<void> _editForward(FirewallState state, PortForward? existing) async {
-    // Only a new forward needs a name; an edit keeps its section.
-    final taken = existing == null
-        ? await ref.read(firewallMutationsProvider).takenSectionNames(state)
-        : const <String>{};
+    if (_busy) return;
+    // Only a new forward needs a name; an edit keeps its section. Busy for
+    // the read, so a second tap cannot open a second sheet holding the same
+    // snapshot and name both forwards the same thing.
+    Set<String> taken = const {};
+    if (existing == null) {
+      setState(() => _busy = true);
+      try {
+        taken = await ref
+            .read(firewallMutationsProvider)
+            .takenSectionNames(state);
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+    }
     if (!mounted) return;
     final ops = await showModalBottomSheet<List<UciOperation>>(
       context: context,
@@ -441,9 +453,7 @@ class _ForwardSheetState extends State<_ForwardSheet> {
   String? get _destIpError {
     final v = _destIp.text.trim();
     if (v.isEmpty) return null;
-    return FirewallPlanner.isValidIpv4(v)
-        ? null
-        : context.l10n.invalidIpAddress;
+    return isValidIpv4(v) ? null : context.l10n.invalidIpAddress;
   }
 
   String? get _destPortError {
@@ -455,7 +465,7 @@ class _ForwardSheetState extends State<_ForwardSheet> {
   bool get _canSave =>
       _name.text.trim().isNotEmpty &&
       FirewallPlanner.isValidPort(_srcPort.text.trim()) &&
-      FirewallPlanner.isValidIpv4(_destIp.text.trim()) &&
+      isValidIpv4(_destIp.text.trim()) &&
       FirewallPlanner.isValidPort(_destPort.text.trim()) &&
       _srcPortError == null;
 

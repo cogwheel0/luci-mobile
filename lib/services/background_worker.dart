@@ -57,8 +57,24 @@ Future<void> get backgroundStartup => _settled.future;
 /// True once [backgroundStartup] has completed.
 bool get backgroundStartupSettled => _settled.isCompleted;
 
-/// For a launch on which [ensureScheduled] will never run - WorkManager
-/// itself failed to initialise - so that nothing waits forever.
+/// For a launch on which [ensureScheduled] cannot run - WorkManager itself
+/// failed to initialise. Reconciles the stored switch, so it does not read
+/// "on" over a poll that was never registered, and unblocks anything
+/// waiting on [backgroundStartup].
+Future<void> backgroundPollUnavailable({SecureStorageService? storage}) async {
+  final store = storage ?? SecureStorageService();
+  try {
+    if (await store.readValue(BackgroundKeys.enabled) == 'true') {
+      await disableBackgroundPoll(store, failed: true, keepRouter: true);
+    }
+  } catch (e, stack) {
+    Logger.exception('Could not switch the poll off in storage', e, stack);
+  } finally {
+    settleBackgroundStartup();
+  }
+}
+
+/// Unblocks anything waiting on [backgroundStartup].
 void settleBackgroundStartup() {
   if (!_settled.isCompleted) _settled.complete();
 }
@@ -84,7 +100,9 @@ Future<void> _ensureScheduled(
     // reader. A task registered by an earlier launch may still exist; it
     // goes too, rather than waking the app every 15 minutes to bail out.
     await cancelPoll();
-    await disableBackgroundPoll(store, failed: true);
+    // The credentials stay: the user is told the device refused, and
+    // switching back on must not mean adding the router again.
+    await disableBackgroundPoll(store, failed: true, keepRouter: true);
   } catch (e, stack) {
     // Storage refusing at startup is logged, not surfaced: the settings
     // screen must still show its switch.
@@ -99,17 +117,65 @@ Future<void> _ensureScheduled(
 }
 
 /// Turns the poll off in storage. With [failed], records that it was the
-/// platform's refusal rather than the user's choice.
+/// platform's refusal rather than the user's choice; with [keepRouter], the
+/// stored credentials stay, so switching back on is one tap.
 Future<void> disableBackgroundPoll(
   SecureStorageService store, {
   bool failed = false,
+  bool keepRouter = false,
 }) async {
   await store.writeValue(BackgroundKeys.enabled, 'false');
-  await store.deleteValue(BackgroundKeys.router);
+  if (!keepRouter) await store.deleteValue(BackgroundKeys.router);
   if (failed) {
     await store.writeValue(BackgroundKeys.schedulingFailed, 'true');
   } else {
     await store.deleteValue(BackgroundKeys.schedulingFailed);
+  }
+}
+
+/// Points the background poll at [router] and drops the old baseline, which
+/// belonged to a different router and would report its clients as gone.
+Future<void> setMonitoredRouter(
+  SecureStorageService store,
+  MonitoredRouter router,
+) async {
+  await store.writeValue(BackgroundKeys.router, jsonEncode(router.toJson()));
+  await store.deleteValue(BackgroundKeys.observation(router.id));
+}
+
+/// Re-points an enabled poll at the newly selected [router]; a no-op when
+/// notifications are off. Without this the poll keeps logging into whichever
+/// router happened to be selected when the switch was flipped.
+Future<void> followSelectedRouter(
+  MonitoredRouter router, {
+  SecureStorageService? storage,
+}) async {
+  final store = storage ?? SecureStorageService();
+  try {
+    if (await store.readValue(BackgroundKeys.enabled) != 'true') return;
+    final current = await _readRouter(store);
+    if (current?.id == router.id) return;
+    await setMonitoredRouter(store, router);
+  } catch (e, stack) {
+    Logger.exception('Could not re-point the background poll', e, stack);
+  }
+}
+
+/// Stops and forgets the poll when the router it watches is deleted - its
+/// address and password would otherwise stay in storage and keep being used.
+Future<void> forgetBackgroundRouter(
+  String routerId, {
+  SecureStorageService? storage,
+}) async {
+  final store = storage ?? SecureStorageService();
+  try {
+    final current = await _readRouter(store);
+    if (current?.id != routerId) return;
+    await cancelPoll();
+    await disableBackgroundPoll(store);
+    await store.deleteValue(BackgroundKeys.observation(routerId));
+  } catch (e, stack) {
+    Logger.exception('Could not stop watching a deleted router', e, stack);
   }
 }
 
@@ -290,12 +356,14 @@ Future<RouterObservation?> _observe(
     final leases = leaseData is Map ? leaseData['dhcp_leases'] : null;
     final sysInfo = _payload(results[2]);
 
+    final wan = wanStateFrom(dump);
+    // An unreadable interface dump is not a router with no uplink; there is
+    // nothing to compare and this poll is skipped.
+    if (wan == null) return null;
+
     return EventDeriver.observe(
       reachable: true,
-      dashboardData: {
-        'wan': wanStateFrom(dump),
-        if (sysInfo is Map) 'sysInfo': sysInfo,
-      },
+      dashboardData: {'wan': wan, if (sysInfo is Map) 'sysInfo': sysInfo},
       clients: clientsFromLeases(leases is List ? leases : const []),
       readAt: at,
     );
@@ -309,23 +377,40 @@ Future<RouterObservation?> _observe(
 dynamic _payload(dynamic result) =>
     result is List && result.length > 1 && result[0] == 0 ? result[1] : null;
 
-/// The WAN block in the shape `EventDeriver.observe` expects.
+/// The WAN block in the shape `EventDeriver.observe` expects, or null when
+/// the dump says nothing at all and this poll should be skipped.
+///
+/// An interface is the uplink when it carries a default route - the rule
+/// the dashboard uses, so the two halves of this feature agree - or, for an
+/// interface that is down and so has no route left, when it is named like
+/// one. A name alone was not enough: on an LTE or tethered uplink named
+/// `mobile` or `usb0` the WAN was reported permanently down, and no
+/// transition could ever fire.
 @visibleForTesting
-Map<String, dynamic> wanStateFrom(dynamic dump) {
+Map<String, dynamic>? wanStateFrom(dynamic dump) {
   final interfaces = dump is Map ? dump['interface'] : null;
-  if (interfaces is! List) return const {'up': false};
-  // Any WAN-like interface being up means there is internet. Returning on
-  // the first match let a down `wan6` mask an up `wan`, which the deriver
-  // then reported as "Internet connection lost" — a push notification about
-  // an outage that never happened.
+  if (interfaces is! List) return null;
+  // Any uplink being up means there is internet. Stopping at the first
+  // match let a down `wan6` mask an up `wan`, which the deriver then
+  // reported as "Internet connection lost" — a push notification about an
+  // outage that never happened.
   var up = false;
   for (final entry in interfaces) {
     if (entry is! Map) continue;
     final name = entry['interface']?.toString() ?? '';
-    if (name != 'wan' && name != 'wwan' && !name.startsWith('wan')) continue;
+    final isUplink = _carriesDefaultRoute(entry) || name.startsWith('wan');
+    if (!isUplink) continue;
     up = up || entry['up'] == true;
   }
   return {'up': up};
+}
+
+bool _carriesDefaultRoute(Map interface) {
+  final routes = interface['route'];
+  if (routes is! List) return false;
+  return routes.any(
+    (r) => r is Map && r['target'] == '0.0.0.0' && r['mask'] == 0,
+  );
 }
 
 Future<MonitoredRouter?> _readRouter(SecureStorageService store) async {

@@ -22,10 +22,11 @@ class RouterObservation {
 
   final bool reachable;
 
-  /// Whether the WAN is up, or null when the payload did not say - a poll
-  /// that landed before the first dashboard fetch, say. Unknown is not
-  /// down: a baseline of "down" would report the internet as restored on
-  /// the next poll.
+  /// Whether the WAN is up, or null when nothing had been fetched yet - a
+  /// clients poll that landed before the first dashboard read, say.
+  /// Unknown is not down: a baseline of "down" would report the internet
+  /// as restored on the next poll. A payload that *was* fetched and holds
+  /// no WAN block is a router with no uplink, which is down.
   final bool? wanUp;
   final Set<String> clientMacs;
 
@@ -135,6 +136,7 @@ class EventDeriver {
           at: at,
           routerId: routerId,
           subject: current.label(mac),
+          subjectKey: mac,
         ),
       );
     }
@@ -145,6 +147,7 @@ class EventDeriver {
           at: at,
           routerId: routerId,
           subject: previous.label(mac),
+          subjectKey: mac,
         ),
       );
     }
@@ -218,7 +221,10 @@ class EventDeriver {
     final uptime = sysInfo is Map ? sysInfo['uptime'] : null;
     return RouterObservation(
       reachable: reachable,
-      wanUp: wan is Map ? wan['up'] == true : null,
+      // The dashboard only puts a `wan` block here when some interface
+      // carries a default route, so its absence from a payload that was
+      // fetched means there is no uplink - not that nobody looked.
+      wanUp: dashboardData == null ? null : (wan is Map && wan['up'] == true),
       bootTime: bootTimeOf(sysInfo),
       uptime: uptime is num ? uptime.toInt() : null,
       uptimeAt: readAt ?? dashboardData?['fetchedAt'] as DateTime?,
@@ -294,9 +300,11 @@ class EventLog {
   ///
   /// The app and the background poll each derive events against their own
   /// baseline, so one change - a device joining - can be recorded by both,
-  /// seconds apart. A record of the same kind about the same subject, with
-  /// nothing else about that subject in between and within [echoWindow] of
-  /// the last, is the echo, not a second event.
+  /// seconds apart. A record of the same kind about the same thing, within
+  /// [echoWindow] of the last one *kept*, is that echo rather than a second
+  /// event. Anchoring on the kept event matters: anchoring on the
+  /// suppressed one would let a chain of echoes swallow a real event an
+  /// hour later.
   static List<RouterEvent> _merge(List<RouterEvent> a, List<RouterEvent> b) {
     final seen = <String>{};
     final merged = [
@@ -307,16 +315,19 @@ class EventLog {
     ];
     merged.sort((a, b) => a.at.compareTo(b.at));
     final kept = <RouterEvent>[];
-    final lastFor = <String, RouterEvent>{};
+    final lastKept = <String, RouterEvent>{};
     for (final e in merged) {
-      final subject = '${e.routerId}|${e.subject ?? ""}';
-      final last = lastFor[subject];
+      // Keyed on identity, not the display name: two devices whose lease
+      // name is `raspberrypi` are two devices.
+      final subject = '${e.routerId}|${e.identity}';
+      final last = lastKept[subject];
       final echo =
           last != null &&
           last.kind == e.kind &&
           e.at.difference(last.at) <= echoWindow;
-      lastFor[subject] = e;
-      if (!echo) kept.add(e);
+      if (echo) continue;
+      lastKept[subject] = e;
+      kept.add(e);
     }
     return kept.length <= maxEntries
         ? kept

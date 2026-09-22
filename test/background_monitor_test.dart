@@ -246,14 +246,18 @@ void _wanDetection() {
       'interface': interfaces,
     };
 
+    const defaultRoute = [
+      {'target': '0.0.0.0', 'mask': 0},
+    ];
+
     test('a down wan6 does not mask an up wan', () {
       final wan = wanStateFrom(
         dump([
           {'interface': 'wan6', 'up': false},
-          {'interface': 'wan', 'up': true},
+          {'interface': 'wan', 'up': true, 'route': defaultRoute},
         ]),
       );
-      expect(wan['up'], isTrue);
+      expect(wan!['up'], isTrue);
     });
 
     test('every WAN-like interface down reads as down', () {
@@ -263,29 +267,48 @@ void _wanDetection() {
           {'interface': 'wan6', 'up': false},
         ]),
       );
-      expect(wan['up'], isFalse);
+      expect(wan!['up'], isFalse);
     });
 
-    test('a LAN-only router reads as down rather than throwing', () {
+    // The dashboard calls the interface with the default route the uplink.
+    // Reading the name instead left every LTE or tethered router reporting
+    // a WAN that was permanently down, so no transition could ever fire.
+    test('an uplink that is not named wan still counts', () {
+      expect(
+        wanStateFrom(
+          dump([
+            {'interface': 'lan', 'up': true},
+            {'interface': 'mobile', 'up': true, 'route': defaultRoute},
+          ]),
+        )!['up'],
+        isTrue,
+      );
+    });
+
+    test('a LAN-only router reads as down', () {
       expect(
         wanStateFrom(
           dump([
             {'interface': 'lan', 'up': true},
           ]),
-        )['up'],
+        )!['up'],
         isFalse,
       );
-      expect(wanStateFrom(const {})['up'], isFalse);
-      expect(wanStateFrom(null)['up'], isFalse);
+    });
+
+    // Not "down": there is nothing to compare, and this poll is skipped.
+    test('an unreadable dump says nothing at all', () {
+      expect(wanStateFrom(const {}), isNull);
+      expect(wanStateFrom(null), isNull);
     });
 
     test('wwan counts', () {
       expect(
         wanStateFrom(
           dump([
-            {'interface': 'wwan', 'up': true},
+            {'interface': 'wwan', 'up': true, 'route': defaultRoute},
           ]),
-        )['up'],
+        )!['up'],
         isTrue,
       );
     });
