@@ -35,7 +35,7 @@ LuCI Mobile is an open-source Flutter client for OpenWrt routers. It talks to Lu
 - Edits the hostname, timezone and description, and changes the router password.
 - Starts, stops and restarts services, and configures SQM, adblock, UPnP and DDNS.
 - Runs ping, traceroute and nslookup from the router, and reads its system and kernel logs.
-- Keeps an activity feed of what changed, and can notify about it in the background.
+- Keeps an activity feed of what changed, and on Android can notify about it in the background.
 - Shows traffic history per client where the router records it.
 - Reboots a router after confirmation.
 - Follows the system theme or uses a selected light or dark theme.
@@ -52,9 +52,9 @@ Credentials and router profiles are stored through `flutter_secure_storage`. The
 | --- | --- | --- | --- |
 | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_01.png" alt="Router dashboard" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_02.png" alt="Router login" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_03.png" alt="Connected clients" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_04.png" alt="Expanded client details" width="200"/> |
 
-| Interfaces | Interface details | Settings |
-| --- | --- | --- |
-| <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_05.png" alt="Router interfaces" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_06.png" alt="Expanded interface details" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_07.png" alt="Router and app settings" width="200"/> |
+| Interfaces | Interface details |
+| --- | --- |
+| <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_05.png" alt="Router interfaces" width="200"/> | <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/flutter_06.png" alt="Expanded interface details" width="200"/> |
 
 ## Install
 
