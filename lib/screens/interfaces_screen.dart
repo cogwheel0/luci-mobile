@@ -735,8 +735,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     uciInterfaces.forEach((uciName, config) {
       if (!runtimeInterfaces.contains(uciName)) {
         final radioName = _uciString(config['device']);
-        final isRadioEnabled = uciRadios[radioName]?['disabled'] != '1';
-        final isIfaceEnabled = _uciString(config['disabled']) != '1';
+        final isRadioEnabled = !uciBool(uciRadios[radioName]?['disabled']);
+        final isIfaceEnabled = !uciBool(config['disabled']);
         final mode = config['mode'] ?? 'N/A';
         final glInetRadio = glInetData?.radioForDevice(radioName);
         final channel = resolveWifiChannel(

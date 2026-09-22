@@ -702,6 +702,7 @@ class _ReservationDialogState extends State<_ReservationDialog> {
     IpCheckResult.outsideSubnet => context.l10n.addressOutsideSubnet,
     IpCheckResult.duplicate => context.l10n.addressAlreadyReserved,
     IpCheckResult.insidePool => context.l10n.addressInsideDhcpPool,
+    IpCheckResult.notAssignable => context.l10n.addressNotAssignable,
   };
 
   @override

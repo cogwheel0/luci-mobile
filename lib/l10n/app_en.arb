@@ -567,6 +567,7 @@
   "addressOutsideSubnet": "Outside this network's subnet",
   "addressAlreadyReserved": "Another reservation already uses this address",
   "addressInsideDhcpPool": "Inside the DHCP pool - may clash with a dynamic lease",
+  "addressNotAssignable": "That address belongs to the network itself, its broadcast address, or the router.",
   "invalidIpAddress": "Enter a valid IPv4 address",
   "noZoneForClient": "No firewall zone covers this client's network",
   "revertsInSeconds": "Reverts in {seconds}s if the router cannot be reached",

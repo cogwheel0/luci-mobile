@@ -220,6 +220,24 @@ void main() {
       },
     );
 
+    // Everything downstream rests on knowing what was already staged:
+    // which leftovers are ours, what may be reverted, whether the apply
+    // would commit somebody else's work. Staging blind produced a duplicate
+    // section the app could then neither apply nor discard.
+    test('nothing is staged when the pending read fails', () async {
+      final h = _build();
+      h.api.changesError = Exception('timeout');
+
+      await expectLater(
+        h.service.stage(_session, const [
+          UciSet('dhcp', section: 'lan', values: {'start': '100'}),
+        ]),
+        throwsA(isA<UciStagingException>()),
+      );
+      expect(h.api.calls.where((c) => c.startsWith('set')), isEmpty);
+      expect(h.api.calls.where((c) => c.startsWith('revert')), isEmpty);
+    });
+
     test('a named add reports the name the caller chose', () async {
       final h = _build();
 
@@ -858,7 +876,12 @@ void _foreignChangeRegressions() {
         UciRemove('dhcp', section: 'host2'),
       ]);
 
-      expect(staged.ownedSections, {'firewall|cfg0f00', 'firewall|named'});
+      // `host2` is removed outright, so whatever was staged on it is ours.
+      expect(staged.ownedSections, {
+        'firewall|cfg0f00',
+        'firewall|named',
+        'dhcp|host2',
+      });
       expect(staged.writtenKeys, {
         'dhcp|remove|lan|dhcp_option',
         'dhcp|listAdd|lan|dhcp_option',
@@ -1245,6 +1268,33 @@ void _foreignChangeRegressions() {
       expect(h.api.calls, contains('delete dhcp.cfg0a'));
       expect(staged.sections.values, isNot(contains('cfg0a')));
       expect(h.api.calls.where((c) => c == 'add dhcp host'), hasLength(2));
+    });
+
+    // A row staged on a section this operation deletes is about to cease to
+    // exist. Refusing over it would be refusing over nothing - and the
+    // refusal path cannot clear it, so the config would stay locked.
+    test('deleting a section owns whatever was staged on it', () async {
+      final h = _build();
+      h.api.changes = {
+        'dhcp': [
+          ['set', 'cfg05', 'ip', '192.168.1.50'],
+          ['remove', 'cfg05'],
+        ],
+      };
+
+      final staged = await h.service.stage(_session, const [
+        UciRemove('dhcp', section: 'cfg05'),
+      ]);
+      final outcome = await h.service.apply(
+        _session,
+        ours: const {'dhcp'},
+        baseline: staged.baseline,
+        writtenKeys: staged.writtenKeys,
+        ownedSections: staged.ownedSections,
+        mode: ApplyMode.unchecked,
+      );
+
+      expect(outcome.phase, ApplyPhase.confirmed);
     });
 
     test('a section adopted earlier in the batch is never swept', () async {

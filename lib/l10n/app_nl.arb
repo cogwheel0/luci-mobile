@@ -334,6 +334,7 @@
   "addressOutsideSubnet": "Buiten het subnet van dit netwerk",
   "addressAlreadyReserved": "Een andere reservering gebruikt dit adres al",
   "addressInsideDhcpPool": "Binnen de DHCP-pool - kan botsen met een dynamische lease",
+  "addressNotAssignable": "Dat adres hoort bij het netwerk zelf, het broadcastadres of de router.",
   "invalidIpAddress": "Voer een geldig IPv4-adres in",
   "noZoneForClient": "Geen firewallzone dekt het netwerk van deze client",
   "revertsInSeconds": "Wordt over {seconds}s teruggedraaid als de router onbereikbaar is",

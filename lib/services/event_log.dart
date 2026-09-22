@@ -273,7 +273,7 @@ class EventLog {
       _read(storageKey(routerId)),
       _read(backgroundKey(routerId)),
     ).wait;
-    return _merge(own, background);
+    return suppressEchoes(_merge(own, background));
   }
 
   Future<List<RouterEvent>> _read(String key) async {
@@ -298,13 +298,12 @@ class EventLog {
 
   /// [a] and [b] de-duplicated, in time order, trimmed to [maxEntries].
   ///
-  /// The app and the background poll each derive events against their own
-  /// baseline, so one change - a device joining - can be recorded by both,
-  /// seconds apart. A record of the same kind about the same thing, within
-  /// [echoWindow] of the last one *kept*, is that echo rather than a second
-  /// event. Anchoring on the kept event matters: anchoring on the
-  /// suppressed one would let a chain of echoes swallow a real event an
-  /// hour later.
+  /// [a] and [b] de-duplicated, in time order, trimmed to [maxEntries].
+  ///
+  /// This is what gets *stored*, so it only drops records of the very same
+  /// event - a repeated poll. Nothing is thrown away on a judgement call
+  /// here: the two writers see different halves of the feed, and a record
+  /// one of them has no reason to keep may be the only copy of it.
   static List<RouterEvent> _merge(List<RouterEvent> a, List<RouterEvent> b) {
     final seen = <String>{};
     final merged = [
@@ -314,11 +313,31 @@ class EventLog {
         if (seen.add(e.dedupeKey)) e,
     ];
     merged.sort((a, b) => a.at.compareTo(b.at));
+    return merged.length <= maxEntries
+        ? merged
+        : merged.sublist(merged.length - maxEntries);
+  }
+
+  /// [events] with one observer's echo of another's record removed.
+  ///
+  /// The app and the background poll each derive events against their own
+  /// baseline, so one change - a device joining - can be recorded by both,
+  /// seconds apart. A record of the same kind about the same thing, within
+  /// [echoWindow] of the last one *kept*, is that echo rather than a second
+  /// event. Anchoring on the kept event matters: anchoring on the
+  /// suppressed one would let a chain of echoes swallow a real event an
+  /// hour later. Applied when the feed is read, never when it is written -
+  /// a guess that deleted the record would be unrecoverable.
+  @visibleForTesting
+  static List<RouterEvent> suppressEchoes(List<RouterEvent> events) {
     final kept = <RouterEvent>[];
     final lastKept = <String, RouterEvent>{};
-    for (final e in merged) {
+    for (final e in events) {
       // Keyed on identity, not the display name: two devices whose lease
-      // name is `raspberrypi` are two devices.
+      // name is `raspberrypi` are two devices. Same-identity events of
+      // different kinds share a bucket on purpose - a device that left and
+      // rejoined within the window really did join twice, and the leaving
+      // in between is what says so.
       final subject = '${e.routerId}|${e.identity}';
       final last = lastKept[subject];
       final echo =
@@ -329,9 +348,7 @@ class EventLog {
       lastKept[subject] = e;
       kept.add(e);
     }
-    return kept.length <= maxEntries
-        ? kept
-        : kept.sublist(kept.length - maxEntries);
+    return kept;
   }
 
   /// Appends [events], de-duplicating and trimming to [maxEntries].
@@ -355,9 +372,11 @@ class EventLog {
     } catch (e, stack) {
       Logger.exception('Failed to save the event log', e, stack);
     }
-    return fromBackground
-        ? _merge(await _read(storageKey(routerId)), own)
-        : _merge(own, await _read(backgroundKey(routerId)));
+    return suppressEchoes(
+      fromBackground
+          ? _merge(await _read(storageKey(routerId)), own)
+          : _merge(own, await _read(backgroundKey(routerId))),
+    );
   }
 
   Future<void> clear(String routerId) async {

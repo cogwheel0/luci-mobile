@@ -334,6 +334,7 @@
   "addressOutsideSubnet": "このネットワークのサブネット外です",
   "addressAlreadyReserved": "このアドレスは別の予約で使用されています",
   "addressInsideDhcpPool": "DHCP プール内です - 動的リースと競合する可能性があります",
+  "addressNotAssignable": "このアドレスはネットワーク自体、そのブロードキャスト、またはルーターのものです。",
   "invalidIpAddress": "有効な IPv4 アドレスを入力してください",
   "noZoneForClient": "このクライアントのネットワークを含むファイアウォールゾーンがありません",
   "revertsInSeconds": "ルーターに接続できない場合、{seconds} 秒後に元に戻ります",

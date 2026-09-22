@@ -334,6 +334,7 @@
   "addressOutsideSubnet": "不在此網路的子網路內",
   "addressAlreadyReserved": "另一筆保留已使用該位址",
   "addressInsideDhcpPool": "位於 DHCP 位址池內 - 可能與動態租約衝突",
+  "addressNotAssignable": "該位址屬於網路本身、其廣播位址或路由器。",
   "invalidIpAddress": "請輸入有效的 IPv4 位址",
   "noZoneForClient": "沒有防火牆區域涵蓋此用戶端所在的網路",
   "revertsInSeconds": "若無法連線路由器，將在 {seconds} 秒後復原",

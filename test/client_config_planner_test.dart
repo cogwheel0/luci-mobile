@@ -225,6 +225,28 @@ void main() {
       );
     });
 
+    // None of the three can be handed to a client; offering them as valid
+    // reservations invites an address conflict with the router itself.
+    test('the network, broadcast and router addresses are refused', () {
+      for (final bad in ['192.168.1.0', '192.168.1.255', '192.168.1.1']) {
+        final result = ClientConfigPlanner.checkReservationIp(
+          bad,
+          subnets: lan,
+          alreadyReserved: const {},
+        );
+        expect(result, IpCheckResult.notAssignable, reason: bad);
+        expect(result.isBlocking, isTrue);
+      }
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          '192.168.1.40',
+          subnets: lan,
+          alreadyReserved: const {},
+        ),
+        IpCheckResult.ok,
+      );
+    });
+
     test('malformed input is rejected', () {
       for (final bad in ['', 'nope', '192.168.1', '192.168.1.999']) {
         expect(
@@ -782,6 +804,9 @@ void main() {
       for (final no in ['0', 'no', 'off', 'false', 'disabled', 'Off']) {
         expect(uciBool(no), isFalse, reason: no);
       }
+      // rpcd hands back an option written with `list` as an array.
+      expect(uciBool(const ['1']), isTrue);
+      expect(uciBool(const ['0'], orElse: true), isFalse);
       expect(uciBool(null), isFalse);
       expect(uciBool(null, orElse: true), isTrue);
       expect(uciBool('maybe', orElse: true), isTrue);

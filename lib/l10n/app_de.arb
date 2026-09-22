@@ -334,6 +334,7 @@
   "addressOutsideSubnet": "Außerhalb des Subnetzes dieses Netzwerks",
   "addressAlreadyReserved": "Diese Adresse ist bereits reserviert",
   "addressInsideDhcpPool": "Im DHCP-Bereich - kann mit einer dynamischen Zuweisung kollidieren",
+  "addressNotAssignable": "Diese Adresse gehört dem Netzwerk selbst, seiner Broadcast-Adresse oder dem Router.",
   "invalidIpAddress": "Gültige IPv4-Adresse eingeben",
   "noZoneForClient": "Keine Firewall-Zone deckt das Netzwerk dieses Clients ab",
   "revertsInSeconds": "Wird in {seconds}s zurückgesetzt, falls der Router nicht erreichbar ist",

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:luci_mobile/services/event_log.dart';
 import 'package:luci_mobile/services/background_worker.dart';
 import 'package:luci_mobile/services/background_monitor.dart';
 import 'package:luci_mobile/utils/uci_values.dart';
@@ -454,6 +455,21 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Tells an enabled background poll where the selected router now is.
+  Future<void> _pointBackgroundPollAtSelectedRouter() async {
+    final router = _routerService?.selectedRouter;
+    if (router == null) return;
+    await followSelectedRouter(
+      MonitoredRouter(
+        id: router.id,
+        ipAddress: router.activeAddress,
+        username: router.username,
+        password: router.password,
+        useHttps: router.activeUseHttps,
+      ),
+    );
+  }
+
   Future<void> removeRouter(String id) async {
     if (_routerService == null) return;
 
@@ -472,8 +488,11 @@ class AppState extends ChangeNotifier {
     }
 
     // Its address and password must not stay behind in the background
-    // isolate's copy, being polled every quarter of an hour.
+    // isolate's copy, being polled every quarter of an hour - nor its
+    // activity feed, which a re-added router with the same address and
+    // account would inherit, ids being derived from those two.
     await forgetBackgroundRouter(id);
+    await EventLog(_secureStorageService).clear(id);
 
     final needsSwitch = await _routerService!.removeRouter(id);
     if (needsSwitch && _routerService!.routers.isNotEmpty) {
@@ -539,18 +558,11 @@ class AppState extends ChangeNotifier {
     // loading and error state now.
     if (token != _sessionToken) return;
     // A background poll that is on watches whichever router the user is
-    // looking at, not the one selected when they switched it on.
-    if (loginSuccess) {
-      await followSelectedRouter(
-        MonitoredRouter(
-          id: found.id,
-          ipAddress: found.activeAddress,
-          username: found.username,
-          password: found.password,
-          useHttps: found.activeUseHttps,
-        ),
-      );
-    }
+    // looking at, not the one selected when they switched it on. Read back
+    // from the service rather than from `found`: logging in may have failed
+    // over to the other address and persisted that choice, and the poll
+    // needs the address that actually answered.
+    if (loginSuccess) await _pointBackgroundPollAtSelectedRouter();
     // login() already fetches dashboard data on success; fetching again here
     // would double the RPC burst on every router switch.
     if (!loginSuccess) {
@@ -1165,6 +1177,8 @@ class AppState extends ChangeNotifier {
             await updateRouter(
               router.copyWith(activeAddressIndex: result.usedAddressIndex),
             );
+            // The poll has to learn the address that answered too.
+            await _pointBackgroundPollAtSelectedRouter();
           }
           _isDashboardLoading = false;
           return await fetchDashboardData(isRetryAfterFallback: true);

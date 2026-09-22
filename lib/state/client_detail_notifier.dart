@@ -11,6 +11,7 @@ import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/services/wol_service.dart';
+import 'package:luci_mobile/state/firewall_notifier.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/state/uci_mutation.dart';
 import 'package:luci_mobile/state/router_session.dart';
@@ -379,7 +380,16 @@ class ClientMutations {
       context: context,
       onPhase: onPhase,
     );
-    if (ref.mounted) ref.invalidate(clientDetailProvider(mac));
+    if (ref.mounted) {
+      ref.invalidate(clientDetailProvider(mac));
+      // Blocking a client writes a firewall rule. The firewall screen holds
+      // its list for the session, so without this it shows a rule that is
+      // gone, or misses one that is there - and acting on the stale row
+      // fails against a section that no longer exists.
+      if (ops.any((op) => op.config == 'firewall')) {
+        ref.invalidate(firewallProvider);
+      }
+    }
     return outcome;
   }
 }

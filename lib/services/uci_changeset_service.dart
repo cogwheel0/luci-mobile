@@ -226,24 +226,24 @@ class UciChangesetService {
     // Measured on OpenWrt 24.10.4: rpcd keeps staging *per session*, so this
     // is not about another admin's work — a second rpcd session's edits and
     // CLI-staged edits are both invisible here, and unaffected by our apply.
-    UciChangeSet? baseline;
-    Set<String>? preExisting;
+    // Nothing is staged until this read succeeds. Everything downstream
+    // rests on it: which leftovers are this app's own earlier attempt, what
+    // may be reverted on failure, and whether the apply would commit
+    // somebody else's work. Staging blind produced a duplicate section the
+    // app could then neither apply nor discard, so a failure here ends the
+    // operation before it has touched anything.
+    final UciChangeSet baseline;
     try {
       baseline = await pending(session, context: context);
-      preExisting = baseline.configs;
     } catch (e, stack) {
       Logger.exception(
         'Could not read pending changes before staging',
         e,
         stack,
       );
-      // Null means "we do not know what else is staged". Cleanup then
-      // reverts nothing: leaving our own half-staged change behind is
-      // recoverable — it shows up as unsaved and can be discarded — whereas
-      // silently dropping an edit the user still wanted is not.
-      baseline = null;
-      preExisting = null;
+      throw UciStagingException(failedIndex: 0, cause: e, revertedConfigs: {});
     }
+    final preExisting = baseline.configs;
 
     // Sections this batch has created, adopted or deleted: never a leftover
     // for a later operation in the same batch to adopt or sweep again.
@@ -254,7 +254,14 @@ class UciChangesetService {
     // whole section is ours, its `add` row and earlier options included.
     void wrote(UciOperation op, String section) {
       writtenKeys.addAll(op.writtenKeys);
-      if (baseline?.hasAdd(op.config, section) ?? false) {
+      // An option written to a section that is still an uncommitted add, or
+      // a section removed outright: either way the whole section is ours.
+      // Refusing to apply over a stale row on a section we are deleting
+      // would be refusing over something that is about to cease to exist -
+      // and the refusal path cannot clear it, so the config would stay
+      // locked for good.
+      final removingSection = op is UciRemove && op.option == null;
+      if (removingSection || (baseline.hasAdd(op.config, section))) {
         own(op.config, section);
       }
     }
@@ -274,10 +281,7 @@ class UciChangesetService {
       // and it is adopted; different values mean a corrected retry, and the
       // leftover is deleted first. `uci.delete` of an uncommitted section is
       // what the stock ACL does grant, unlike `uci.revert`.
-      if (op is UciAdd &&
-          op.name == null &&
-          op.identity.isNotEmpty &&
-          baseline != null) {
+      if (op is UciAdd && op.name == null && op.identity.isNotEmpty) {
         final adopted = _identicalStagedAdd(baseline, op, spare: consumed);
         if (adopted != null) {
           Logger.info('Reusing staged ${op.config} section $adopted');

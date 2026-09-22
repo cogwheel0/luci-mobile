@@ -137,15 +137,24 @@ Future<void> disableBackgroundPoll(
 /// belonged to a different router and would report its clients as gone.
 Future<void> setMonitoredRouter(
   SecureStorageService store,
-  MonitoredRouter router,
-) async {
+  MonitoredRouter router, {
+  bool keepBaseline = false,
+}) async {
   await store.writeValue(BackgroundKeys.router, jsonEncode(router.toJson()));
-  await store.deleteValue(BackgroundKeys.observation(router.id));
+  if (!keepBaseline) {
+    await store.deleteValue(BackgroundKeys.observation(router.id));
+  }
 }
 
-/// Re-points an enabled poll at the newly selected [router]; a no-op when
-/// notifications are off. Without this the poll keeps logging into whichever
-/// router happened to be selected when the switch was flipped.
+/// Points an enabled poll at [router]; a no-op when notifications are off,
+/// or when nothing about the router has changed.
+///
+/// Called on every router switch and whenever the app learns a new way to
+/// reach one. Without it the poll keeps using whatever was stored when the
+/// switch was flipped: the router selected then, at the address that
+/// answered then - and a failover to the other address, which the app
+/// handles silently, would leave the poll knocking on the dead one every
+/// quarter of an hour while the switch still reads "on".
 Future<void> followSelectedRouter(
   MonitoredRouter router, {
   SecureStorageService? storage,
@@ -154,8 +163,14 @@ Future<void> followSelectedRouter(
   try {
     if (await store.readValue(BackgroundKeys.enabled) != 'true') return;
     final current = await _readRouter(store);
-    if (current?.id == router.id) return;
-    await setMonitoredRouter(store, router);
+    if (current != null && current.sameAs(router)) return;
+    // Only a different router invalidates the baseline; the same one at a
+    // new address has the same clients as a moment ago.
+    await setMonitoredRouter(
+      store,
+      router,
+      keepBaseline: current?.id == router.id,
+    );
   } catch (e, stack) {
     Logger.exception('Could not re-point the background poll', e, stack);
   }
@@ -169,11 +184,14 @@ Future<void> forgetBackgroundRouter(
 }) async {
   final store = storage ?? SecureStorageService();
   try {
+    // The baseline goes whether or not this was the monitored router: it is
+    // per router, and a re-added profile with the same address and account
+    // gets the same id.
+    await store.deleteValue(BackgroundKeys.observation(routerId));
     final current = await _readRouter(store);
     if (current?.id != routerId) return;
     await cancelPoll();
     await disableBackgroundPoll(store);
-    await store.deleteValue(BackgroundKeys.observation(routerId));
   } catch (e, stack) {
     Logger.exception('Could not stop watching a deleted router', e, stack);
   }
@@ -398,7 +416,10 @@ Map<String, dynamic>? wanStateFrom(dynamic dump) {
   for (final entry in interfaces) {
     if (entry is! Map) continue;
     final name = entry['interface']?.toString() ?? '';
-    final isUplink = _carriesDefaultRoute(entry) || name.startsWith('wan');
+    final isUplink =
+        _carriesDefaultRoute(entry) ||
+        name.startsWith('wan') ||
+        name.startsWith('wwan');
     if (!isUplink) continue;
     up = up || entry['up'] == true;
   }

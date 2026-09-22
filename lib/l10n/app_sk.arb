@@ -334,6 +334,7 @@
   "addressOutsideSubnet": "Mimo podsiete tejto siete",
   "addressAlreadyReserved": "Túto adresu už používa iná rezervácia",
   "addressInsideDhcpPool": "Vnútri rozsahu DHCP - môže kolidovať s dynamickou zápožičkou",
+  "addressNotAssignable": "Táto adresa patrí samotnej sieti, jej všesmerovej adrese alebo routeru.",
   "invalidIpAddress": "Zadajte platnú adresu IPv4",
   "noZoneForClient": "Sieť tohto klienta nepokrýva žiadna zóna firewallu",
   "revertsInSeconds": "Bude vrátené o {seconds}s, ak router nebude dostupný",

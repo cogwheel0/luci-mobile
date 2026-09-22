@@ -334,6 +334,7 @@
   "addressOutsideSubnet": "Hors du sous-réseau de ce réseau",
   "addressAlreadyReserved": "Une autre réservation utilise déjà cette adresse",
   "addressInsideDhcpPool": "Dans la plage DHCP - risque de conflit avec un bail dynamique",
+  "addressNotAssignable": "Cette adresse est celle du réseau lui-même, de sa diffusion ou du routeur.",
   "invalidIpAddress": "Saisissez une adresse IPv4 valide",
   "noZoneForClient": "Aucune zone de pare-feu ne couvre le réseau de ce client",
   "revertsInSeconds": "Annulé dans {seconds}s si le routeur est injoignable",

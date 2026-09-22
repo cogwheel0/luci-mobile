@@ -334,6 +334,7 @@ class ClientConfigPlanner {
 
     final subnet = subnetContaining(ip, subnets);
     if (subnet == null) return IpCheckResult.outsideSubnet;
+    if (_isNotAssignable(octets, subnet)) return IpCheckResult.notAssignable;
     // dnsmasq counts `start` from the network address, not from zero.
     final pool = pools[subnet.name];
     final offset = _toInt(octets) - _networkAddress(subnet);
@@ -341,6 +342,19 @@ class ClientConfigPlanner {
       return IpCheckResult.insidePool;
     }
     return IpCheckResult.ok;
+  }
+
+  /// The subnet's network and broadcast addresses, and the router's own:
+  /// handing any of them to a client is an address conflict.
+  static bool _isNotAssignable(List<int> octets, InterfaceSubnet subnet) {
+    if (_toInt(octets) == _toInt(subnet.base)) return true;
+    final bits = subnet.prefix.clamp(0, 32);
+    // A /31 or /32 has no network or broadcast address to speak of.
+    if (bits >= 31) return false;
+    final network = _networkAddress(subnet);
+    final size = 1 << (32 - bits);
+    final address = _toInt(octets);
+    return address == network || address == network + size - 1;
   }
 
   static int _toInt(List<int> octets) =>

@@ -662,8 +662,12 @@ class _RadioSheetState extends State<_RadioSheet> {
                         radio: radio,
                         channel: edit(radio.channel ?? 'auto', _channel),
                         htmode: edit(radio.htmode, htmode),
+                        // Compared upper-cased on both sides: a router
+                        // storing `us` must not be rewritten to `US` on a
+                        // save where nothing was touched, which reconfigures
+                        // the radio and drops every client on it.
                         country: edit(
-                          radio.country,
+                          radio.country?.toUpperCase(),
                           country.isEmpty ? null : country,
                         ),
                       ),

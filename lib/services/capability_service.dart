@@ -113,8 +113,12 @@ class CapabilityService {
       return RouterCapabilities(probeFailed: true, probedAt: _clock());
     }
 
+    // An empty map is not an answer either, for the same reason an empty
+    // config list is not: the RPC layer produces one for a payload shape it
+    // did not recognise, and taken as authoritative it denies every write -
+    // including the rollback that keeps a user from locking themselves out.
     var unprobed = const <String>{};
-    if (acl == null) {
+    if (acl == null || acl.isEmpty) {
       final fallback = await _probeAclIndividually(session);
       acl = fallback?.acl;
       unprobed = fallback?.unprobed ?? const {};

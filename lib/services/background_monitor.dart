@@ -83,6 +83,14 @@ class MonitoredRouter {
   final String password;
   final bool useHttps;
 
+  /// True when this would poll exactly as [other] does.
+  bool sameAs(MonitoredRouter other) =>
+      id == other.id &&
+      ipAddress == other.ipAddress &&
+      username == other.username &&
+      password == other.password &&
+      useHttps == other.useHttps;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'ipAddress': ipAddress,

@@ -274,6 +274,25 @@ void main() {
       expect(WirelessPlanner.planUpdateRadio(radio: radio), isEmpty);
     });
 
+    // A router storing `us` must not be rewritten to `US` on a save where
+    // nothing was touched: that reconfigures the radio and drops every
+    // client on it.
+    test('a country code differing only in case is no change', () {
+      const radio = WirelessRadio(section: 'radio0', country: 'us');
+      OptionEdit edit(String? was, String? now) => now == was
+          ? const OptionEdit.keep()
+          : now == null
+          ? const OptionEdit.clear()
+          : OptionEdit.set(now);
+      expect(
+        WirelessPlanner.planUpdateRadio(
+          radio: radio,
+          country: edit(radio.country?.toUpperCase(), 'US'),
+        ),
+        isEmpty,
+      );
+    });
+
     // Emptying a field is a choice too: the option goes, and the driver or
     // the regulatory default takes over. Not the same as leaving it alone.
     test('a radio option can be cleared, not just changed', () {

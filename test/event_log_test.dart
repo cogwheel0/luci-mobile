@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:luci_mobile/models/client.dart';
@@ -441,6 +443,52 @@ void main() {
       // A real second reboot, more than the window after the one kept.
       await log.append('r1', [rebooted(6)]);
       expect(await log.load('r1'), hasLength(2));
+    });
+
+    // One poll stamps every event it derives with the same instant. Two
+    // kinds from one poll, echoed by the other observer, must not reset
+    // each other's anchor and let both through twice.
+    test('two kinds echoed together are each suppressed once', () async {
+      final storage = _MemoryStorage();
+      final log = EventLog(storage);
+      List<RouterEvent> poll(int minutes) => [
+        RouterEvent(
+          kind: RouterEventKind.rebooted,
+          at: _at.add(Duration(minutes: minutes)),
+          routerId: 'r1',
+        ),
+        RouterEvent(
+          kind: RouterEventKind.wanDown,
+          at: _at.add(Duration(minutes: minutes)),
+          routerId: 'r1',
+        ),
+      ];
+
+      await log.append('r1', poll(0));
+      final feed = await log.append('r1', poll(4), fromBackground: true);
+      expect(feed.map((e) => e.kind), [
+        RouterEventKind.rebooted,
+        RouterEventKind.wanDown,
+      ]);
+    });
+
+    // Suppression is a display judgement. Storing it would delete the only
+    // copy of an event the other half of the feed would have kept.
+    test('an echo is hidden, not deleted', () async {
+      final storage = _MemoryStorage();
+      final log = EventLog(storage);
+      RouterEvent rebooted(int minutes) => RouterEvent(
+        kind: RouterEventKind.rebooted,
+        at: _at.add(Duration(minutes: minutes)),
+        routerId: 'r1',
+      );
+
+      await log.append('r1', [rebooted(0), rebooted(2)]);
+      expect(await log.load('r1'), hasLength(1));
+      expect(EventLog.suppressEchoes([rebooted(0), rebooted(2)]), hasLength(1));
+      // Both are on the router, so the record survives the app's view of it.
+      final stored = jsonDecode(storage.values[EventLog.storageKey('r1')]!);
+      expect(stored, hasLength(2));
     });
 
     test('the same event seen by both observers is one event', () async {

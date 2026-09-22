@@ -334,6 +334,7 @@
   "addressOutsideSubnet": "Fuori dalla subnet di questa rete",
   "addressAlreadyReserved": "Un'altra prenotazione usa già questo indirizzo",
   "addressInsideDhcpPool": "Dentro il pool DHCP - può entrare in conflitto con un lease dinamico",
+  "addressNotAssignable": "Quell’indirizzo appartiene alla rete stessa, al suo broadcast o al router.",
   "invalidIpAddress": "Inserisci un indirizzo IPv4 valido",
   "noZoneForClient": "Nessuna zona firewall copre la rete di questo client",
   "revertsInSeconds": "Ripristinato tra {seconds}s se il router non è raggiungibile",

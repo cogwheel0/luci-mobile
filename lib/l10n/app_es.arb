@@ -334,6 +334,7 @@
   "addressOutsideSubnet": "Fuera de la subred de esta red",
   "addressAlreadyReserved": "Otra reserva ya usa esta dirección",
   "addressInsideDhcpPool": "Dentro del rango DHCP: puede chocar con una concesión dinámica",
+  "addressNotAssignable": "Esa dirección pertenece a la propia red, a su difusión o al router.",
   "invalidIpAddress": "Introduce una dirección IPv4 válida",
   "noZoneForClient": "Ninguna zona del cortafuegos cubre la red de este cliente",
   "revertsInSeconds": "Se revertirá en {seconds}s si no se puede contactar con el router",

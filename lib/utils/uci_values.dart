@@ -81,8 +81,11 @@ List<String> uciList(dynamic v) {
 /// (`1`/`yes`/`on`/`true`/`enabled` and `0`/`no`/`off`/`false`/
 /// `disabled`); anything unrecognised, or absent, reads as [orElse].
 bool uciBool(dynamic v, {bool orElse = false}) {
-  final s = v?.toString().trim().toLowerCase();
-  if (s == null || s.isEmpty) return orElse;
+  // Through [uciText], so an option rpcd hands back as a one-element list
+  // reads the same as the bare value - which is what the three private
+  // helpers this replaced all did.
+  final s = uciText(v)?.toLowerCase();
+  if (s == null) return orElse;
   return switch (s) {
     '1' || 'yes' || 'on' || 'true' || 'enabled' => true,
     '0' || 'no' || 'off' || 'false' || 'disabled' => false,

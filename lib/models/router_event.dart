@@ -36,8 +36,11 @@ class RouterEvent {
   /// tell two records of one thing from two things.
   final String? subjectKey;
 
-  /// What this event is about, as precisely as it can be said.
-  String get identity => subjectKey ?? subject ?? '';
+  /// What this event is about, as precisely as it can be said. An event
+  /// with no subject - a reboot, a WAN transition - is about the router,
+  /// and its kind is the only thing that distinguishes it from another
+  /// such event.
+  String get identity => subjectKey ?? subject ?? kind.name;
 
   EventSeverity get severity => switch (kind) {
     RouterEventKind.routerUnreachable ||
@@ -48,9 +51,13 @@ class RouterEvent {
   };
 
   /// A stable identity, so the same event is not recorded twice when a poll
-  /// repeats.
+  /// repeats. On [identity] rather than [subject]: one poll stamps every
+  /// event it derives with the same instant, so two devices sharing a lease
+  /// name would otherwise collapse into one record - and one notification,
+  /// whose id is derived from this.
   String get dedupeKey =>
-      '$routerId|${kind.name}|${subject ?? ""}|${at.millisecondsSinceEpoch ~/ 1000}';
+      '$routerId|${kind.name}|$identity|'
+      '${at.millisecondsSinceEpoch ~/ 1000}';
 
   Map<String, dynamic> toJson() => {
     'kind': kind.name,

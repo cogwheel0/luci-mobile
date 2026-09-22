@@ -80,11 +80,16 @@ enum IpCheckResult {
   /// Another host section already claims it. dnsmasq refuses duplicates and
   /// will fail to start.
   duplicate,
+
+  /// The subnet's own network or broadcast address, or the router's. None
+  /// of the three can be handed to a client.
+  notAssignable,
 }
 
 extension IpCheckResultX on IpCheckResult {
   bool get isBlocking =>
       this == IpCheckResult.malformed ||
       this == IpCheckResult.outsideSubnet ||
-      this == IpCheckResult.duplicate;
+      this == IpCheckResult.duplicate ||
+      this == IpCheckResult.notAssignable;
 }
