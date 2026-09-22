@@ -186,6 +186,9 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                 if (!context.mounted) return;
                                 if (confirm == true) {
                                   await appState.removeRouter(router.id);
+                                  // The screen can be gone by now, and a
+                                  // disposed ConsumerState's `ref` throws.
+                                  if (!mounted) return;
                                   // Deleting the monitored router switches
                                   // the poll off in storage; the cached
                                   // settings would still read "on".

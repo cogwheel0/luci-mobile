@@ -40,9 +40,12 @@ LuCI Mobile is an open-source Flutter client for OpenWrt routers. It talks to Lu
 - Reboots a router after confirmation.
 - Follows the system theme or uses a selected light or dark theme.
 
-Configuration changes go through the router's own apply-with-rollback
-protocol: if the phone cannot confirm a change in time, the router puts the
-previous configuration back by itself.
+Where the router allows it, configuration changes go through its own
+apply-with-rollback protocol: if the phone cannot confirm a change in time,
+the router puts the previous configuration back by itself. Some routers do
+not grant the permission that makes this work, and there the change is
+committed immediately; the app says so while it is going in, rather than
+letting you rely on a safety net that is not there.
 
 Credentials and router profiles are stored through `flutter_secure_storage`. The app asks before trusting a self-signed HTTPS certificate. It does not include analytics, tracking, or advertising SDKs.
 
