@@ -8,6 +8,54 @@
   "more": "More",
   "settings": "Settings",
   "cancel": "Cancel",
+  "errorSessionRejected": "The router rejected this session. Reconnect and check the account's RPC permissions.",
+  "errorNoPermission": "This account does not have permission for {call}. Sign in with an administrator account or grant the required RPC access.",
+  "@errorNoPermission": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "errorMissingPackage": "{call} is unavailable. Install {package}, restart rpcd, then reconnect.",
+  "@errorMissingPackage": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      },
+      "package": {
+        "type": "String"
+      }
+    }
+  },
+  "errorHttpStatus": "The router returned HTTP {status}.",
+  "@errorHttpStatus": {
+    "placeholders": {
+      "status": {
+        "type": "int"
+      }
+    }
+  },
+  "errorUnreachable": "Could not connect to the router. Check its address and your network connection, then try again.",
+  "errorRpcFailed": "The router refused {call}.",
+  "@errorRpcFailed": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      }
+    }
+  },
+  "errorRpcFailedBecause": "The router refused {call}: {reason}.",
+  "@errorRpcFailedBecause": {
+    "placeholders": {
+      "call": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
   "close": "Close",
   "exit": "Exit",
   "retry": "Retry",

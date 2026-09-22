@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/l10n/api_error_text.dart';
 import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
@@ -9,7 +10,6 @@ import 'package:luci_mobile/models/client_config.dart';
 import 'package:luci_mobile/models/router_capabilities.dart';
 import 'package:luci_mobile/models/station_info.dart';
 import 'package:luci_mobile/models/uci_change.dart';
-import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/wol_service.dart';
 import 'package:luci_mobile/services/client_config_planner.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
@@ -97,7 +97,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
               error: (error, _) => [
                 _MessageCard(
                   icon: Icons.error_outline,
-                  message: userFacingApiError(error),
+                  message: apiErrorText(context, error),
                   action: context.l10n.retry,
                   onAction: () => ref.invalidate(clientDetailProvider(mac)),
                 ),
@@ -240,7 +240,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(userFacingApiError(e))));
+      messenger.showSnackBar(SnackBar(content: Text(apiErrorText(context, e))));
     } finally {
       if (mounted) setState(() => _wakeBusy = false);
     }

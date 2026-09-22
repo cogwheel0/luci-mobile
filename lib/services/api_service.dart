@@ -34,6 +34,30 @@ class RpcException implements Exception {
   /// too many unrelated errors to be an answer.
   bool get isNotFound => status == 4;
 
+  /// The `object.method` this failure is about.
+  String get call => '$object.$method';
+
+  /// True when the router has no such object or method at all - the module
+  /// that would provide it is not installed.
+  bool get isUnavailable =>
+      status == 3 ||
+      status == 4 ||
+      status == 8 ||
+      detail?.toLowerCase().contains('not found') == true ||
+      detail?.toLowerCase().contains('not supported') == true;
+
+  /// The package that would provide this call, when it is one the app knows
+  /// how to name. Null when the failure is not a missing module, or when
+  /// the module has no obvious package.
+  String? get requiredPackage {
+    if (!isUnavailable) return null;
+    return switch (object) {
+      'luci-rpc' => 'rpcd-mod-luci',
+      'iwinfo' => 'rpcd-mod-iwinfo',
+      _ => null,
+    };
+  }
+
   /// True when the router refused the call for lack of permission.
   ///
   /// rpcd reports this as ubus status 6, but LuCI's `/admin/ubus` proxy turns
@@ -42,22 +66,14 @@ class RpcException implements Exception {
   bool get isAccessDenied =>
       status == 6 || detail?.toLowerCase().contains('access denied') == true;
 
+  /// For logs. What the *user* is told goes through `apiErrorText`, which
+  /// says the same things in their language.
   @override
   String toString() {
-    final call = '$object.$method';
-    final unavailable =
-        status == 3 ||
-        status == 4 ||
-        status == 8 ||
-        detail?.toLowerCase().contains('not found') == true ||
-        detail?.toLowerCase().contains('not supported') == true;
-    if (unavailable && object == 'luci-rpc') {
-      return 'Router RPC support is missing: $call is unavailable. Install '
-          'rpcd-mod-luci, restart rpcd, then reconnect.';
-    }
-    if (unavailable && object == 'iwinfo') {
-      return 'Wireless client support is missing: $call is unavailable. '
-          'Install rpcd-mod-iwinfo, restart rpcd, then refresh.';
+    final package = requiredPackage;
+    if (package != null) {
+      return '$call is unavailable. Install $package, restart rpcd, then '
+          'reconnect.';
     }
     if (isAccessDenied) {
       return 'This account does not have permission for $call. Sign in with '
@@ -147,6 +163,101 @@ bool isRouterUnreachable(Object error) {
   };
 }
 
+/// What went wrong with a router call, in terms a user can act on.
+enum ApiErrorKind {
+  /// The router rejected the session; reconnecting is the next step.
+  sessionRejected,
+
+  /// This account may not make the call.
+  noPermission,
+
+  /// The module that provides the call is not installed.
+  missingPackage,
+
+  /// The router answered, with an HTTP status that is not a session
+  /// problem.
+  httpStatus,
+
+  /// The router could not be reached at all.
+  unreachable,
+
+  /// The router refused the call and said why, in its own words.
+  rpcFailed,
+
+  /// Anything else; [ApiErrorInfo.detail] is all there is to say.
+  other,
+}
+
+/// A router failure, classified so the message can be translated.
+///
+/// The classification is here, with the wire protocol it describes; the
+/// wording lives with the other user-facing strings.
+@immutable
+class ApiErrorInfo {
+  const ApiErrorInfo(
+    this.kind, {
+    this.call,
+    this.package,
+    this.status,
+    this.detail,
+  });
+
+  final ApiErrorKind kind;
+
+  /// The `object.method` that failed, when the failure names one.
+  final String? call;
+
+  /// What to install, for [ApiErrorKind.missingPackage].
+  final String? package;
+
+  /// The HTTP status, for [ApiErrorKind.httpStatus].
+  final int? status;
+
+  /// The router's own words, which cannot be translated.
+  final String? detail;
+}
+
+/// Classifies [error] without putting it into words.
+ApiErrorInfo describeApiError(Object error) {
+  if (error is RpcException) {
+    final package = error.requiredPackage;
+    if (package != null) {
+      return ApiErrorInfo(
+        ApiErrorKind.missingPackage,
+        call: error.call,
+        package: package,
+      );
+    }
+    if (error.isAccessDenied) {
+      return ApiErrorInfo(ApiErrorKind.noPermission, call: error.call);
+    }
+    return ApiErrorInfo(
+      ApiErrorKind.rpcFailed,
+      call: error.call,
+      detail: error.detail,
+    );
+  }
+  if (error is DioException) {
+    final status = error.response?.statusCode;
+    if (status == 401 || status == 403) {
+      return const ApiErrorInfo(ApiErrorKind.sessionRejected);
+    }
+    if (status != null) {
+      return ApiErrorInfo(ApiErrorKind.httpStatus, status: status);
+    }
+    return const ApiErrorInfo(ApiErrorKind.unreachable);
+  }
+  if (isRouterUnreachable(error)) {
+    return const ApiErrorInfo(ApiErrorKind.unreachable);
+  }
+  return ApiErrorInfo(
+    ApiErrorKind.other,
+    detail: error.toString().replaceFirst('Exception: ', ''),
+  );
+}
+
+/// The English form, for logs and for the places that have no
+/// `BuildContext`. Screens use `apiErrorText` instead.
 String userFacingApiError(Object error) {
   if (error is RpcException) return error.toString();
   if (error is DioException) {

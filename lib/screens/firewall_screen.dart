@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/l10n/api_error_text.dart';
 import 'package:luci_mobile/utils/ipv4.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/firewall_config.dart';
 import 'package:luci_mobile/models/uci_change.dart';
-import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/firewall_planner.dart';
 import 'package:luci_mobile/state/firewall_notifier.dart';
 import 'package:luci_mobile/widgets/luci_apply_progress.dart';
@@ -58,9 +58,10 @@ class _FirewallScreenState extends ConsumerState<FirewallScreen> {
             padding: EdgeInsets.all(LuciSpacing.md),
             child: LuciCardSkeleton(contentLines: 4),
           ),
-          error: (error, _) => _Centered(
+          error: (error, _) => LuciMessageState(
+            scrollable: false,
             icon: Icons.error_outline,
-            text: userFacingApiError(error),
+            message: apiErrorText(context, error),
             action: l10n.retry,
             onAction: () => ref.invalidate(firewallProvider),
           ),
@@ -162,7 +163,11 @@ class _ForwardsTab extends StatelessWidget {
     final l10n = context.l10n;
     return Scaffold(
       body: state.forwards.isEmpty
-          ? _Centered(icon: Icons.swap_horiz, text: l10n.noPortForwards)
+          ? LuciMessageState(
+              scrollable: false,
+              icon: Icons.swap_horiz,
+              message: l10n.noPortForwards,
+            )
           : ListView.separated(
               padding: const EdgeInsets.only(bottom: 88),
               itemCount: state.forwards.length,
@@ -218,7 +223,11 @@ class _RulesTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     if (rules.isEmpty) {
-      return _Centered(icon: Icons.rule, text: l10n.noTrafficRules);
+      return LuciMessageState(
+        scrollable: false,
+        icon: Icons.rule,
+        message: l10n.noTrafficRules,
+      );
     }
     return ListView.separated(
       itemCount: rules.length,
@@ -272,7 +281,11 @@ class _ZonesTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     if (zones.isEmpty) {
-      return _Centered(icon: Icons.security, text: l10n.noZones);
+      return LuciMessageState(
+        scrollable: false,
+        icon: Icons.security,
+        message: l10n.noZones,
+      );
     }
     return ListView(
       padding: const EdgeInsets.all(LuciSpacing.md),
@@ -356,7 +369,11 @@ class _RoutesTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     if (routes.isEmpty) {
-      return _Centered(icon: Icons.alt_route, text: l10n.noStaticRoutes);
+      return LuciMessageState(
+        scrollable: false,
+        icon: Icons.alt_route,
+        message: l10n.noStaticRoutes,
+      );
     }
     return ListView.separated(
       itemCount: routes.length,
@@ -649,39 +666,4 @@ class _ForwardSheetState extends State<_ForwardSheet> {
           );
     Navigator.of(context).pop(ops);
   }
-}
-
-class _Centered extends StatelessWidget {
-  const _Centered({
-    required this.icon,
-    required this.text,
-    this.action,
-    this.onAction,
-  });
-
-  final IconData icon;
-  final String text;
-  final String? action;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(LuciSpacing.xl),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 48, color: Theme.of(context).colorScheme.outline),
-          const SizedBox(height: LuciSpacing.md),
-          Text(
-            text,
-            textAlign: TextAlign.center,
-            style: LuciTextStyles.cardSubtitle(context),
-          ),
-          if (action != null)
-            TextButton(onPressed: onAction, child: Text(action!)),
-        ],
-      ),
-    ),
-  );
 }

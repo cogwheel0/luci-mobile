@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:luci_mobile/widgets/luci_loading_states.dart';
 import 'package:luci_mobile/l10n/app_localizations.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
@@ -36,7 +37,14 @@ class EventFeedScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text(e.toString())),
         data: (events) => events.isEmpty
-            ? _Empty()
+            ? LuciMessageState(
+                scrollable: false,
+                icon: Icons.history,
+                title: l10n.noActivityYet,
+                // Saying plainly that this only records while the app is
+                // open stops an empty feed reading as a broken feature.
+                message: l10n.activityOnlyWhileOpen,
+              )
             : ListView.separated(
                 itemCount: events.length,
                 separatorBuilder: (_, _) => const Divider(height: 1),
@@ -45,38 +53,6 @@ class EventFeedScreen extends ConsumerWidget {
                 itemBuilder: (context, i) =>
                     _EventRow(event: events[events.length - 1 - i]),
               ),
-      ),
-    );
-  }
-}
-
-class _Empty extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(LuciSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.history,
-              size: 48,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-            const SizedBox(height: LuciSpacing.md),
-            Text(l10n.noActivityYet, style: LuciTextStyles.cardTitle(context)),
-            const SizedBox(height: LuciSpacing.sm),
-            // Saying plainly that this only records while the app is open
-            // stops an empty feed reading as a broken feature.
-            Text(
-              l10n.activityOnlyWhileOpen,
-              textAlign: TextAlign.center,
-              style: LuciTextStyles.cardSubtitle(context),
-            ),
-          ],
-        ),
       ),
     );
   }

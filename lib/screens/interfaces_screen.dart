@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:luci_mobile/l10n/api_error_text.dart';
 import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/models/glinet_data.dart';
@@ -434,7 +435,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                 builder: (context) {
                   final watchedAppState = ref.watch(appStateProvider);
                   final isLoading = watchedAppState.isDashboardLoading;
-                  final dashboardError = watchedAppState.dashboardError;
+                  final dashboardCause = watchedAppState.dashboardErrorCause;
+                  final dashboardError = dashboardCause == null
+                      ? watchedAppState.dashboardError
+                      : apiErrorText(context, dashboardCause);
                   final dashboardData = watchedAppState.dashboardData;
 
                   if (isLoading && dashboardData == null) {

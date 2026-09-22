@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/l10n/api_error_text.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/router_capabilities.dart';
-import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/traffic_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/state/feature_providers.dart';
@@ -65,15 +65,15 @@ class _TrafficScreenState extends ConsumerState<TrafficScreen> {
             padding: EdgeInsets.all(LuciSpacing.md),
             child: LuciCardSkeleton(contentLines: 5),
           ),
-          error: (error, _) => _Message(
-            text: gate.explain(context) ?? userFacingApiError(error),
+          error: (error, _) => LuciMessageState(
+            message: gate.explain(context) ?? apiErrorText(context, error),
             action: l10n.retry,
             onAction: () => ref.invalidate(trafficPeriodsProvider),
           ),
           data: (list) {
             if (list.isEmpty) {
-              return _Message(
-                text: gate.explain(context) ?? l10n.trafficNoPeriods,
+              return LuciMessageState(
+                message: gate.explain(context) ?? l10n.trafficNoPeriods,
               );
             }
             final period = list.contains(_period) ? _period! : list.first;
@@ -132,13 +132,13 @@ class _Records extends ConsumerWidget {
               padding: EdgeInsets.all(LuciSpacing.md),
               child: LuciCardSkeleton(contentLines: 5),
             ),
-            error: (error, _) => _Message(
-              text: userFacingApiError(error),
+            error: (error, _) => LuciMessageState(
+              message: apiErrorText(context, error),
               action: l10n.retry,
               onAction: () => ref.invalidate(trafficRecordsProvider(period)),
             ),
             data: (rows) => rows.isEmpty
-                ? _Message(text: l10n.trafficNoRecords)
+                ? LuciMessageState(message: l10n.trafficNoRecords)
                 : _RowList(rows: rows),
           ),
         ),
@@ -195,32 +195,4 @@ class _RowList extends StatelessWidget {
       },
     );
   }
-}
-
-class _Message extends StatelessWidget {
-  const _Message({required this.text, this.action, this.onAction});
-
-  final String text;
-  final String? action;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) => ListView(
-    physics: const AlwaysScrollableScrollPhysics(),
-    children: [
-      const SizedBox(height: LuciSpacing.xxl),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: LuciSpacing.xl),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: LuciTextStyles.cardSubtitle(context),
-        ),
-      ),
-      if (action != null)
-        Center(
-          child: TextButton(onPressed: onAction, child: Text(action!)),
-        ),
-    ],
-  );
 }

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/l10n/api_error_text.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
-import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/diagnostics_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
@@ -29,7 +29,9 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
   DiagnosticTool _tool = DiagnosticTool.ping;
   bool _running = false;
   String? _output;
-  String? _error;
+
+  /// Kept as the error, not as a sentence; worded when it is shown.
+  Object? _error;
 
   @override
   void dispose() {
@@ -58,7 +60,7 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = userFacingApiError(e));
+      setState(() => _error = e);
     } finally {
       if (mounted) setState(() => _running = false);
     }
@@ -123,7 +125,7 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
               color: Theme.of(context).colorScheme.errorContainer,
               child: Padding(
                 padding: const EdgeInsets.all(LuciSpacing.md),
-                child: Text(_error!),
+                child: Text(apiErrorText(context, _error!)),
               ),
             ),
 

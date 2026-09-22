@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:luci_mobile/l10n/api_error_text.dart';
 import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/main.dart';
@@ -1657,9 +1658,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Widget _buildBody(AppState appState) {
     if (appState.dashboardError != null) {
+      // Worded here, where there is a BuildContext, when the failure came
+      // from a router call this app can name.
+      final cause = appState.dashboardErrorCause;
       return LuciErrorDisplay(
         title: context.l10n.unableToLoadDashboard,
-        message: appState.dashboardError!,
+        message: cause == null
+            ? appState.dashboardError!
+            : apiErrorText(context, cause),
         actionLabel: context.l10n.retryConnection,
         onAction: () => appState.fetchDashboardData(),
         icon: Icons.wifi_off_rounded,

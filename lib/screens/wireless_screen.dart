@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/l10n/api_error_text.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/router_capabilities.dart';
 import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/models/wireless_config.dart';
-import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/wireless_planner.dart';
 import 'package:luci_mobile/state/feature_providers.dart';
 import 'package:luci_mobile/state/wireless_notifier.dart';
@@ -45,16 +45,16 @@ class _WirelessScreenState extends ConsumerState<WirelessScreen> {
               LuciCardSkeleton(contentLines: 3),
             ],
           ),
-          error: (error, _) => _Message(
+          error: (error, _) => LuciMessageState(
             icon: Icons.error_outline,
-            text: userFacingApiError(error),
+            message: apiErrorText(context, error),
             action: l10n.retry,
             onAction: () => ref.invalidate(wirelessConfigProvider),
           ),
           data: (radios) => radios.isEmpty
-              ? _Message(
+              ? LuciMessageState(
                   icon: Icons.wifi_off_rounded,
-                  text: gate.explain(context) ?? l10n.noWirelessRadios,
+                  message: gate.explain(context) ?? l10n.noWirelessRadios,
                 )
               : ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -712,42 +712,4 @@ class _Banner extends StatelessWidget {
       ),
     );
   }
-}
-
-class _Message extends StatelessWidget {
-  const _Message({
-    required this.icon,
-    required this.text,
-    this.action,
-    this.onAction,
-  });
-
-  final IconData icon;
-  final String text;
-  final String? action;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) => ListView(
-    children: [
-      const SizedBox(height: LuciSpacing.xxl),
-      Icon(icon, size: 48, color: Theme.of(context).colorScheme.outline),
-      const SizedBox(height: LuciSpacing.md),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: LuciSpacing.xl),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: LuciTextStyles.cardSubtitle(context),
-        ),
-      ),
-      if (action != null)
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.only(top: LuciSpacing.md),
-            child: TextButton(onPressed: onAction, child: Text(action!)),
-          ),
-        ),
-    ],
-  );
 }

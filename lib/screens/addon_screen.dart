@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/l10n/api_error_text.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/addon_strings.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
@@ -9,7 +10,6 @@ import 'package:luci_mobile/models/addon_spec.dart';
 import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/services/addon_catalog.dart';
 import 'package:luci_mobile/services/addon_planner.dart';
-import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/state/addon_notifier.dart';
 import 'package:luci_mobile/state/feature_providers.dart';
@@ -110,15 +110,15 @@ class _AddonScreenState extends ConsumerState<AddonScreen> {
             padding: EdgeInsets.all(LuciSpacing.md),
             child: LuciCardSkeleton(contentLines: 5),
           ),
-          error: (error, _) => _Message(
-            text: gate.explain(context) ?? userFacingApiError(error),
+          error: (error, _) => LuciMessageState(
+            message: gate.explain(context) ?? apiErrorText(context, error),
             action: l10n.retry,
             onAction: () => ref.invalidate(addonProvider(spec)),
           ),
           data: (sections) {
             if (sections.isEmpty) {
-              return _Message(
-                text: gate.explain(context) ?? l10n.addonNotConfigured,
+              return LuciMessageState(
+                message: gate.explain(context) ?? l10n.addonNotConfigured,
               );
             }
             final selected = sections.firstWhere(
@@ -389,32 +389,4 @@ class _FieldTile extends StatelessWidget {
         );
     }
   }
-}
-
-class _Message extends StatelessWidget {
-  const _Message({required this.text, this.action, this.onAction});
-
-  final String text;
-  final String? action;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) => ListView(
-    physics: const AlwaysScrollableScrollPhysics(),
-    children: [
-      const SizedBox(height: LuciSpacing.xxl),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: LuciSpacing.xl),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: LuciTextStyles.cardSubtitle(context),
-        ),
-      ),
-      if (action != null)
-        Center(
-          child: TextButton(onPressed: onAction, child: Text(action!)),
-        ),
-    ],
-  );
 }

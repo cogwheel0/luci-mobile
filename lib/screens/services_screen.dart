@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/l10n/api_error_text.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/router_capabilities.dart';
 import 'package:luci_mobile/models/service_status.dart';
-import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/state/feature_providers.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
@@ -59,7 +59,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(userFacingApiError(e))));
+      messenger.showSnackBar(SnackBar(content: Text(apiErrorText(context, e))));
     } finally {
       if (mounted) setState(() => _busyService = null);
     }
@@ -113,13 +113,15 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
             padding: EdgeInsets.all(LuciSpacing.md),
             child: LuciCardSkeleton(contentLines: 5),
           ),
-          error: (error, _) => _Centered(
-            text: gate.explain(context) ?? userFacingApiError(error),
+          error: (error, _) => LuciMessageState(
+            message: gate.explain(context) ?? apiErrorText(context, error),
             action: l10n.retry,
             onAction: () => ref.invalidate(servicesProvider),
           ),
           data: (services) => services.isEmpty
-              ? _Centered(text: gate.explain(context) ?? l10n.noServices)
+              ? LuciMessageState(
+                  message: gate.explain(context) ?? l10n.noServices,
+                )
               : ListView.separated(
                   physics: const AlwaysScrollableScrollPhysics(),
                   itemCount: services.length,
@@ -206,31 +208,4 @@ class _ServiceRow extends StatelessWidget {
       ),
     );
   }
-}
-
-class _Centered extends StatelessWidget {
-  const _Centered({required this.text, this.action, this.onAction});
-
-  final String text;
-  final String? action;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) => ListView(
-    children: [
-      const SizedBox(height: LuciSpacing.xxl),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: LuciSpacing.xl),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: LuciTextStyles.cardSubtitle(context),
-        ),
-      ),
-      if (action != null)
-        Center(
-          child: TextButton(onPressed: onAction, child: Text(action!)),
-        ),
-    ],
-  );
 }

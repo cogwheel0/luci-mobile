@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/l10n/api_error_text.dart';
+import 'package:luci_mobile/widgets/luci_loading_states.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/screens/diagnostics_screen.dart';
-import 'package:luci_mobile/services/api_service.dart';
 import 'package:luci_mobile/services/diagnostics_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
@@ -23,7 +24,10 @@ class _LogScreenState extends ConsumerState<LogScreen> {
   _LogSource _source = _LogSource.system;
   final _filter = TextEditingController();
   bool _loading = false;
-  String? _error;
+
+  /// Kept as the error, not as a sentence: the wording is looked up when
+  /// it is shown, so it is in the user's language.
+  Object? _error;
   List<LogEntry> _entries = const [];
 
   @override
@@ -59,7 +63,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
         _entries = const [];
         // Saying "no log entries" when the read failed would suggest the
         // router had nothing to report, which is the opposite of the truth.
-        _error = userFacingApiError(e);
+        _error = e;
       });
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -157,19 +161,28 @@ class _LogScreenState extends ConsumerState<LogScreen> {
     final l10n = context.l10n;
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return _Centered(
+      return LuciMessageState(
+        scrollable: false,
         icon: Icons.error_outline,
         title: l10n.logUnavailable,
-        detail: _error!,
+        message: apiErrorText(context, _error!),
         action: l10n.retry,
         onAction: _load,
       );
     }
     if (_entries.isEmpty) {
-      return _Centered(icon: Icons.article_outlined, title: l10n.logEmpty);
+      return LuciMessageState(
+        scrollable: false,
+        icon: Icons.article_outlined,
+        message: l10n.logEmpty,
+      );
     }
     if (visible.isEmpty) {
-      return _Centered(icon: Icons.search_off, title: l10n.noMatchingLogLines);
+      return LuciMessageState(
+        scrollable: false,
+        icon: Icons.search_off,
+        message: l10n.noMatchingLogLines,
+      );
     }
 
     return ListView.builder(
@@ -241,45 +254,4 @@ class _LogRow extends StatelessWidget {
       ),
     );
   }
-}
-
-class _Centered extends StatelessWidget {
-  const _Centered({
-    required this.icon,
-    required this.title,
-    this.detail,
-    this.action,
-    this.onAction,
-  });
-
-  final IconData icon;
-  final String title;
-  final String? detail;
-  final String? action;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(LuciSpacing.xl),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 48, color: Theme.of(context).colorScheme.outline),
-          const SizedBox(height: LuciSpacing.md),
-          Text(title, style: LuciTextStyles.cardTitle(context)),
-          if (detail != null) ...[
-            const SizedBox(height: LuciSpacing.sm),
-            Text(
-              detail!,
-              textAlign: TextAlign.center,
-              style: LuciTextStyles.cardSubtitle(context),
-            ),
-          ],
-          if (action != null)
-            TextButton(onPressed: onAction, child: Text(action!)),
-        ],
-      ),
-    ),
-  );
 }

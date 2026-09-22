@@ -52,7 +52,20 @@ class AppState extends ChangeNotifier {
 
   Map<String, dynamic>? _dashboardData;
   bool _isDashboardLoading = false;
-  String? _dashboardError;
+  String? _dashboardErrorMessage;
+
+  /// What actually failed, when the failure came from a router call.
+  ///
+  /// The message is built here for logs and for the older assignments that
+  /// have only a sentence; a screen with a `BuildContext` prefers this and
+  /// words it in the user's language. Assigning a message clears it, so a
+  /// stale cause can never outlive the failure it explains.
+  Object? _dashboardErrorCause;
+
+  set _dashboardError(String? message) {
+    _dashboardErrorMessage = message;
+    _dashboardErrorCause = null;
+  }
 
   Timer? _throughputTimer;
   Timer? _pollingTimer;
@@ -424,7 +437,10 @@ class AppState extends ChangeNotifier {
   double get currentRxRate => _throughputService?.currentRxRate ?? 0.0;
   double get currentTxRate => _throughputService?.currentTxRate ?? 0.0;
   bool get isDashboardLoading => _isDashboardLoading;
-  String? get dashboardError => _dashboardError;
+  String? get dashboardError => _dashboardErrorMessage;
+
+  /// The error behind [dashboardError], when there was one.
+  Object? get dashboardErrorCause => _dashboardErrorCause;
 
   // Interface-specific throughput getters
   List<double> getRxHistoryForInterface(String interface) {
@@ -1210,6 +1226,7 @@ class AppState extends ChangeNotifier {
         }
       }
       _dashboardError = userFacingApiError(e);
+      _dashboardErrorCause = e;
     } finally {
       // A newer session (router switch / re-login / logout) started while this
       // fetch was in flight - drop the stale results instead of clobbering it.
