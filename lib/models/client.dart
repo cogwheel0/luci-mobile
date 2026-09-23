@@ -19,6 +19,12 @@ class Client {
   final String? wifiBand; // "2G", "5G", "6G", or null (wired/unknown)
   final bool? isOnline; // true/false from GL.iNet API, null if unknown
   final String? deviceClass; // "phone", "laptop", "tv", etc.
+  // Which saved router profile reported this client. Null when unknown.
+  // Writes (reservation, block) must target the owning router, so the detail
+  // page refuses to mutate a client belonging to a router that is not the
+  // selected one.
+  final String? routerId;
+  final String? routerLabel;
 
   Client({
     required this.ipAddress,
@@ -36,6 +42,8 @@ class Client {
     this.wifiBand,
     this.isOnline,
     this.deviceClass,
+    this.routerId,
+    this.routerLabel,
   });
 
   // Helper function to determine connection type from MAC address or other data
@@ -188,6 +196,8 @@ class Client {
       expiresAt: expiresAtTimestamp, // Store the calculated absolute timestamp
       connectionType: _determineConnectionType(lease),
       ipv6Addresses: ipv6Addresses,
+      routerId: toStringValue(lease['_routerId']),
+      routerLabel: toStringValue(lease['_routerLabel']),
     );
   }
 
@@ -273,6 +283,8 @@ class Client {
     String? wifiBand,
     bool? isOnline,
     String? deviceClass,
+    String? routerId,
+    String? routerLabel,
   }) {
     return Client(
       ipAddress: ipAddress ?? this.ipAddress,
@@ -290,6 +302,8 @@ class Client {
       wifiBand: wifiBand ?? this.wifiBand,
       isOnline: isOnline ?? this.isOnline,
       deviceClass: deviceClass ?? this.deviceClass,
+      routerId: routerId ?? this.routerId,
+      routerLabel: routerLabel ?? this.routerLabel,
     );
   }
 }

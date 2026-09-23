@@ -1,0 +1,15 @@
+{
+  "values": {
+    "global": {
+      ".anonymous": false, ".type": "ddns", ".name": "global", ".index": 0,
+      "ddns_dateformat": "%F %R", "ddns_loglines": "250"
+    },
+    "myddns_ipv4": {
+      ".anonymous": false, ".type": "service", ".name": "myddns_ipv4", ".index": 1,
+      "enabled": "1", "service_name": "dyndns.org",
+      "lookup_host": "home.example.com", "domain": "home.example.com",
+      "username": "demo", "password": "demo",
+      "interface": "wan", "ip_source": "network", "ip_network": "wan"
+    }
+  }
+}

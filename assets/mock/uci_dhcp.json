@@ -1,0 +1,65 @@
+{
+  "values": {
+    "cfg01411c": {
+      ".anonymous": true,
+      ".type": "dnsmasq",
+      ".name": "cfg01411c",
+      "domainneeded": "1",
+      "localise_queries": "1",
+      "rebind_protection": "1",
+      "local": "/lan/",
+      "domain": "lan",
+      "expandhosts": "1",
+      "authoritative": "1",
+      "readethers": "1",
+      "leasefile": "/tmp/dhcp.leases",
+      "localservice": "1",
+      "ednspacket_max": "1232"
+    },
+    "lan": {
+      ".anonymous": false,
+      ".type": "dhcp",
+      ".name": "lan",
+      "interface": "lan",
+      "start": "100",
+      "limit": "150",
+      "leasetime": "12h",
+      "dhcpv4": "server",
+      "dhcpv6": "server",
+      "ra": "server",
+      "ra_slaac": "1"
+    },
+    "wan": {
+      ".anonymous": false,
+      ".type": "dhcp",
+      ".name": "wan",
+      "interface": "wan",
+      "ignore": "1"
+    },
+    "odhcpd": {
+      ".anonymous": false,
+      ".type": "odhcpd",
+      ".name": "odhcpd",
+      "maindhcp": "0",
+      "leasefile": "/tmp/hosts/odhcpd",
+      "leasetrigger": "/usr/sbin/odhcpd-update",
+      "loglevel": "4"
+    },
+    "cfg0b9836": {
+      ".anonymous": true,
+      ".type": "host",
+      ".name": "cfg0b9836",
+      "mac": "CC:DD:EE:DD:EE:FF",
+      "ip": "192.168.1.120",
+      "name": "Raspberry-Pi-Server"
+    },
+    "cfg0c9836": {
+      ".anonymous": true,
+      ".type": "host",
+      ".name": "cfg0c9836",
+      "mac": "AA:BB:CC:98:76:54",
+      "ip": "192.168.1.107",
+      "name": "Printer-HP-Office"
+    }
+  }
+}

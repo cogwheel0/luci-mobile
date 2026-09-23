@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
+import 'package:luci_mobile/models/service_status.dart';
+import 'package:luci_mobile/models/station_info.dart';
 import '../utils/http_client_manager.dart';
 import '../utils/logger.dart';
 
@@ -26,25 +29,53 @@ class RpcException implements Exception {
     this.detail,
   });
 
+  /// True when the router has no such object, method or config: ubus
+  /// status 4. The message text is not consulted - "not found" appears in
+  /// too many unrelated errors to be an answer.
+  bool get isNotFound => status == 4;
+
+  /// The `object.method` this failure is about.
+  String get call => '$object.$method';
+
+  /// True when the router has no such object or method at all - the module
+  /// that would provide it is not installed.
+  bool get isUnavailable =>
+      status == 3 ||
+      status == 4 ||
+      status == 8 ||
+      detail?.toLowerCase().contains('not found') == true ||
+      detail?.toLowerCase().contains('not supported') == true;
+
+  /// The package that would provide this call, when it is one the app knows
+  /// how to name. Null when the failure is not a missing module, or when
+  /// the module has no obvious package.
+  String? get requiredPackage {
+    if (!isUnavailable) return null;
+    return switch (object) {
+      'luci-rpc' => 'rpcd-mod-luci',
+      'iwinfo' => 'rpcd-mod-iwinfo',
+      _ => null,
+    };
+  }
+
+  /// True when the router refused the call for lack of permission.
+  ///
+  /// rpcd reports this as ubus status 6, but LuCI's `/admin/ubus` proxy turns
+  /// a dead session into a JSON-RPC error whose only trace is the message
+  /// text, so both shapes have to count.
+  bool get isAccessDenied =>
+      status == 6 || detail?.toLowerCase().contains('access denied') == true;
+
+  /// For logs. What the *user* is told goes through `apiErrorText`, which
+  /// says the same things in their language.
   @override
   String toString() {
-    final call = '$object.$method';
-    final unavailable =
-        status == 3 ||
-        status == 4 ||
-        status == 8 ||
-        detail?.toLowerCase().contains('not found') == true ||
-        detail?.toLowerCase().contains('not supported') == true;
-    if (unavailable && object == 'luci-rpc') {
-      return 'Router RPC support is missing: $call is unavailable. Install '
-          'rpcd-mod-luci, restart rpcd, then reconnect.';
+    final package = requiredPackage;
+    if (package != null) {
+      return '$call is unavailable. Install $package, restart rpcd, then '
+          'reconnect.';
     }
-    if (unavailable && object == 'iwinfo') {
-      return 'Wireless client support is missing: $call is unavailable. '
-          'Install rpcd-mod-iwinfo, restart rpcd, then refresh.';
-    }
-    if (status == 6 ||
-        detail?.toLowerCase().contains('access denied') == true) {
+    if (isAccessDenied) {
       return 'This account does not have permission for $call. Sign in with '
           'an administrator account or grant the required RPC access.';
     }
@@ -106,6 +137,127 @@ bool? rpcAccessAllowed(dynamic result) {
   return null;
 }
 
+/// True when [error] says the router could not be reached at all, as opposed
+/// to reaching it and being refused. Only the former is evidence for the
+/// activity feed that the router went away.
+bool isRouterUnreachable(Object error) {
+  if (error is SocketException || error is TimeoutException) return true;
+  if (error is! DioException) return false;
+  return switch (error.type) {
+    DioExceptionType.connectionError ||
+    DioExceptionType.connectionTimeout ||
+    DioExceptionType.sendTimeout ||
+    DioExceptionType.receiveTimeout => true,
+    // A certificate the router did present, a cancelled request, or a body
+    // that would not parse all mean it answered.
+    DioExceptionType.badCertificate ||
+    DioExceptionType.badResponse ||
+    DioExceptionType.transformTimeout ||
+    DioExceptionType.cancel => false,
+    // Dio wraps a dropped connection - reset, refused, closed mid-header
+    // while the router reboots - as `unknown` with the IO error inside.
+    DioExceptionType.unknown =>
+      error.error is SocketException ||
+          error.error is HttpException ||
+          error.error is OSError,
+  };
+}
+
+/// What went wrong with a router call, in terms a user can act on.
+enum ApiErrorKind {
+  /// The router rejected the session; reconnecting is the next step.
+  sessionRejected,
+
+  /// This account may not make the call.
+  noPermission,
+
+  /// The module that provides the call is not installed.
+  missingPackage,
+
+  /// The router answered, with an HTTP status that is not a session
+  /// problem.
+  httpStatus,
+
+  /// The router could not be reached at all.
+  unreachable,
+
+  /// The router refused the call and said why, in its own words.
+  rpcFailed,
+
+  /// Anything else; [ApiErrorInfo.detail] is all there is to say.
+  other,
+}
+
+/// A router failure, classified so the message can be translated.
+///
+/// The classification is here, with the wire protocol it describes; the
+/// wording lives with the other user-facing strings.
+@immutable
+class ApiErrorInfo {
+  const ApiErrorInfo(
+    this.kind, {
+    this.call,
+    this.package,
+    this.status,
+    this.detail,
+  });
+
+  final ApiErrorKind kind;
+
+  /// The `object.method` that failed, when the failure names one.
+  final String? call;
+
+  /// What to install, for [ApiErrorKind.missingPackage].
+  final String? package;
+
+  /// The HTTP status, for [ApiErrorKind.httpStatus].
+  final int? status;
+
+  /// The router's own words, which cannot be translated.
+  final String? detail;
+}
+
+/// Classifies [error] without putting it into words.
+ApiErrorInfo describeApiError(Object error) {
+  if (error is RpcException) {
+    final package = error.requiredPackage;
+    if (package != null) {
+      return ApiErrorInfo(
+        ApiErrorKind.missingPackage,
+        call: error.call,
+        package: package,
+      );
+    }
+    if (error.isAccessDenied) {
+      return ApiErrorInfo(ApiErrorKind.noPermission, call: error.call);
+    }
+    return ApiErrorInfo(
+      ApiErrorKind.rpcFailed,
+      call: error.call,
+      detail: error.detail,
+    );
+  }
+  if (error is DioException) {
+    final status = error.response?.statusCode;
+    if (status == 401 || status == 403) {
+      return const ApiErrorInfo(ApiErrorKind.sessionRejected);
+    }
+    if (status != null) {
+      return ApiErrorInfo(ApiErrorKind.httpStatus, status: status);
+    }
+    return const ApiErrorInfo(ApiErrorKind.unreachable);
+  }
+  if (isRouterUnreachable(error)) {
+    return const ApiErrorInfo(ApiErrorKind.unreachable);
+  }
+  return ApiErrorInfo(
+    ApiErrorKind.other,
+    detail: error.toString().replaceFirst('Exception: ', ''),
+  );
+}
+
+/// The English form, for logs and for the places that have no
+/// `BuildContext`. Screens use `apiErrorText` instead.
 String userFacingApiError(Object error) {
   if (error is RpcException) return error.toString();
   if (error is DioException) {
@@ -795,7 +947,7 @@ class RealApiService implements IApiService {
     bool useHttps, {
     required String config,
     required String section,
-    required Map<String, String> values,
+    required Map<String, Object> values,
     BuildContext? context,
   }) async {
     return _requireRpcSuccess(
@@ -1042,5 +1194,485 @@ class RealApiService implements IApiService {
       ),
       'uci.get',
     );
+  }
+
+  @override
+  Future<List<String>> uciConfigs(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'configs',
+        context: context,
+      ),
+      'uci.configs',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is Map && data['configs'] is List) {
+      return (data['configs'] as List).map((e) => e.toString()).toList();
+    }
+    return const <String>[];
+  }
+
+  @override
+  Future<Map<String, List<List<String>>>> uciChanges(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    String? config,
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'changes',
+        params: config == null ? null : {'config': config},
+        context: context,
+      ),
+      'uci.changes',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is! Map) return const <String, List<List<String>>>{};
+    final changes = data['changes'];
+
+    // uci.changes returns one of two shapes: with a config filter it is a flat
+    // list of change rows; without one it is a map of config name -> rows.
+    if (config != null) {
+      final rows = _parseChangeRows(changes);
+      return rows.isEmpty
+          ? const <String, List<List<String>>>{}
+          : {config: rows};
+    }
+    if (changes is! Map) return const <String, List<List<String>>>{};
+    final out = <String, List<List<String>>>{};
+    for (final entry in changes.entries) {
+      final rows = _parseChangeRows(entry.value);
+      if (rows.isNotEmpty) out[entry.key.toString()] = rows;
+    }
+    return out;
+  }
+
+  /// Normalizes one config's worth of `uci.changes` rows into
+  /// `[op, section, option?, value?]` string lists.
+  static List<List<String>> _parseChangeRows(dynamic raw) {
+    if (raw is! List) return const <List<String>>[];
+    final rows = <List<String>>[];
+    for (final row in raw) {
+      if (row is! List || row.isEmpty) continue;
+      rows.add(row.map((e) => e?.toString() ?? '').toList());
+    }
+    return rows;
+  }
+
+  @override
+  Future<dynamic> uciRevert(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String config,
+    BuildContext? context,
+  }) async {
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'revert',
+        params: {'config': config},
+        context: context,
+      ),
+      'uci.revert',
+    );
+  }
+
+  @override
+  Future<dynamic> uciApply(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required bool rollback,
+    required int timeoutSeconds,
+    BuildContext? context,
+  }) async {
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'apply',
+        params: {'rollback': rollback, 'timeout': timeoutSeconds},
+        context: context,
+      ),
+      'uci.apply',
+    );
+  }
+
+  @override
+  Future<dynamic> uciConfirm(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'confirm',
+        context: context,
+      ),
+      'uci.confirm',
+    );
+  }
+
+  @override
+  Future<dynamic> uciRollback(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    return _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'uci',
+        method: 'rollback',
+        context: context,
+      ),
+      'uci.rollback',
+    );
+  }
+
+  @override
+  Future<Map<String, dynamic>> luciGetFeatures(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'luci',
+        method: 'getFeatures',
+        context: context,
+      ),
+      'luci.getFeatures',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return const <String, dynamic>{};
+  }
+
+  @override
+  Future<Map<String, Set<String>>?> fetchSessionAcl(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'session',
+        method: 'list',
+        params: {'ubus_rpc_session': sysauth},
+        context: context,
+      ),
+      'session.list',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    return _extractUbusAcl(data, sysauth);
+  }
+
+  /// Pulls the `acls.ubus` map out of a `session.list` response.
+  ///
+  /// rpcd answers either with the session object directly or with a map of
+  /// session id -> session object depending on version, so handle both.
+  static Map<String, Set<String>>? _extractUbusAcl(dynamic data, String sid) {
+    if (data is! Map) return null;
+
+    Map<dynamic, dynamic>? session;
+    if (data['acls'] is Map) {
+      session = data;
+    } else if (data[sid] is Map) {
+      session = data[sid] as Map;
+    } else {
+      // A map of sessions keyed by id: take the only one that has acls.
+      for (final value in data.values) {
+        if (value is Map && value['acls'] is Map) {
+          session = value;
+          break;
+        }
+      }
+    }
+    if (session == null) return null;
+
+    final acls = session['acls'];
+    if (acls is! Map) return null;
+    final ubus = acls['ubus'];
+    if (ubus is! Map) return null;
+
+    final out = <String, Set<String>>{};
+    for (final entry in ubus.entries) {
+      final value = entry.value;
+      if (value is List) {
+        out[entry.key.toString()] = value.map((e) => e.toString()).toSet();
+      } else if (value is String) {
+        out[entry.key.toString()] = {value};
+      }
+    }
+    return out;
+  }
+
+  @override
+  Future<Map<String, StationInfo>> fetchStationDetails(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String device,
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'iwinfo',
+        method: 'assoclist',
+        params: {'device': device},
+        context: context,
+      ),
+      'iwinfo.assoclist',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is! Map || data['results'] is! List) {
+      return const <String, StationInfo>{};
+    }
+    final out = <String, StationInfo>{};
+    for (final row in data['results'] as List) {
+      if (row is! Map) continue;
+      final station = StationInfo.fromJson(
+        Map<String, dynamic>.from(row),
+        interface: device,
+      );
+      if (station != null) out[station.macAddress] = station;
+    }
+    return out;
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchHostHints(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'luci-rpc',
+        method: 'getHostHints',
+        context: context,
+      ),
+      'luci-rpc.getHostHints',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is! Map) return const <String, dynamic>{};
+    return {
+      for (final entry in data.entries)
+        StationInfo.normalizeMac(entry.key.toString()): entry.value,
+    };
+  }
+
+  @override
+  Future<List<List<num>>> luciRealtimeStats(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String mode,
+    String? device,
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'luci',
+        method: 'getRealtimeStats',
+        params: {'mode': mode, 'device': ?device},
+        context: context,
+      ),
+      'luci.getRealtimeStats',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    final rows = data is Map ? data['result'] : null;
+    if (rows is! List) return const <List<num>>[];
+    return [
+      for (final row in rows)
+        if (row is List)
+          [
+            for (final v in row)
+              if (v is num) v else num.tryParse(v.toString()) ?? 0,
+          ],
+    ];
+  }
+
+  @override
+  Future<Map<String, ServiceStatus>> rcList(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'rc',
+        method: 'list',
+        context: context,
+      ),
+      'rc.list',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is! Map) return const <String, ServiceStatus>{};
+    return {
+      for (final entry in data.entries)
+        if (entry.value is Map)
+          entry.key.toString(): ServiceStatus.fromJson(
+            entry.key.toString(),
+            Map<String, dynamic>.from(entry.value as Map),
+          ),
+    };
+  }
+
+  @override
+  Future<bool> rcInit(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String name,
+    required String action,
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'rc',
+        method: 'init',
+        params: {'name': name, 'action': action},
+        context: context,
+      ),
+      'rc.init',
+    );
+    // rpcd answers `{"result": <bool>}`: an init script that exits non-zero
+    // comes back with ubus status 0 and `result: false`, which reporting as
+    // success would tell the user a service started when it did not.
+    final data = result.length > 1 ? result[1] : null;
+    if (data is Map) return data['result'] != false;
+    return true;
+  }
+
+  @override
+  Future<bool> luciSetPassword(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String username,
+    required String password,
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'luci',
+        method: 'setPassword',
+        params: {'username': username, 'password': password},
+        context: context,
+      ),
+      'luci.setPassword',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    // rpcd answers `{"result": true}`; a bare success envelope with no body
+    // means it ran, so both count.
+    if (data is Map) return data['result'] != false;
+    return true;
+  }
+
+  @override
+  Future<Map<String, String>> luciTimezones(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    BuildContext? context,
+  }) async {
+    final result = _requireRpcSuccess(
+      await callWithContext(
+        ipAddress,
+        sysauth,
+        useHttps,
+        object: 'luci',
+        method: 'getTimezones',
+        context: context,
+      ),
+      'luci.getTimezones',
+    );
+    final data = result.length > 1 ? result[1] : null;
+    if (data is! Map) return const <String, String>{};
+    return {
+      for (final entry in data.entries)
+        if (entry.value is Map && (entry.value as Map)['tzstring'] != null)
+          entry.key.toString(): (entry.value as Map)['tzstring'].toString(),
+    };
+  }
+
+  @override
+  Future<bool?> checkUbusAccess(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String object,
+    required String function,
+    BuildContext? context,
+  }) async {
+    final result = await callWithContext(
+      ipAddress,
+      sysauth,
+      useHttps,
+      object: 'session',
+      method: 'access',
+      params: {'scope': 'ubus', 'object': object, 'function': function},
+      context: context,
+    );
+    return rpcAccessAllowed(result);
   }
 }

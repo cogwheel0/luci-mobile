@@ -1,0 +1,9 @@
+{
+  "values": {
+    "global": {
+      ".anonymous": false, ".type": "adblock", ".name": "global", ".index": 0,
+      "adb_enabled": "1", "adb_safesearch": "0", "adb_dnsforce": "0",
+      "adb_feed": ["adguard", "adguard_tracking", "certpl"]
+    }
+  }
+}

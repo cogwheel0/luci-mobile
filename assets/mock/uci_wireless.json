@@ -1,5 +1,5 @@
 {
-  "wireless": {
+  "values": {
     "radio0": {
       ".anonymous": false,
       ".type": "wifi-device",

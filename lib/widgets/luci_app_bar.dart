@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 
@@ -261,4 +262,21 @@ class LuciLoadingWidget extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Copies [value] and says so.
+///
+/// One copy of the gesture, because the four that grew separately disagreed
+/// on the wording and one of them put the copied value in the toast.
+Future<void> copyToClipboard(
+  BuildContext context,
+  String value, {
+  required String label,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final message = context.l10n.copiedToClipboard(label);
+  await Clipboard.setData(ClipboardData(text: value));
+  messenger.showSnackBar(
+    SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+  );
 }

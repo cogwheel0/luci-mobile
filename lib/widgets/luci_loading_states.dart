@@ -272,3 +272,83 @@ class LuciChartSkeleton extends StatelessWidget {
     );
   }
 }
+
+/// A whole-pane message: an empty list, a gated feature, a failed load.
+///
+/// The lighter counterpart to `LuciEmptyState`, for a pane that sits inside
+/// a screen which already has its own app bar and chrome. One widget rather
+/// than one per screen: nine private copies had drifted into four different
+/// looks, and two of them dropped the scroll physics that keeps a
+/// pull-to-refresh working when there is nothing to pull on.
+class LuciMessageState extends StatelessWidget {
+  const LuciMessageState({
+    super.key,
+    required this.message,
+    this.icon,
+    this.title,
+    this.action,
+    this.onAction,
+    this.scrollable = true,
+  });
+
+  final String message;
+  final IconData? icon;
+
+  /// A heading above [message], when the message alone needs framing.
+  final String? title;
+
+  final String? action;
+  final VoidCallback? onAction;
+
+  /// Whether the message scrolls. True keeps a `RefreshIndicator` above it
+  /// working on an otherwise empty pane; false centres it in the space
+  /// available, for a pane that has no refresh gesture of its own.
+  final bool scrollable;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = <Widget>[
+      if (icon != null) ...[
+        Icon(icon, size: 48, color: Theme.of(context).colorScheme.outline),
+        const SizedBox(height: LuciSpacing.md),
+      ],
+      if (title != null) ...[
+        Text(
+          title!,
+          textAlign: TextAlign.center,
+          style: LuciTextStyles.cardTitle(context),
+        ),
+        const SizedBox(height: LuciSpacing.sm),
+      ],
+      Text(
+        message,
+        textAlign: TextAlign.center,
+        style: LuciTextStyles.cardSubtitle(context),
+      ),
+      if (action != null)
+        Padding(
+          padding: const EdgeInsets.only(top: LuciSpacing.md),
+          child: TextButton(onPressed: onAction, child: Text(action!)),
+        ),
+    ];
+
+    if (!scrollable) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(LuciSpacing.xl),
+          child: Column(mainAxisSize: MainAxisSize.min, children: content),
+        ),
+      );
+    }
+    return ListView(
+      // Always scrollable, so a pull-to-refresh still works with nothing
+      // on screen to drag.
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(
+        horizontal: LuciSpacing.xl,
+        vertical: LuciSpacing.xxl,
+      ),
+      children: [Column(children: content)],
+    );
+  }
+}

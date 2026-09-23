@@ -1,0 +1,946 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:luci_mobile/utils/uci_values.dart';
+import 'package:luci_mobile/models/client_config.dart';
+import 'package:luci_mobile/models/uci_change.dart';
+import 'package:luci_mobile/services/client_config_planner.dart';
+
+const _mac = 'AA:BB:CC:11:22:33';
+
+final _dhcp = <String, dynamic>{
+  'lan': {
+    '.type': 'dhcp',
+    '.name': 'lan',
+    'interface': 'lan',
+    'start': '100',
+    'limit': '150',
+  },
+  'cfg01': {
+    '.type': 'host',
+    '.name': 'cfg01',
+    'mac': 'AA:BB:CC:11:22:33',
+    'ip': '192.168.1.50',
+    'name': 'Laptop',
+  },
+  'cfg02': {
+    '.type': 'host',
+    '.name': 'cfg02',
+    'mac': ['BB:CC:DD:11:22:33', 'BB:CC:DD:44:55:66'],
+    'ip': '192.168.1.51',
+  },
+  'cfg03': {
+    '.type': 'host',
+    '.name': 'cfg03',
+    'mac': 'CC:DD:EE:11:22:33',
+    'ip': '192.168.1.52',
+    'leasetime': '24h',
+    'dns': '1',
+  },
+};
+
+final _firewall = <String, dynamic>{
+  'z_lan': {
+    '.type': 'zone',
+    '.name': 'z_lan',
+    'name': 'lan',
+    'network': ['lan'],
+  },
+  'z_guest': {
+    '.type': 'zone',
+    '.name': 'z_guest',
+    'name': 'guest',
+    'network': ['guest', 'guest6'],
+  },
+  'z_wan': {
+    '.type': 'zone',
+    '.name': 'z_wan',
+    'name': 'wan',
+    'network': 'wan wan6',
+  },
+  'luci_mobile_block_aabbcc112233': {
+    '.type': 'rule',
+    '.name': 'luci_mobile_block_aabbcc112233',
+    'src_mac': 'AA:BB:CC:11:22:33',
+    'target': 'REJECT',
+    'enabled': '1',
+  },
+  'user_rule': {
+    '.type': 'rule',
+    '.name': 'user_rule',
+    'src_mac': 'DD:EE:FF:11:22:33',
+    'target': 'DROP',
+  },
+  'not_a_block': {
+    '.type': 'rule',
+    '.name': 'not_a_block',
+    'src_mac': 'EE:FF:00:11:22:33',
+    'target': 'ACCEPT',
+  },
+};
+
+void main() {
+  group('MAC handling', () {
+    // MACs reach us from UCI, DHCP leases and iwinfo in different cases and
+    // separators; matching has to be insensitive to all of it.
+    test('normalizes case and separators when matching a host section', () {
+      for (final form in ['aa:bb:cc:11:22:33', 'AA-BB-CC-11-22-33']) {
+        final host = ClientConfigPlanner.findHost(_dhcp, form);
+        expect(host, isNotNull, reason: form);
+        expect(host!.section, 'cfg01');
+      }
+    });
+
+    // A host section can carry several MACs; equality against the raw option
+    // would silently miss those.
+    test('matches by membership when mac is a list', () {
+      final host = ClientConfigPlanner.findHost(_dhcp, 'bb:cc:dd:44:55:66');
+      expect(host, isNotNull);
+      expect(host!.section, 'cfg02');
+      expect(host.macAddresses, hasLength(2));
+    });
+
+    test('reads space-separated MACs in a single option', () {
+      expect(
+        ClientConfigPlanner.macsOf('aa:bb:cc:11:22:33 dd:ee:ff:00:11:22'),
+        ['AA:BB:CC:11:22:33', 'DD:EE:FF:00:11:22'],
+      );
+    });
+
+    test('derives a stable block section name', () {
+      expect(
+        ClientConfigPlanner.blockSectionFor('aa-bb-cc-11-22-33'),
+        'luci_mobile_block_aabbcc112233',
+      );
+    });
+
+    test('an unknown MAC has no host section', () {
+      expect(ClientConfigPlanner.findHost(_dhcp, '11:22:33:44:55:66'), isNull);
+    });
+  });
+
+  group('hostname validation', () {
+    // An invalid name stops dnsmasq, which takes LAN DNS down - and since the
+    // router stays reachable, apply's rollback timer will not catch it.
+    test('rejects names dnsmasq would choke on', () {
+      for (final bad in [
+        'my laptop',
+        'my_laptop',
+        '-leading',
+        'trailing-',
+        '',
+        'a' * 64,
+        'has.dot',
+      ]) {
+        expect(isValidHostname(bad), isFalse, reason: 'should reject "$bad"');
+      }
+    });
+
+    test('accepts valid DNS labels', () {
+      for (final good in ['laptop', 'Laptop-01', 'a', 'x' * 63, '0abc']) {
+        expect(isValidHostname(good), isTrue, reason: 'should accept "$good"');
+      }
+    });
+  });
+
+  group('reservation IP checks', () {
+    const lan = [
+      InterfaceSubnet(
+        name: 'lan',
+        address: '192.168.1.1',
+        base: [192, 168, 1, 1],
+        prefix: 24,
+      ),
+    ];
+    const pools = {'lan': DhcpPool(start: 100, limit: 150)};
+    Set<String> reserved({String? except}) =>
+        ClientConfigPlanner.reservedIps(_dhcp, exceptSection: except);
+
+    test('an address in the subnet and outside the pool is fine', () {
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          '192.168.1.40',
+          subnets: lan,
+          alreadyReserved: reserved(),
+          pools: pools,
+        ),
+        IpCheckResult.ok,
+      );
+    });
+
+    test('a different subnet is blocking - the lease would never be used', () {
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          '10.0.0.5',
+          subnets: lan,
+          alreadyReserved: reserved(),
+        ),
+        IpCheckResult.outsideSubnet,
+      );
+    });
+
+    // Inside the pool works but can collide with a dynamically handed lease,
+    // so it warns rather than blocks.
+    test('an address inside the DHCP pool warns but does not block', () {
+      final result = ClientConfigPlanner.checkReservationIp(
+        '192.168.1.120',
+        subnets: lan,
+        alreadyReserved: reserved(),
+        pools: pools,
+      );
+      expect(result, IpCheckResult.insidePool);
+      expect(result.isBlocking, isFalse);
+    });
+
+    // dnsmasq refuses duplicate reservations and fails to start.
+    test('a duplicate of another reservation is blocking', () {
+      final result = ClientConfigPlanner.checkReservationIp(
+        '192.168.1.51',
+        subnets: lan,
+        alreadyReserved: reserved(),
+      );
+      expect(result, IpCheckResult.duplicate);
+      expect(result.isBlocking, isTrue);
+    });
+
+    test('a client keeping its own address is not a duplicate', () {
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          '192.168.1.50',
+          subnets: lan,
+          alreadyReserved: reserved(except: 'cfg01'),
+        ),
+        IpCheckResult.ok,
+      );
+    });
+
+    // The value saved is trimmed, so the checks must run on that too.
+    test('a pasted space does not slip a duplicate past the guard', () {
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          ' 192.168.1.51 ',
+          subnets: lan,
+          alreadyReserved: reserved(),
+        ),
+        IpCheckResult.duplicate,
+      );
+    });
+
+    // None of the three can be handed to a client; offering them as valid
+    // reservations invites an address conflict with the router itself.
+    test('the network, broadcast and router addresses are refused', () {
+      for (final bad in ['192.168.1.0', '192.168.1.255', '192.168.1.1']) {
+        final result = ClientConfigPlanner.checkReservationIp(
+          bad,
+          subnets: lan,
+          alreadyReserved: const {},
+        );
+        expect(result, IpCheckResult.notAssignable, reason: bad);
+        expect(result.isBlocking, isTrue);
+      }
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          '192.168.1.40',
+          subnets: lan,
+          alreadyReserved: const {},
+        ),
+        IpCheckResult.ok,
+      );
+    });
+
+    test('malformed input is rejected', () {
+      for (final bad in ['', 'nope', '192.168.1', '192.168.1.999']) {
+        expect(
+          ClientConfigPlanner.checkReservationIp(
+            bad,
+            subnets: lan,
+            alreadyReserved: const {},
+          ),
+          IpCheckResult.malformed,
+          reason: bad,
+        );
+      }
+    });
+
+    test('unreadable interfaces skip the subnet check rather than block', () {
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          '10.0.0.5',
+          subnets: const [],
+          alreadyReserved: const {},
+        ),
+        IpCheckResult.ok,
+      );
+    });
+
+    // With the client's own network unknown, any LAN-side subnet will do -
+    // but an address on none of them would still never be served.
+    test('an unknown client is checked against every LAN-side subnet', () {
+      const all = [
+        InterfaceSubnet(
+          name: 'lan',
+          address: '192.168.1.1',
+          base: [192, 168, 1, 1],
+          prefix: 24,
+        ),
+        InterfaceSubnet(
+          name: 'guest',
+          address: '192.168.2.1',
+          base: [192, 168, 2, 1],
+          prefix: 24,
+        ),
+      ];
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          '192.168.2.9',
+          subnets: all,
+          alreadyReserved: const {},
+          pools: const {'guest': DhcpPool(start: 2, limit: 50)},
+        ),
+        IpCheckResult.insidePool,
+      );
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          '10.0.0.5',
+          subnets: all,
+          alreadyReserved: const {},
+        ),
+        IpCheckResult.outsideSubnet,
+      );
+    });
+
+    test('pools are keyed by the network a dhcp section serves', () {
+      final pools = ClientConfigPlanner.dhcpPools({
+        'guest_pool': {
+          '.type': 'dhcp',
+          'interface': 'guest',
+          'start': '20',
+          'limit': '30',
+        },
+        'lan': {'.type': 'dhcp', 'start': '100', 'limit': '150'},
+        'wan': {'.type': 'dhcp', 'interface': 'wan', 'ignore': '1'},
+        'wan6': {
+          '.type': 'dhcp',
+          'interface': 'wan6',
+          'ignore': 'true',
+          'start': '2',
+          'limit': '10',
+        },
+      });
+      expect(pools.keys, {'guest', 'lan'});
+      expect(pools['guest']!.start, 20);
+      expect(pools['guest']!.coversOffset(49), isTrue);
+      expect(pools['guest']!.coversOffset(50), isFalse);
+    });
+
+    // dnsmasq counts `start` from the network address. On 10.0.0.64/26 with
+    // start 10 the pool begins at .74, not .10.
+    test('the pool is an offset from the network address', () {
+      const small = [
+        InterfaceSubnet(
+          name: 'lan',
+          address: '10.0.0.65',
+          base: [10, 0, 0, 65],
+          prefix: 26,
+        ),
+      ];
+      const pools = {'lan': DhcpPool(start: 10, limit: 20)};
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          '10.0.0.80',
+          subnets: small,
+          alreadyReserved: const {},
+          pools: pools,
+        ),
+        IpCheckResult.insidePool,
+      );
+      expect(
+        ClientConfigPlanner.checkReservationIp(
+          '10.0.0.70',
+          subnets: small,
+          alreadyReserved: const {},
+          pools: pools,
+        ),
+        IpCheckResult.ok,
+      );
+    });
+  });
+
+  group('reservation planning', () {
+    test('a new client gets a new host section', () {
+      final ops = ClientConfigPlanner.planReservation(
+        mac: 'aa:bb:cc:99:88:77',
+        ip: '192.168.1.60',
+        name: 'Tablet',
+      );
+      expect(ops, hasLength(1));
+      final add = ops.single as UciAdd;
+      expect(add.config, 'dhcp');
+      expect(add.type, 'host');
+      expect(add.values['mac'], 'AA:BB:CC:99:88:77');
+      expect(add.values['ip'], '192.168.1.60');
+      expect(add.values['name'], 'Tablet');
+    });
+
+    test('an existing host section is updated in place', () {
+      final existing = ClientConfigPlanner.findHost(_dhcp, _mac);
+      final ops = ClientConfigPlanner.planReservation(
+        mac: _mac,
+        ip: '192.168.1.61',
+        existing: existing,
+      );
+      final set = ops.single as UciSet;
+      expect(set.section, 'cfg01');
+      expect(set.values['ip'], '192.168.1.61');
+    });
+
+    // Deleting a section that carries settings we do not model would throw
+    // away the user's leasetime/dns config.
+    test('removal drops only the ip when the section has other options', () {
+      final existing = ClientConfigPlanner.findHost(_dhcp, 'CC:DD:EE:11:22:33');
+      expect(existing!.otherOptionCount, greaterThan(0));
+
+      final ops = ClientConfigPlanner.planRemoveReservation(existing: existing);
+      final remove = ops.single as UciRemove;
+      expect(remove.section, 'cfg03');
+      expect(remove.option, 'ip');
+    });
+
+    test('removal deletes a section that holds nothing else', () {
+      const bare = ClientDhcpHost(
+        section: 'cfg09',
+        macAddresses: [_mac],
+        ip: '192.168.1.70',
+      );
+      final ops = ClientConfigPlanner.planRemoveReservation(existing: bare);
+      final remove = ops.single as UciRemove;
+      expect(remove.section, 'cfg09');
+      expect(remove.option, isNull);
+    });
+
+    test('removal keeps a shared multi-MAC section', () {
+      final existing = ClientConfigPlanner.findHost(_dhcp, 'BB:CC:DD:11:22:33');
+      final ops = ClientConfigPlanner.planRemoveReservation(
+        existing: existing!,
+      );
+      expect((ops.single as UciRemove).option, 'ip');
+    });
+  });
+
+  group('zone resolution', () {
+    // Hardcoding 'lan' breaks guest VLANs and every multi-zone setup.
+    test('finds the zone whose network list contains the interface', () {
+      expect(ClientConfigPlanner.zoneForNetwork(_firewall, 'lan'), 'lan');
+      expect(ClientConfigPlanner.zoneForNetwork(_firewall, 'guest'), 'guest');
+      expect(ClientConfigPlanner.zoneForNetwork(_firewall, 'wan6'), 'wan');
+    });
+
+    test('returns null rather than guessing when nothing matches', () {
+      expect(ClientConfigPlanner.zoneForNetwork(_firewall, 'iot'), isNull);
+      expect(ClientConfigPlanner.zoneForNetwork(_firewall, null), isNull);
+    });
+  });
+
+  group('block and unblock', () {
+    test('a new block rule is named, zone-scoped and rejects forwarding', () {
+      final ops = ClientConfigPlanner.planBlock(
+        mac: 'dd:ee:ff:99:88:77',
+        zone: 'guest',
+        displayName: 'Tablet',
+      );
+      final add = ops.single as UciAdd;
+      expect(add.config, 'firewall');
+      expect(add.type, 'rule');
+      expect(add.name, 'luci_mobile_block_ddeeff998877');
+      expect(add.values['src'], 'guest');
+      expect(add.values['src_mac'], 'DD:EE:FF:99:88:77');
+      // The router itself must stay reachable, or a user who blocks the phone
+      // in their hand can never unblock it.
+      expect(add.values['dest'], '*');
+      expect(add.values['target'], 'REJECT');
+      expect(add.values['enabled'], '1');
+    });
+
+    test('re-blocking re-enables the existing rule instead of duplicating', () {
+      final existing = ClientConfigPlanner.findBlockRule(_firewall, _mac);
+      final ops = ClientConfigPlanner.planBlock(
+        mac: _mac,
+        zone: 'lan',
+        displayName: 'Laptop',
+        existing: existing,
+      );
+      final set = ops.single as UciSet;
+      expect(set.section, 'luci_mobile_block_aabbcc112233');
+      expect(set.values['enabled'], '1');
+    });
+
+    test('detects our own rule and marks it owned', () {
+      final rule = ClientConfigPlanner.findBlockRule(_firewall, _mac);
+      expect(rule, isNotNull);
+      expect(rule!.ownedByApp, isTrue);
+      expect(rule.enabled, isTrue);
+    });
+
+    test('detects a DROP rule the user wrote, and does not own it', () {
+      final rule = ClientConfigPlanner.findBlockRule(
+        _firewall,
+        'DD:EE:FF:11:22:33',
+      );
+      expect(rule, isNotNull);
+      expect(rule!.ownedByApp, isFalse);
+      expect(rule.target, 'DROP');
+    });
+
+    test('an ACCEPT rule is not a block', () {
+      expect(
+        ClientConfigPlanner.findBlockRule(_firewall, 'EE:FF:00:11:22:33'),
+        isNull,
+      );
+    });
+
+    test('unblocking deletes only a rule this app created', () {
+      final ours = ClientConfigPlanner.findBlockRule(_firewall, _mac)!;
+      final ops = ClientConfigPlanner.planUnblock(existing: ours);
+      expect(ops.single, isA<UciRemove>());
+      expect((ops.single as UciRemove).section, ours.section);
+    });
+
+    // Destroying configuration the user wrote by hand is not ours to do.
+    test("unblocking disables, never deletes, a user's own rule", () {
+      final theirs = ClientConfigPlanner.findBlockRule(
+        _firewall,
+        'DD:EE:FF:11:22:33',
+      )!;
+      final ops = ClientConfigPlanner.planUnblock(existing: theirs);
+      final set = ops.single as UciSet;
+      expect(set.section, 'user_rule');
+      expect(set.values['enabled'], '0');
+    });
+  });
+
+  group('DHCP hostname planning', () {
+    test('sets the name on an existing section', () {
+      final existing = ClientConfigPlanner.findHost(_dhcp, _mac);
+      final ops = ClientConfigPlanner.planDhcpName(
+        mac: _mac,
+        name: 'Workstation',
+        existing: existing,
+      );
+      expect((ops.single as UciSet).values['name'], 'Workstation');
+    });
+
+    test('creates a section when the client has none', () {
+      final ops = ClientConfigPlanner.planDhcpName(
+        mac: '11:22:33:44:55:66',
+        name: 'NewThing',
+      );
+      final add = ops.single as UciAdd;
+      expect(add.values['mac'], '11:22:33:44:55:66');
+      expect(add.values['name'], 'NewThing');
+      expect(add.values.containsKey('ip'), isFalse);
+    });
+
+    test('clearing the name removes just that option', () {
+      final existing = ClientConfigPlanner.findHost(_dhcp, _mac);
+      final ops = ClientConfigPlanner.planDhcpName(
+        mac: _mac,
+        name: null,
+        existing: existing,
+      );
+      expect((ops.single as UciRemove).option, 'name');
+    });
+
+    test('clearing a name that was never set is a no-op', () {
+      expect(ClientConfigPlanner.planDhcpName(mac: _mac, name: null), isEmpty);
+    });
+  });
+
+  group('which network a client is on', () {
+    // `lan` deliberately first: the old code returned the first interface
+    // with an address, which put every guest-VLAN client in the lan zone.
+    final dump = <String, dynamic>{
+      'interface': [
+        {
+          'interface': 'loopback',
+          'ipv4-address': [
+            {'address': '127.0.0.1', 'mask': 8},
+          ],
+        },
+        {
+          'interface': 'wan',
+          'proto': 'dhcp',
+          'ipv4-address': [
+            {'address': '10.0.0.7', 'mask': 24},
+          ],
+        },
+        {
+          'interface': 'lan',
+          'proto': 'static',
+          'ipv4-address': [
+            {'address': '192.168.1.1', 'mask': 24},
+          ],
+        },
+        {
+          'interface': 'guest',
+          'proto': 'static',
+          'ipv4-address': [
+            {'address': '192.168.2.1', 'mask': '24'},
+          ],
+        },
+      ],
+    };
+
+    test('a guest client resolves to guest, not the first interface', () {
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
+          addresses: const ['192.168.2.50'],
+        )?.name,
+        'guest',
+      );
+    });
+
+    test('a lan client resolves to lan even with wan listed first', () {
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
+          addresses: const ['192.168.1.50'],
+        )?.name,
+        'lan',
+      );
+    });
+
+    test('an address on no interface subnet is unknown, not lan', () {
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
+          addresses: const ['172.16.0.9', 'garbage'],
+        ),
+        isNull,
+      );
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
+        ),
+        isNull,
+      );
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(null),
+          addresses: const ['192.168.1.50'],
+        ),
+        isNull,
+      );
+    });
+
+    test('the AP the client is on outranks an address match', () {
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
+          addresses: const ['192.168.1.50'],
+          wirelessNetworks: const ['guest'],
+        )?.name,
+        'guest',
+      );
+    });
+
+    // `option network 'lan guest'`: the AP bridges both, and only the
+    // address says which one this client is on.
+    test('an AP bridged into several networks defers to the address', () {
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
+          addresses: const ['192.168.2.50'],
+          wirelessNetworks: const ['lan', 'guest'],
+        )?.name,
+        'guest',
+      );
+      // With no address at all, the first bridged network stands.
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
+          wirelessNetworks: const ['lan', 'guest'],
+        )?.name,
+        'lan',
+      );
+    });
+
+    // With the firewall read, its word is final; the name only decides
+    // when there is no firewall to ask.
+    test('the interface name decides only without a firewall', () {
+      final byName = ClientConfigPlanner.interfaceSubnets(dump);
+      expect(byName.firstWhere((s) => s.name == 'wan').upstream, isTrue);
+      expect(byName.firstWhere((s) => s.name == 'lan').upstream, isFalse);
+
+      final byFirewall = ClientConfigPlanner.interfaceSubnets(
+        dump,
+        hints: const UpstreamHints(named: {}, masq: {}),
+      );
+      expect(byFirewall.every((s) => !s.upstream), isTrue);
+    });
+
+    test('an AP on an interface the dump does not list still names it', () {
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(dump),
+          wirelessNetworks: const ['iot'],
+        )?.name,
+        'iot',
+      );
+    });
+
+    // getHostHints remembers addresses a client has since moved off, so the
+    // order the caller gives is the order of trust — not the dump's.
+    test('the first address that matches wins, whatever the dump order', () {
+      final guestFirst = <String, dynamic>{
+        'interface': [
+          {
+            'interface': 'guest',
+            'ipv4-address': [
+              {'address': '192.168.2.1', 'mask': 24},
+            ],
+          },
+          {
+            'interface': 'lan',
+            'ipv4-address': [
+              {'address': '192.168.1.1', 'mask': 24},
+            ],
+          },
+        ],
+      };
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(guestFirst),
+          addresses: const ['192.168.1.5', '192.168.2.5'],
+        )?.name,
+        'lan',
+      );
+    });
+
+    // Double NAT: the upstream box hands the router a /16 that swallows the
+    // lan /24. The dump lists it first; the client is still on lan.
+    test('a wide upstream subnet never claims a lan client', () {
+      final doubleNat = <String, dynamic>{
+        'interface': [
+          {
+            'interface': 'transit',
+            'ipv4-address': [
+              {'address': '192.168.0.7', 'mask': 16},
+            ],
+            'route': [
+              {'target': '0.0.0.0', 'mask': 0, 'nexthop': '192.168.0.1'},
+            ],
+          },
+          {
+            'interface': 'lan',
+            'ipv4-address': [
+              {'address': '192.168.1.1', 'mask': 24},
+            ],
+          },
+        ],
+      };
+      // Not named wan, but it NATs and carries the default route.
+      const hints = UpstreamHints(named: {}, masq: {'transit'});
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(
+            doubleNat,
+            hints: hints,
+          ),
+          addresses: const ['192.168.1.50'],
+        )?.name,
+        'lan',
+      );
+      // An address only the upstream holds is not a client of this router.
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(
+            doubleNat,
+            hints: hints,
+          ),
+          addresses: const ['192.168.7.7'],
+        ),
+        isNull,
+      );
+    });
+
+    // A lan that masquerades out a VPN is still where the clients are: NAT
+    // alone is not upstream, only NAT on the interface with the default
+    // route.
+    test('a masquerading lan without the default route stays a lan', () {
+      final vpnOut = <String, dynamic>{
+        'interface': [
+          {
+            'interface': 'lan',
+            'ipv4-address': [
+              {'address': '192.168.1.1', 'mask': 24},
+            ],
+          },
+          {
+            'interface': 'vpn',
+            'ipv4-address': [
+              {'address': '10.8.0.2', 'mask': 24},
+            ],
+            'route': [
+              {'target': '0.0.0.0', 'mask': 0, 'nexthop': '10.8.0.1'},
+            ],
+          },
+        ],
+      };
+      const hints = UpstreamHints(named: {}, masq: {'lan', 'vpn'});
+      final subnets = ClientConfigPlanner.interfaceSubnets(
+        vpnOut,
+        hints: hints,
+      );
+      expect(subnets.firstWhere((s) => s.name == 'lan').upstream, isFalse);
+      expect(subnets.firstWhere((s) => s.name == 'vpn').upstream, isTrue);
+    });
+
+    // The firewall says which networks face the internet: the zone that
+    // NATs, or one named wan. Not the default route.
+    test('UCI booleans are read in every spelling', () {
+      for (final yes in ['1', 'yes', 'on', 'true', 'enabled', 'YES']) {
+        expect(uciBool(yes), isTrue, reason: yes);
+      }
+      for (final no in ['0', 'no', 'off', 'false', 'disabled', 'Off']) {
+        expect(uciBool(no), isFalse, reason: no);
+      }
+      // rpcd hands back an option written with `list` as an array.
+      expect(uciBool(const ['1']), isTrue);
+      expect(uciBool(const ['0'], orElse: true), isFalse);
+      expect(uciBool(null), isFalse);
+      expect(uciBool(null, orElse: true), isTrue);
+      expect(uciBool('maybe', orElse: true), isTrue);
+    });
+
+    // `option masq 'no'` is a LAN zone; treating anything but '0' as NAT
+    // would have made every client on it unlocatable.
+    test('a zone with masq spelled "no" is not a NAT hint', () {
+      final hints = ClientConfigPlanner.upstreamHints({
+        'z_lan': {
+          '.type': 'zone',
+          'name': 'lan',
+          'masq': 'no',
+          'network': ['lan'],
+        },
+      });
+      expect(hints.masq, isEmpty);
+      expect(hints.named, isEmpty);
+    });
+
+    test('the firewall hints are the wan-named and the NAT zones', () {
+      final hints = ClientConfigPlanner.upstreamHints({
+        'z_lan': {
+          '.type': 'zone',
+          'name': 'lan',
+          'network': ['lan'],
+        },
+        'z_wan': {
+          '.type': 'zone',
+          'name': 'wan',
+          'masq': '1',
+          'network': 'wan wan6',
+        },
+        'z_transit': {
+          '.type': 'zone',
+          'name': 'transit',
+          'masq': '1',
+          'network': ['transit'],
+        },
+      });
+      expect(hints.named, {'wan', 'wan6'});
+      expect(hints.masq, {'wan', 'wan6', 'transit'});
+    });
+
+    // A dumb AP's lan carries the default route, and every client is on it.
+    test('a dumb AP still locates its clients on lan', () {
+      final dumbAp = <String, dynamic>{
+        'interface': [
+          {
+            'interface': 'lan',
+            'ipv4-address': [
+              {'address': '192.168.1.2', 'mask': 24},
+            ],
+            'route': [
+              {'target': '0.0.0.0', 'mask': 0, 'nexthop': '192.168.1.1'},
+            ],
+          },
+        ],
+      };
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(
+            dumbAp,
+            hints: const UpstreamHints(named: {}, masq: {}),
+          ),
+          addresses: const ['192.168.1.50'],
+        )?.name,
+        'lan',
+      );
+    });
+
+    test('overlapping LAN-side subnets resolve to the most specific', () {
+      final nested = <String, dynamic>{
+        'interface': [
+          {
+            'interface': 'iot',
+            'ipv4-address': [
+              {'address': '10.0.0.1', 'mask': 8},
+            ],
+          },
+          {
+            'interface': 'lan',
+            'ipv4-address': [
+              {'address': '10.0.1.1', 'mask': 24},
+            ],
+          },
+        ],
+      };
+      expect(
+        ClientConfigPlanner.networkForClient(
+          subnets: ClientConfigPlanner.interfaceSubnets(nested),
+          addresses: const ['10.0.1.50'],
+        )?.name,
+        'lan',
+      );
+    });
+
+    test('the subnet reported is the one the address matched', () {
+      final twoSubnets = <String, dynamic>{
+        'interface': [
+          {
+            'interface': 'lan',
+            'ipv4-address': [
+              {'address': '10.0.0.1', 'mask': 24},
+              {'address': '192.168.1.1', 'mask': 24},
+            ],
+          },
+        ],
+      };
+      final located = ClientConfigPlanner.networkForClient(
+        subnets: ClientConfigPlanner.interfaceSubnets(twoSubnets),
+        addresses: const ['192.168.1.20'],
+      );
+      expect(located?.name, 'lan');
+      expect(located?.subnet?.address, '192.168.1.1');
+
+      final viaAp = ClientConfigPlanner.networkForClient(
+        subnets: ClientConfigPlanner.interfaceSubnets(twoSubnets),
+        addresses: const ['192.168.1.20'],
+        wirelessNetworks: const ['lan'],
+      );
+      expect(viaAp?.subnet?.address, '192.168.1.1');
+    });
+
+    test('the matching subnet is reported with its prefix', () {
+      final guest = ClientConfigPlanner.interfaceSubnets(
+        dump,
+      ).firstWhere((s) => s.name == 'guest');
+      expect(guest.address, '192.168.2.1');
+      expect(guest.prefix, 24);
+      expect(
+        ClientConfigPlanner.interfaceSubnets(dump).map((s) => s.name),
+        isNot(contains('loopback')),
+      );
+    });
+  });
+}

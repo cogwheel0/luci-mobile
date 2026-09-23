@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android 13+ gates notifications behind a runtime grant. Requested
+         only when the user turns background monitoring on. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:enableOnBackInvokedCallback="true"
         android:label="LuCI Mobile"

@@ -8,7 +8,14 @@ Designed for both power users and network enthusiasts, LuCI Mobile simplifies ro
 * <b>Real-Time Dashboard:</b> Instantly view system status, performance metrics, and uptime with interactive charts.
 * <b>Complete Network Management:</b> Monitor all wired and wireless interfaces, track bandwidth usage, and check IP configurations.
 * <b>Detailed Client Oversight:</b> See a live list of all connected devices with their IP/MAC addresses, hostnames, and active connection times.
-* <b>Powerful System Control:</b> Remotely reboot your router with a single tap.
+* <b>Wireless Configuration:</b> Edit SSIDs, security, channel, width and country code, and add or remove networks on any radio.
+* <b>Firewall &amp; Routing:</b> Manage port forwards, traffic rules, zones and static routes.
+* <b>Per-Client Control:</b> Reserve a DHCP address, block a device with a firewall rule, or wake a sleeping one over the network.
+* <b>Services &amp; Add-ons:</b> Start, stop and restart services, and configure SQM, adblock, UPnP and DDNS.
+* <b>Diagnostics:</b> Run ping, traceroute and nslookup from the router, and read its system and kernel logs.
+* <b>Activity &amp; Alerts:</b> Keep a feed of what changed on the network, with optional background notifications on Android.
+* <b>Powerful System Control:</b> Edit the hostname, timezone and description, change the router password, and reboot with a single tap.
+* <b>Safe Changes:</b> Configuration edits use the router's own apply-with-rollback protocol, so a change that cuts off your connection is undone by the router itself.
 * <b>Secure & Flexible Connection:</b> Connect via HTTP or HTTPS, with support for self-signed certificates and secure credential storage.
 * <b>Modern UI:</b> Enjoy a clean experience with Material Design 3, including full support for light and dark themes.
 

@@ -1,0 +1,60 @@
+{
+  "values": {
+    "defaults": {
+      ".anonymous": false,
+      ".type": "defaults",
+      ".name": "defaults",
+      "syn_flood": "1",
+      "input": "ACCEPT",
+      "output": "ACCEPT",
+      "forward": "REJECT",
+      "flow_offloading": "1"
+    },
+    "cfg02dc81": {
+      ".anonymous": true,
+      ".type": "zone",
+      ".name": "cfg02dc81",
+      "name": "lan",
+      "input": "ACCEPT",
+      "output": "ACCEPT",
+      "forward": "ACCEPT",
+      "network": [
+        "lan"
+      ]
+    },
+    "cfg03dc81": {
+      ".anonymous": true,
+      ".type": "zone",
+      ".name": "cfg03dc81",
+      "name": "wan",
+      "input": "REJECT",
+      "output": "ACCEPT",
+      "forward": "REJECT",
+      "masq": "1",
+      "mtu_fix": "1",
+      "network": [
+        "wan",
+        "wan6",
+        "wanb"
+      ]
+    },
+    "cfg04dc81": {
+      ".anonymous": true,
+      ".type": "forwarding",
+      ".name": "cfg04dc81",
+      "src": "lan",
+      "dest": "wan"
+    },
+    "luci_mobile_block_ccddee98765a": {
+      ".anonymous": false,
+      ".type": "rule",
+      ".name": "luci_mobile_block_ccddee98765a",
+      "name": "Block Baby-Monitor (LuCI Mobile)",
+      "src": "lan",
+      "src_mac": "CC:DD:EE:98:76:54",
+      "dest": "*",
+      "target": "REJECT",
+      "enabled": "1"
+    }
+  }
+}

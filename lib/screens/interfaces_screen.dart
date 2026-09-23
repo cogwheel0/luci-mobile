@@ -1,26 +1,33 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:luci_mobile/l10n/failure_text.dart';
+import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/main.dart';
-import 'package:flutter/services.dart';
 import 'package:luci_mobile/models/glinet_data.dart';
 import 'package:luci_mobile/models/interface.dart';
 import 'package:luci_mobile/utils/wifi_utils.dart';
-import 'dart:math';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
 import 'package:luci_mobile/widgets/luci_refresh_components.dart';
 import 'package:luci_mobile/screens/wifi_scan_screen.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/utils/format_bytes.dart';
 
 class InterfacesScreen extends ConsumerStatefulWidget {
   final String? scrollToInterface;
   final VoidCallback? onScrollComplete;
 
+  /// True when pushed as its own route rather than shown as a tab root.
+  final bool showBack;
+
   const InterfacesScreen({
     super.key,
     this.scrollToInterface,
     this.onScrollComplete,
+    this.showBack = false,
   });
 
   @override
@@ -413,7 +420,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     final appState = ref.read(appStateProvider);
 
     return Scaffold(
-      appBar: LuciAppBar(title: context.l10n.interfaces),
+      appBar: LuciAppBar(
+        title: context.l10n.interfaces,
+        showBack: widget.showBack,
+      ),
       body: SafeArea(
         top: true,
         bottom: false,
@@ -425,7 +435,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                 builder: (context) {
                   final watchedAppState = ref.watch(appStateProvider);
                   final isLoading = watchedAppState.isDashboardLoading;
-                  final dashboardError = watchedAppState.dashboardError;
+                  final failure = watchedAppState.appFailure;
+                  final dashboardError = failure == null
+                      ? null
+                      : appFailureText(context, failure);
                   final dashboardData = watchedAppState.dashboardData;
 
                   if (isLoading && dashboardData == null) {
@@ -628,24 +641,13 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     final glInetData = dashboardData?['glinet'] as GlInetData?;
     final interfacesList = <Map<String, dynamic>>[];
 
-    final uciRadios = <String, Map>{};
-    final uciInterfaces = <String, Map<String, dynamic>>{};
-
-    // Try 'values' key (real API) then 'wireless' key (mock data)
-    final uciValues =
-        (uciWirelessConfig?['values'] as Map?) ??
-        (uciWirelessConfig?['wireless'] as Map?);
-    if (uciValues != null) {
-      uciValues.forEach((key, value) {
-        if (value is! Map) return;
-        if (value['.type'] == 'wifi-device') {
-          uciRadios[key.toString()] = value;
-        } else if (value['.type'] == 'wifi-iface') {
-          uciInterfaces[key.toString()] = Map<String, dynamic>.from(value);
-        }
-      });
-    }
-
+    final uciValues = uciSectionsOf(uciWirelessConfig, config: 'wireless');
+    final uciRadios = <String, Map>{
+      for (final e in uciSections(uciValues, 'wifi-device')) e.key: e.value,
+    };
+    final uciInterfaces = <String, Map<String, dynamic>>{
+      for (final e in uciSections(uciValues, 'wifi-iface')) e.key: e.value,
+    };
     final runtimeInterfaces = <String>{};
     if (wirelessData != null) {
       wirelessData.forEach((radioName, radioData) {
@@ -659,11 +661,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               runtimeInterfaces.add(uciName);
             }
 
-            final isRadioEnabled = uciRadios[radioName]?['disabled'] != '1';
-            final isIfaceEnabled =
-                config['disabled'] != '1' &&
-                config['disabled'] != 1 &&
-                config['disabled'] != true;
+            final isRadioEnabled = !uciBool(uciRadios[radioName]?['disabled']);
+            final isIfaceEnabled = !uciBool(config['disabled']);
             final isEnabled = isRadioEnabled && isIfaceEnabled;
 
             final name = iface['name'] ?? '';
@@ -739,8 +738,8 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     uciInterfaces.forEach((uciName, config) {
       if (!runtimeInterfaces.contains(uciName)) {
         final radioName = _uciString(config['device']);
-        final isRadioEnabled = uciRadios[radioName]?['disabled'] != '1';
-        final isIfaceEnabled = _uciString(config['disabled']) != '1';
+        final isRadioEnabled = !uciBool(uciRadios[radioName]?['disabled']);
+        final isIfaceEnabled = !uciBool(config['disabled']);
         final mode = config['mode'] ?? 'N/A';
         final glInetRadio = glInetData?.radioForDevice(radioName);
         final channel = resolveWifiChannel(
@@ -1034,10 +1033,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             context,
             context.l10n.ipAddress,
             interface.ipAddress!,
-            onTap: () => _copyToClipboard(
+            onTap: () => copyToClipboard(
               context,
               interface.ipAddress!,
-              context.l10n.ipAddress,
+              label: context.l10n.ipAddress,
             ),
           ),
         if (interface.ipv6Addresses != null &&
@@ -1047,8 +1046,11 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               context,
               context.l10n.ipv6Address,
               ipv6,
-              onTap: () =>
-                  _copyToClipboard(context, ipv6, context.l10n.ipv6Address),
+              onTap: () => copyToClipboard(
+                context,
+                ipv6,
+                label: context.l10n.ipv6Address,
+              ),
             ),
           ),
         if (interface.gateway != null)
@@ -1056,10 +1058,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             context,
             context.l10n.gateway,
             interface.gateway!,
-            onTap: () => _copyToClipboard(
+            onTap: () => copyToClipboard(
               context,
               interface.gateway!,
-              context.l10n.gatewayIp,
+              label: context.l10n.gatewayIp,
             ),
           ),
         if (interface.dnsServers.isNotEmpty)
@@ -1067,10 +1069,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             context,
             context.l10n.dns,
             interface.dnsServers.join(', '),
-            onTap: () => _copyToClipboard(
+            onTap: () => copyToClipboard(
               context,
               interface.dnsServers.join(', '),
-              context.l10n.dnsServers,
+              label: context.l10n.dnsServers,
             ),
           ),
         // Add WireGuard peer information if this is a WireGuard interface
@@ -1318,38 +1320,21 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     );
   }
 
-  void _copyToClipboard(BuildContext context, String text, String label) {
-    Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(context.l10n.copiedToClipboard(label)),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
   Widget _buildStatsRow(BuildContext context, Map<String, dynamic> stats) {
-    String formatBytes(int bytes) {
-      if (bytes <= 0) return '0 B';
-      const suffixes = ["B", "KB", "MB", "GB", "TB"];
-      var i = (log(bytes) / log(1024)).floor();
-      return '${(bytes / pow(1024, i)).toStringAsFixed(2)} ${suffixes[i]}';
-    }
-
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         _buildStatColumn(
           context,
           context.l10n.received,
-          formatBytes(stats['rx_bytes'] ?? 0),
+          formatBytes(stats['rx_bytes'] ?? 0, decimals: 2),
           Icons.arrow_downward,
           Colors.green,
         ),
         _buildStatColumn(
           context,
           context.l10n.transmitted,
-          formatBytes(stats['tx_bytes'] ?? 0),
+          formatBytes(stats['tx_bytes'] ?? 0, decimals: 2),
           Icons.arrow_upward,
           Colors.blue,
         ),
@@ -1427,26 +1412,6 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     } else {
       return '${iface.protocol} • $shown';
     }
-  }
-}
-
-class LuciSectionHeader extends StatelessWidget {
-  final String title;
-  const LuciSectionHeader(this.title, {super.key});
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-      child: Text(
-        title,
-        style: theme.textTheme.titleMedium?.copyWith(
-          color: theme.colorScheme.onSurface,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
-        ),
-      ),
-    );
   }
 }
 

@@ -89,7 +89,9 @@ For testing with a real router:
 - **Files**: Use snake_case (e.g., `api_service.dart`)
 - **Classes**: Use PascalCase (e.g., `NetworkInterface`)
 - **Variables**: Use camelCase (e.g., `ipAddress`)
-- **Constants**: Use SCREAMING_SNAKE_CASE (e.g., `MAX_RETRY_COUNT`)
+- **Constants**: Use camelCase (e.g., `maxRetryCount`). `constant_identifier_names`
+  is enabled, and CI runs `flutter analyze --fatal-infos`, so SCREAMING_SNAKE_CASE
+  fails the build.
 
 ### Documentation
 

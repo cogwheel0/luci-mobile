@@ -44,6 +44,8 @@ dependencies:
   url_launcher: ^6.3.0
   crypto: ^3.0.7
   intl: ^0.20.2
+  flutter_local_notifications: ^22.3.1
+  workmanager: ^0.10.10
 
 dev_dependencies:
   flutter_test:
