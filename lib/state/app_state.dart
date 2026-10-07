@@ -799,7 +799,18 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> fetchDashboardData({bool isRetryAfterFallback = false}) async {
+  Future<void> fetchDashboardData({bool isRetryAfterFallback = false}) =>
+      _fetchDashboardData(isRetryAfterFallback: isRetryAfterFallback);
+
+  /// [resentUnanswered] marks the one retry after requests a router left
+  /// unanswered (see below). It is kept apart from [isRetryAfterFallback]
+  /// so that retry does not use up the alternate address: a saved address
+  /// that went away mid-fetch looks like that hang first, and the retry is
+  /// what then finds it gone.
+  Future<void> _fetchDashboardData({
+    required bool isRetryAfterFallback,
+    bool resentUnanswered = false,
+  }) async {
     // A UCI apply is awaiting confirmation. This fetch's fallback path can
     // re-login, which would invalidate the session the pending rollback is
     // bound to and make the router revert the change.
@@ -933,8 +944,7 @@ class AppState extends ChangeNotifier {
     // finds out. The router is sent one request at a time from then on, so
     // whatever this fetch lost to it - optional wireless data included,
     // which goes missing quietly - comes back if it asks once more. These
-    // are all reads. `isRetryAfterFallback` marks any retry, so there is
-    // never a second.
+    // are all reads, and `resentUnanswered` keeps it to once.
     var unanswered = false;
 
     try {
@@ -1054,10 +1064,13 @@ class AppState extends ChangeNotifier {
         wirelessFuture,
         uciWirelessFuture,
       ]);
-      if (unanswered && !isRetryAfterFallback) {
+      if (unanswered && !resentUnanswered) {
         if (token != _sessionToken) return;
         _isDashboardLoading = false;
-        return await fetchDashboardData(isRetryAfterFallback: true);
+        return await _fetchDashboardData(
+          isRetryAfterFallback: isRetryAfterFallback,
+          resentUnanswered: true,
+        );
       }
       final wirelessRaw = optionalResults[0];
       final uciWirelessRaw = optionalResults[1];
@@ -1224,9 +1237,12 @@ class AppState extends ChangeNotifier {
       if (token != _sessionToken) return;
       // The router did answer - just not in parallel - so this is no reason
       // to try the other address.
-      if (isUnansweredParallelRequest(e) && !isRetryAfterFallback) {
+      if (isUnansweredParallelRequest(e) && !resentUnanswered) {
         _isDashboardLoading = false;
-        return await fetchDashboardData(isRetryAfterFallback: true);
+        return await _fetchDashboardData(
+          isRetryAfterFallback: isRetryAfterFallback,
+          resentUnanswered: true,
+        );
       }
       final status = e is DioException ? e.response?.statusCode : null;
       // A rejected session is worth retrying on the other address, and so

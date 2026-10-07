@@ -59,6 +59,71 @@ class _Router extends MockApiService {
   );
 }
 
+/// A saved address that loses one request to the parallel hang and is then
+/// gone - the phone left its network - while the alternate keeps answering.
+/// Each dashboard fetch starts with the reboot-access check, which is how a
+/// new round is told apart.
+class _PrimaryGoesAway extends MockApiService {
+  static const primary = '192.168.1.1';
+
+  var _round = 0;
+
+  @override
+  Future<dynamic> call(
+    String ipAddress,
+    String sysauth,
+    bool useHttps, {
+    required String object,
+    required String method,
+    Map<String, dynamic>? params,
+    BuildContext? context,
+  }) async {
+    if (object == 'session' && method == 'access') _round++;
+    if (ipAddress == primary && _round == 1 && object == 'system') {
+      throw _Router._timeout(const UnansweredParallelRequest());
+    }
+    if (ipAddress == primary && _round > 1) {
+      throw DioException.connectionError(
+        requestOptions: RequestOptions(path: '/cgi-bin/luci/admin/ubus'),
+        reason: 'Network is unreachable',
+      );
+    }
+    return super.call(
+      ipAddress,
+      sysauth,
+      useHttps,
+      object: object,
+      method: method,
+      params: params,
+      context: context,
+    );
+  }
+}
+
+/// Logs in on the alternate address, as `loginWithFallback` does when the
+/// saved one does not answer.
+class _FallbackAuth extends MockAuthService {
+  String? _address;
+
+  @override
+  String? get ipAddress => _address ?? super.ipAddress;
+
+  @override
+  Future<FallbackLoginResult> loginWithFallback({
+    required String activeAddress,
+    required bool activeHttps,
+    required int activeIndex,
+    String? fallbackAddress,
+    bool? fallbackHttps,
+    required String username,
+    required String password,
+    BuildContext? context,
+  }) async {
+    _address = fallbackAddress;
+    return FallbackLoginResult(success: true, usedAddressIndex: 1);
+  }
+}
+
 /// Holds every login until [answer] completes.
 class _SlowAuth extends MockAuthService {
   final answer = Completer<void>();
@@ -135,6 +200,33 @@ void main() {
         expect(state.appFailure, isNull);
       },
     );
+
+    // Asking again after the hang is not the alternate-address retry: a
+    // saved address that went away mid-fetch looks like the hang first.
+    test('still tries the alternate address after asking again', () async {
+      final saved = Router(
+        id: 'router',
+        ipAddress: _PrimaryGoesAway.primary,
+        username: 'root',
+        password: 'password',
+        useHttps: false,
+        alternateAddress: '100.64.0.1',
+        alternateUseHttps: false,
+      );
+      await routers.updateRouter(saved);
+      final state = AppState.forTesting(
+        apiService: _PrimaryGoesAway(),
+        authService: _FallbackAuth(),
+        routerService: routers,
+      );
+      addTearDown(state.dispose);
+
+      await state.fetchDashboardData();
+
+      expect(state.appFailure, isNull);
+      expect(state.dashboardData, isNotNull);
+      expect(routers.selectedRouter!.activeAddressIndex, 1);
+    });
 
     test('reports an ordinary timeout without asking again', () async {
       final api = _Router(timesOut: {'system.board'});
