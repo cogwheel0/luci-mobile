@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
@@ -174,11 +177,7 @@ class HttpClientManager {
   void _closeAndRemoveClients(bool Function(String key) matches) {
     final keysToRemove = _clients.keys.where(matches).toList();
     for (final key in keysToRemove) {
-      final dio = _clients.remove(key);
-      final adapter = dio?.httpClientAdapter;
-      if (adapter is IOHttpClientAdapter) {
-        adapter.close(force: true);
-      }
+      _clients.remove(key)?.httpClientAdapter.close(force: true);
     }
   }
 
@@ -222,6 +221,7 @@ class HttpClientManager {
       };
       dio.httpClientAdapter = adapter;
     }
+    dio.httpClientAdapter = _GatedAdapter(dio.httpClientAdapter);
 
     return dio;
   }
@@ -372,7 +372,9 @@ class HttpClientManager {
       final request = await testClient.getUrl(uri);
       // Never pin a redirect target's certificate under this host.
       request.followRedirects = false;
-      await request.close();
+      // Bounded: a router that completes the handshake and then never
+      // answers would otherwise keep the login spinning with no error.
+      await request.close().timeout(const Duration(seconds: 10));
 
       if (presentedCert == null) {
         // Certificate chains to a trusted CA - nothing to accept.
@@ -537,11 +539,20 @@ class HttpClientManager {
         Logger.warning('Certificate probe failed: $e');
       }
     } finally {
-      testClient.close();
+      // Forced, so a probe that timed out does not leave its socket open.
+      testClient.close(force: true);
     }
 
     return false;
   }
+
+  /// How many requests [getClient]'s client for [hostWithPort] lets run at
+  /// once, for tests.
+  @visibleForTesting
+  int maxInFlightFor(String hostWithPort, bool useHttps) =>
+      (_clients['$hostWithPort-$useHttps']?.httpClientAdapter as _GatedAdapter?)
+          ?._limit ??
+      _GatedAdapter.maxInFlight;
 
   Widget _buildCertDetail(String label, String value) {
     return Padding(
@@ -566,4 +577,86 @@ class HttpClientManager {
       ),
     );
   }
+}
+
+/// Caps how many requests are in flight to one router at a time.
+///
+/// Requests over the cap wait here, before the inner adapter starts their
+/// timeouts. Left to the router they wait in uhttpd, which runs only
+/// `max_requests` (3 by default) LuCI requests at once, and their receive
+/// timeout runs out in the queue.
+///
+/// Some LuCI builds hang every request that runs alongside another
+/// (openwrt/luci#9091): the workers uhttpd forks share one ubus socket and
+/// take each other's replies. Nothing answers until the app gives up, and a
+/// retry hangs the same way, so login spun for as long as the app kept
+/// trying. A response that never came while other requests were in flight
+/// is that bug's signature; from then on the router is sent one request at
+/// a time.
+class _GatedAdapter implements HttpClientAdapter {
+  _GatedAdapter(this._inner);
+
+  static const maxInFlight = 3;
+
+  final HttpClientAdapter _inner;
+  int _limit = maxInFlight;
+  int _inFlight = 0;
+  final Queue<Completer<void>> _waiting = Queue();
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    await _acquire();
+    try {
+      // Cancelled while it waited: Dio has already failed it, so it must
+      // not reach the router now.
+      final cancelToken = options.cancelToken;
+      if (cancelToken != null && cancelToken.isCancelled) {
+        throw DioException.requestCancelled(
+          requestOptions: options,
+          reason: cancelToken.cancelError?.error,
+        );
+      }
+      return await _inner.fetch(options, requestStream, cancelFuture);
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.receiveTimeout &&
+          _inFlight > 1 &&
+          _limit > 1) {
+        _limit = 1;
+        Logger.warning(
+          '${options.uri.host} stopped answering parallel requests; '
+          'sending one at a time (openwrt/luci#9091)',
+        );
+      }
+      rethrow;
+    } finally {
+      _release();
+    }
+  }
+
+  /// Completes once this request may go out. The slot is handed over by
+  /// [_release], so a request arriving meanwhile cannot take it first.
+  Future<void> _acquire() {
+    if (_inFlight < _limit && _waiting.isEmpty) {
+      _inFlight++;
+      return Future.value();
+    }
+    final turn = Completer<void>();
+    _waiting.add(turn);
+    return turn.future;
+  }
+
+  void _release() {
+    _inFlight--;
+    while (_inFlight < _limit && _waiting.isNotEmpty) {
+      _inFlight++;
+      _waiting.removeFirst().complete();
+    }
+  }
+
+  @override
+  void close({bool force = false}) => _inner.close(force: force);
 }

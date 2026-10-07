@@ -107,6 +107,13 @@ ubus call luci-rpc getNetworkDevices '{}'
 - If the app cannot connect, open the same router address in a browser and check the scheme, port, firewall, and VPN route.
 - If login fails, verify the username, password, and administrator permissions in LuCI.
 - If the dashboard is empty, install the RPC modules above, restart `rpcd`, and run the two `ubus` checks.
+- If login or the dashboard times out even though LuCI works in a browser, the router's LuCI may stall on parallel requests ([openwrt/luci#9091](https://github.com/openwrt/luci/issues/9091)). Limit uhttpd to one request at a time:
+
+  ```sh
+  uci set uhttpd.main.max_requests=1
+  uci commit uhttpd
+  /etc/init.d/uhttpd restart
+  ```
 - Accept a self-signed certificate only after checking that its fingerprint belongs to your router.
 
 ## Contributing
