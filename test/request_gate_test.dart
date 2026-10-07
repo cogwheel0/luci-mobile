@@ -11,18 +11,22 @@ import 'package:luci_mobile/utils/http_client_manager.dart';
 /// openwrt/luci#9091: a request that arrives while another is open is never
 /// answered, and is let go only when the client gives up on it.
 class _Router {
-  _Router._(this._server, this.hangWhenParallel) {
+  _Router._(this._server, this.hangWhenParallel, this.responseDelay) {
     _server.listen(_serve);
   }
 
-  static Future<_Router> start({bool hangWhenParallel = false}) async =>
-      _Router._(
-        await ServerSocket.bind(InternetAddress.loopbackIPv4, 0),
-        hangWhenParallel,
-      );
+  static Future<_Router> start({
+    bool hangWhenParallel = false,
+    Duration responseDelay = const Duration(milliseconds: 30),
+  }) async => _Router._(
+    await ServerSocket.bind(InternetAddress.loopbackIPv4, 0),
+    hangWhenParallel,
+    responseDelay,
+  );
 
   final ServerSocket _server;
   final bool hangWhenParallel;
+  final Duration responseDelay;
   int _open = 0;
   int maxOpen = 0;
 
@@ -47,7 +51,7 @@ class _Router {
         _open++;
         if (_open > maxOpen) maxOpen = _open;
         if (hangWhenParallel && parallel) return;
-        await Future<void>.delayed(const Duration(milliseconds: 30));
+        await Future<void>.delayed(responseDelay);
         finish();
         socket.write(
           'HTTP/1.1 200 OK\r\nContent-Length: 2\r\n'
@@ -106,10 +110,14 @@ void main() {
       final burst = await Future.wait([
         for (var i = 0; i < 6; i++) _get(dio, router, timeout: timeout),
       ]);
+      final lost = burst.whereType<DioException>();
+      expect(lost, isNotEmpty);
       expect(
-        burst.whereType<DioException>().map((e) => e.type),
+        lost.map((e) => e.type),
         everyElement(DioExceptionType.receiveTimeout),
       );
+      // Including the last of them to give up, when nothing else is open.
+      expect(lost.every(isUnansweredParallelRequest), isTrue);
       expect(HttpClientManager().maxInFlightFor(router.host, false), 1);
 
       // Let the router notice the abandoned requests.
@@ -120,4 +128,26 @@ void main() {
       expect(after, everyElement('ok'));
     },
   );
+
+  // A request that was alone is just slow; nothing says parallel requests
+  // are the trouble, and nothing was lost that asking again would recover.
+  test('a request that times out on its own changes nothing', () async {
+    final router = await _Router.start(
+      responseDelay: const Duration(milliseconds: 500),
+    );
+    addTearDown(router.close);
+    final dio = HttpClientManager().getClient(router.host, false);
+
+    final result = await _get(
+      dio,
+      router,
+      timeout: const Duration(milliseconds: 50),
+    );
+
+    expect(result, isA<DioException>());
+    result as DioException;
+    expect(result.type, DioExceptionType.receiveTimeout);
+    expect(isUnansweredParallelRequest(result), isFalse);
+    expect(HttpClientManager().maxInFlightFor(router.host, false), 3);
+  });
 }

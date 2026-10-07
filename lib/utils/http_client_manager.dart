@@ -579,6 +579,25 @@ class HttpClientManager {
   }
 }
 
+/// The `error` of a [DioException] whose request ran alongside others and
+/// was never answered: the openwrt/luci#9091 hang.
+///
+/// The router is sent one request at a time from then on, so the same
+/// request would be answered now. But LuCI may well have run it and lost
+/// only the reply, so only a read is safe to send again.
+class UnansweredParallelRequest implements Exception {
+  const UnansweredParallelRequest();
+
+  @override
+  String toString() =>
+      'No reply while other requests were in flight (openwrt/luci#9091)';
+}
+
+/// Whether [error] is a request the router left unanswered because it ran
+/// alongside others. See [UnansweredParallelRequest].
+bool isUnansweredParallelRequest(Object error) =>
+    error is DioException && error.error is UnansweredParallelRequest;
+
 /// Caps how many requests are in flight to one router at a time.
 ///
 /// Requests over the cap wait here, before the inner adapter starts their
@@ -592,7 +611,8 @@ class HttpClientManager {
 /// retry hangs the same way, so login spun for as long as the app kept
 /// trying. A response that never came while other requests were in flight
 /// is that bug's signature; from then on the router is sent one request at
-/// a time.
+/// a time, and the requests it left unanswered fail with
+/// [UnansweredParallelRequest].
 class _GatedAdapter implements HttpClientAdapter {
   _GatedAdapter(this._inner);
 
@@ -601,6 +621,7 @@ class _GatedAdapter implements HttpClientAdapter {
   final HttpClientAdapter _inner;
   int _limit = maxInFlight;
   int _inFlight = 0;
+  int _started = 0;
   final Queue<Completer<void>> _waiting = Queue();
 
   @override
@@ -610,6 +631,8 @@ class _GatedAdapter implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     await _acquire();
+    final number = ++_started;
+    final startedAlone = _inFlight == 1;
     try {
       // Cancelled while it waited: Dio has already failed it, so it must
       // not reach the router now.
@@ -622,16 +645,19 @@ class _GatedAdapter implements HttpClientAdapter {
       }
       return await _inner.fetch(options, requestStream, cancelFuture);
     } on DioException catch (e) {
-      if (e.type == DioExceptionType.receiveTimeout &&
-          _inFlight > 1 &&
-          _limit > 1) {
+      // Other requests were running when this one started, or started
+      // before it gave up. Counting only the ones still open now would miss
+      // the last of a hung burst to time out.
+      final parallel = !startedAlone || _started > number;
+      if (e.type != DioExceptionType.receiveTimeout || !parallel) rethrow;
+      if (_limit > 1) {
         _limit = 1;
         Logger.warning(
           '${options.uri.host} stopped answering parallel requests; '
           'sending one at a time (openwrt/luci#9091)',
         );
       }
-      rethrow;
+      throw e.copyWith(error: const UnansweredParallelRequest());
     } finally {
       _release();
     }
