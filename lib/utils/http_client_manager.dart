@@ -64,6 +64,13 @@ class HttpClientManager {
 
   final Map<String, Dio> _clients = {};
 
+  /// Routers that stopped answering parallel requests, by `host[:port]`.
+  ///
+  /// Kept here rather than in each connection's gate: reboot recovery and
+  /// certificate changes replace the connection, and the router would
+  /// otherwise have to time out again for the app to relearn it.
+  final Set<String> _oneAtATime = {};
+
   /// Maps `host:port` to the SHA-256 fingerprint of the accepted certificate.
   final Map<String, String> _acceptedCertFingerprints = {};
   static const String _acceptedCertsKey = 'accepted_certificates';
@@ -108,7 +115,7 @@ class HttpClientManager {
       return _clients[key]!;
     }
 
-    final client = _createSecureClient(useHttps);
+    final client = _createSecureClient(hostWithPort, useHttps);
     _clients[key] = client;
     return client;
   }
@@ -181,7 +188,7 @@ class HttpClientManager {
     }
   }
 
-  Dio _createSecureClient(bool useHttps) {
+  Dio _createSecureClient(String hostWithPort, bool useHttps) {
     final dio = Dio(
       BaseOptions(
         connectTimeout: const Duration(seconds: 10),
@@ -221,7 +228,11 @@ class HttpClientManager {
       };
       dio.httpClientAdapter = adapter;
     }
-    dio.httpClientAdapter = _GatedAdapter(dio.httpClientAdapter);
+    dio.httpClientAdapter = _GatedAdapter(
+      dio.httpClientAdapter,
+      oneAtATime: _oneAtATime.contains(hostWithPort),
+      onParallelHang: () => _oneAtATime.add(hostWithPort),
+    );
 
     return dio;
   }
@@ -614,12 +625,21 @@ bool isUnansweredParallelRequest(Object error) =>
 /// a time, and the requests it left unanswered fail with
 /// [UnansweredParallelRequest].
 class _GatedAdapter implements HttpClientAdapter {
-  _GatedAdapter(this._inner);
+  _GatedAdapter(
+    this._inner, {
+    required bool oneAtATime,
+    required this.onParallelHang,
+  }) : _limit = oneAtATime ? 1 : maxInFlight;
 
   static const maxInFlight = 3;
 
   final HttpClientAdapter _inner;
-  int _limit = maxInFlight;
+
+  /// Called when the router is found to hang parallel requests, so the
+  /// next connection to it starts one at a time.
+  final void Function() onParallelHang;
+
+  int _limit;
   int _inFlight = 0;
   int _started = 0;
   final Queue<Completer<void>> _waiting = Queue();
@@ -652,6 +672,7 @@ class _GatedAdapter implements HttpClientAdapter {
       if (e.type != DioExceptionType.receiveTimeout || !parallel) rethrow;
       if (_limit > 1) {
         _limit = 1;
+        onParallelHang();
         Logger.warning(
           '${options.uri.host} stopped answering parallel requests; '
           'sending one at a time (openwrt/luci#9091)',

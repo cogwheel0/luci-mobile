@@ -126,6 +126,12 @@ void main() {
         for (var i = 0; i < 3; i++) _get(dio, router, timeout: timeout),
       ]);
       expect(after, everyElement('ok'));
+
+      // Reboot recovery and certificate changes replace the connection;
+      // the router is still the same router.
+      HttpClientManager().disposeClient(router.host, false);
+      HttpClientManager().getClient(router.host, false);
+      expect(HttpClientManager().maxInFlightFor(router.host, false), 1);
     },
   );
 

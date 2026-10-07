@@ -140,16 +140,19 @@ class ClientDetailLoader {
     final api = ref.watch(apiServiceProvider);
     if (api == null) return const ClientDetail();
 
-    // Whether the dashboard has loaded is watched: a detail page opened
-    // before the first dashboard fetch lands - or right after a router
-    // switch clears it - would otherwise cache a client with no subnets, no
-    // zone and no pools for the rest of the session, which greys out
-    // blocking and lets the reservation dialog accept an address the router
-    // would never serve. Its contents are only read. AppState notifies on
-    // every throughput tick, and re-reading the router that often flashed
-    // the page back to its skeleton every two seconds.
-    ref.watch(appStateProvider.select((s) => s.dashboardData != null));
-    final dashboard = ref.read(appStateProvider).dashboardData;
+    // The dashboard snapshot is watched, not AppState as a whole. A detail
+    // page opened before the first dashboard fetch lands - or right after a
+    // router switch clears it - would otherwise cache a client with no
+    // subnets, no zone and no pools for the rest of the session, which
+    // greys out blocking and lets the reservation dialog accept an address
+    // the router would never serve; and a client that moved network would
+    // keep its old zone after a refresh. Only a dashboard fetch replaces
+    // the snapshot. AppState also notifies on every throughput tick, and
+    // re-reading the router that often flashed the page back to its
+    // skeleton every two seconds.
+    final dashboard = ref.watch(
+      appStateProvider.select((s) => s.dashboardData),
+    );
     final alias = await ref
         .read(clientAliasStoreProvider)
         .aliasFor(session.routerId, mac);
