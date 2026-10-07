@@ -252,6 +252,20 @@ void main() {
     expect(state.dashboardFetchIsFresh, isFalse);
   });
 
+  // The fetch a logout overtakes leaves its state alone; the dashboard would
+  // then skip fetching for good, waiting on it.
+  test('logging out during a fetch leaves nothing loading', () async {
+    final state = stateFor(_Router());
+
+    final fetch = state.fetchDashboardData();
+    expect(state.isDashboardLoading, isTrue);
+    await state.logout();
+    await fetch;
+
+    expect(state.isDashboardLoading, isFalse);
+    expect(state.dashboardFetchIsFresh, isFalse);
+  });
+
   test('a login whose fetch failed starts no throughput poll', () async {
     final api = _Router(timesOut: {'system.board'});
     final state = stateFor(api);

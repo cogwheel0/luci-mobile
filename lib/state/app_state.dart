@@ -786,9 +786,11 @@ class AppState extends ChangeNotifier {
     }
     // A newer session started while cleanup ran - it owns the state now.
     if (token != _sessionToken) return;
-    // A login or router switch this logout overtook returns without
-    // touching it, leaving the login button spinning.
+    // A login, router switch or dashboard fetch this logout overtook returns
+    // without touching these, leaving the login button spinning - or the
+    // dashboard, which skips its own fetch while one is running, loading.
     _isLoading = false;
+    _isDashboardLoading = false;
     _glInetService?.clearSession();
     _dashboardData = null;
     _dashboardSettledAt = null;
