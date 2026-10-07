@@ -8,6 +8,7 @@ import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
+import 'package:luci_mobile/state/client_detail_notifier.dart';
 import 'package:luci_mobile/state/feature_providers.dart';
 
 class _TestAppState extends AppState {
@@ -94,6 +95,28 @@ void main() {
       container.read(featureProvider(RouterFeature.clientBlocking)).available,
       isTrue,
     );
+  });
+
+  // AppState notifies on every 2 s throughput tick. A detail provider that
+  // reloaded on each one re-read every config from the router that often and
+  // flashed the page back to its skeleton (#83).
+  test('the client detail is not reloaded by unrelated app state', () async {
+    const mac = 'AA:BB:CC:DD:EE:FF';
+    final states = <AsyncValue<ClientDetail>>[];
+    container.listen(
+      clientDetailProvider(mac),
+      (_, next) => states.add(next),
+      fireImmediately: true,
+    );
+    await container.read(clientDetailProvider(mac).future);
+    final settled = states.length;
+
+    appState.notifyListeners();
+    await container.pump();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(states, hasLength(settled));
+    expect(container.read(clientDetailProvider(mac)).isLoading, isFalse);
   });
 
   // The apply flow only confirms once the router answers again. Against the
