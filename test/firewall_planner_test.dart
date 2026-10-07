@@ -79,6 +79,7 @@ final _network = <String, dynamic>{
 
 void main() {
   _portForwardZoneRegression();
+  _portForwardSourceAddress();
 
   group('reading zones', () {
     test('parses policies and network membership', () {
@@ -424,6 +425,175 @@ void _portForwardZoneRegression() {
       expect(values['src_dport'], '8080');
       // Not touched when the caller did not say.
       expect(values.containsKey('dest'), isFalse);
+    });
+  });
+}
+
+/// Restricting a forward to the addresses allowed to use it (#86).
+void _portForwardSourceAddress() {
+  const restricted = PortForward(
+    section: 'cfg07',
+    name: 'ssh',
+    sourceIp: '203.0.113.0/24',
+    sourcePort: '2222',
+    destIp: '192.168.1.10',
+    destPort: '22',
+    protocol: 'tcp',
+  );
+
+  List<UciOperation> update(PortForward existing, String? sourceIp) =>
+      FirewallPlanner.planUpdatePortForward(
+        existing: existing,
+        name: 'ssh',
+        sourceZone: 'wan',
+        sourcePort: '2222',
+        destIp: '192.168.1.10',
+        destPort: '22',
+        protocol: 'tcp',
+        sourceIp: sourceIp,
+      );
+
+  group('port forward source address', () {
+    test('is read from src_ip', () {
+      final fwd = FirewallPlanner.portForwards({
+        'r': {
+          '.type': 'redirect',
+          'src': 'wan',
+          'src_ip': '198.51.100.7',
+          'src_dport': '2222',
+        },
+      }).single;
+      expect(fwd.sourceIp, '198.51.100.7');
+      expect(
+        FirewallPlanner.portForwards(_firewall).first.sourceIp,
+        isNull,
+        reason: 'no src_ip means any sender',
+      );
+    });
+
+    test('accepts an IPv4 address or subnet, optionally negated', () {
+      for (final ok in [
+        '198.51.100.7',
+        '203.0.113.0/24',
+        '0.0.0.0/0',
+        '10.0.0.1/32',
+        '!198.51.100.7',
+        ' 203.0.113.0/24 ',
+      ]) {
+        expect(FirewallPlanner.isValidSourceAddress(ok), isTrue, reason: ok);
+      }
+      for (final bad in [
+        '',
+        '!',
+        'any',
+        '203.0.113.0/33',
+        '203.0.113.0/024',
+        '203.0.113.0/',
+        '203.0.113.0/24/8',
+        '203.0.113.0 /24',
+        '! 198.51.100.7',
+        '198.51.100.7 198.51.100.8',
+        '2001:db8::1',
+        '203.0.113.0/255.255.255.0',
+      ]) {
+        expect(FirewallPlanner.isValidSourceAddress(bad), isFalse, reason: bad);
+      }
+    });
+
+    test('a new forward writes it only when given', () {
+      UciAdd create(String? sourceIp) =>
+          FirewallPlanner.planCreatePortForward(
+                name: 'SSH',
+                sourceZone: 'wan',
+                sourcePort: '2222',
+                destIp: '192.168.1.10',
+                destPort: '22',
+                protocol: 'tcp',
+                sourceIp: sourceIp,
+              ).single
+              as UciAdd;
+      expect(create('203.0.113.0/24').values['src_ip'], '203.0.113.0/24');
+      expect(create(null).values.containsKey('src_ip'), isFalse);
+    });
+
+    test('editing sets a new one', () {
+      final ops = update(restricted, '198.51.100.7');
+      expect(ops, hasLength(1));
+      expect((ops.single as UciSet).values['src_ip'], '198.51.100.7');
+    });
+
+    test('clearing it deletes the option rather than writing it empty', () {
+      final ops = update(restricted, '');
+      expect(
+        ops.whereType<UciSet>().single.values.containsKey('src_ip'),
+        false,
+      );
+      final remove = ops.whereType<UciRemove>().single;
+      expect(remove.section, 'cfg07');
+      expect(remove.option, 'src_ip');
+    });
+
+    // LuCI may store it as a list; writing back the joined text would
+    // flatten it into one option.
+    test('an unchanged one is not rewritten', () {
+      const listed = PortForward(
+        section: 'cfg08',
+        sourceIp: '198.51.100.7 198.51.100.8',
+        sourcePort: '2222',
+      );
+      for (final ops in [
+        update(listed, '198.51.100.7 198.51.100.8'),
+        update(listed, null),
+        update(const PortForward(section: 'cfg09'), ''),
+      ]) {
+        expect(ops, hasLength(1));
+        expect((ops.single as UciSet).values.containsKey('src_ip'), isFalse);
+      }
+    });
+
+    group('the duplicate-port check', () {
+      final existing = [restricted];
+
+      test('allows the same port from a sender outside it', () {
+        expect(
+          FirewallPlanner.portAlreadyForwarded(
+            existing,
+            '2222',
+            'tcp',
+            sourceIp: '198.51.100.7',
+          ),
+          isFalse,
+        );
+      });
+
+      test('refuses a sender inside it', () {
+        for (final source in ['203.0.113.9', '203.0.0.0/16', null]) {
+          expect(
+            FirewallPlanner.portAlreadyForwarded(
+              existing,
+              '2222',
+              'tcp',
+              sourceIp: source,
+            ),
+            isTrue,
+            reason: '$source overlaps 203.0.113.0/24',
+          );
+        }
+      });
+
+      // `!` turns the match around; a forward that says it cannot be
+      // reasoned about as a subnet, so it is taken to overlap.
+      test('assumes a negated source overlaps', () {
+        expect(
+          FirewallPlanner.portAlreadyForwarded(
+            existing,
+            '2222',
+            'tcp',
+            sourceIp: '!198.51.100.7',
+          ),
+          isTrue,
+        );
+      });
     });
   });
 }

@@ -188,7 +188,9 @@ class _ForwardsTab extends StatelessWidget {
                   subtitle: Text(
                     '${f.protocol.toUpperCase()}  '
                     '${f.sourceZone}:${f.sourcePort ?? "?"}'
-                    '  →  ${f.destIp ?? "?"}:${f.effectiveDestPort}',
+                    '  →  ${f.destIp ?? "?"}:${f.effectiveDestPort}'
+                    // A restricted forward reads as open without this.
+                    '${f.sourceIp == null ? '' : '\n${l10n.sourceAddress}: ${f.sourceIp}'}',
                   ),
                   trailing: Switch.adaptive(
                     value: f.enabled,
@@ -424,6 +426,9 @@ class _ForwardSheetState extends State<_ForwardSheet> {
   late final _srcPort = TextEditingController(
     text: widget.existing?.sourcePort ?? '',
   );
+  late final _srcIp = TextEditingController(
+    text: widget.existing?.sourceIp ?? '',
+  );
   late final _destIp = TextEditingController(
     text: widget.existing?.destIp ?? '',
   );
@@ -460,6 +465,7 @@ class _ForwardSheetState extends State<_ForwardSheet> {
   void dispose() {
     _name.dispose();
     _srcPort.dispose();
+    _srcIp.dispose();
     _destIp.dispose();
     _destPort.dispose();
     super.dispose();
@@ -474,10 +480,21 @@ class _ForwardSheetState extends State<_ForwardSheet> {
       v,
       _protocol,
       exceptSection: widget.existing?.section,
+      sourceIp: _srcIp.text.trim().isEmpty ? null : _srcIp.text.trim(),
     )) {
       return context.l10n.portAlreadyForwarded;
     }
     return null;
+  }
+
+  String? get _srcIpError {
+    final v = _srcIp.text.trim();
+    // One the router already has is left as it is, even in a form this
+    // sheet would not write - a list, or a netmask set in LuCI.
+    if (v.isEmpty || v == widget.existing?.sourceIp) return null;
+    return FirewallPlanner.isValidSourceAddress(v)
+        ? null
+        : context.l10n.invalidSourceAddress;
   }
 
   String? get _destIpError {
@@ -497,7 +514,8 @@ class _ForwardSheetState extends State<_ForwardSheet> {
       FirewallPlanner.isValidPort(_srcPort.text.trim()) &&
       isValidIpv4(_destIp.text.trim()) &&
       FirewallPlanner.isValidPort(_destPort.text.trim()) &&
-      _srcPortError == null;
+      _srcPortError == null &&
+      _srcIpError == null;
 
   @override
   Widget build(BuildContext context) {
@@ -576,6 +594,22 @@ class _ForwardSheetState extends State<_ForwardSheet> {
             ),
             const SizedBox(height: LuciSpacing.md),
 
+            TextField(
+              controller: _srcIp,
+              // Not the number pad: a subnet needs `/`.
+              keyboardType: TextInputType.text,
+              autocorrect: false,
+              decoration: InputDecoration(
+                labelText: l10n.sourceAddress,
+                hintText: '203.0.113.0/24',
+                helperText: l10n.sourceAddressHint,
+                helperMaxLines: 2,
+                errorText: _srcIpError,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: LuciSpacing.md),
+
             DropdownButtonFormField<String>(
               initialValue: widget.state.zoneNames.contains(_destZone)
                   ? _destZone
@@ -643,10 +677,12 @@ class _ForwardSheetState extends State<_ForwardSheet> {
   }
 
   void _save() {
+    final srcIp = _srcIp.text.trim();
     final ops = widget.existing == null
         ? FirewallPlanner.planCreatePortForward(
             name: _name.text.trim(),
             sourceZone: _srcZone,
+            sourceIp: srcIp.isEmpty ? null : srcIp,
             sourcePort: _srcPort.text.trim(),
             destIp: _destIp.text.trim(),
             destPort: _destPort.text.trim(),
@@ -658,6 +694,7 @@ class _ForwardSheetState extends State<_ForwardSheet> {
             existing: widget.existing!,
             name: _name.text.trim(),
             sourceZone: _srcZone,
+            sourceIp: srcIp,
             sourcePort: _srcPort.text.trim(),
             destIp: _destIp.text.trim(),
             destPort: _destPort.text.trim(),
