@@ -1,3 +1,4 @@
+import 'package:luci_mobile/utils/ipv4.dart';
 import 'package:luci_mobile/utils/uci_values.dart';
 import 'package:luci_mobile/models/firewall_config.dart';
 import 'package:luci_mobile/models/uci_change.dart';
@@ -40,6 +41,7 @@ class FirewallPlanner {
           enabled: uciBool(e.value['enabled'], orElse: true),
           protocol: uciText(e.value['proto']) ?? 'tcp udp',
           sourceZone: uciText(e.value['src']) ?? 'wan',
+          sourceIp: uciText(e.value['src_ip']),
           sourcePort: uciText(e.value['src_dport']),
           destZone: uciText(e.value['dest']) ?? 'lan',
           destIp: uciText(e.value['dest_ip']),
@@ -96,12 +98,15 @@ class FirewallPlanner {
   /// True when [port] on [protocol] is already forwarded by another rule.
   ///
   /// Two forwards claiming the same external port is a configuration the user
-  /// almost never means, and fw4 silently applies only one of them.
+  /// almost never means, and fw4 silently applies only one of them. Unless
+  /// they take it from different senders: one port forwarded to two hosts
+  /// depending on [sourceIp] is what restricting the source is for.
   static bool portAlreadyForwarded(
     List<PortForward> existing,
     String port,
     String protocol, {
     String? exceptSection,
+    String? sourceIp,
   }) {
     final wanted = uciList(protocol).toSet();
     final range = _portRange(port);
@@ -113,8 +118,52 @@ class FirewallPlanner {
       // Ranges, not strings: `8000-8100` already claims `8080`, and fw4
       // silently applies only one of two forwards that overlap.
       if (range.$2 < theirs.$1 || theirs.$2 < range.$1) return false;
+      if (!_sourcesOverlap(sourceIp, f.sourceIp)) return false;
       return uciList(f.protocol).toSet().intersection(wanted).isNotEmpty;
     });
+  }
+
+  /// An IPv4 address or CIDR subnet a forward may be restricted to,
+  /// optionally negated with a leading `!` as LuCI writes it.
+  ///
+  /// IPv4 only, like the internal address: a forward cannot mix address
+  /// families.
+  static bool isValidSourceAddress(String raw) {
+    final text = raw.trim();
+    return _subnet(text.startsWith('!') ? text.substring(1) : text) != null;
+  }
+
+  /// Whether traffic from [a] could also come from [b]. Null is any address,
+  /// and a source that is not a plain subnet - negated, a list, a netmask
+  /// written in LuCI - is assumed to overlap.
+  static bool _sourcesOverlap(String? a, String? b) {
+    if (a == null || b == null) return true;
+    final x = _subnet(a);
+    final y = _subnet(b);
+    if (x == null || y == null) return true;
+    final prefix = x.$2 < y.$2 ? x.$2 : y.$2;
+    if (prefix == 0) return true;
+    final shift = 32 - prefix;
+    return x.$1 >> shift == y.$1 >> shift;
+  }
+
+  /// The address and prefix length of an IPv4 address or CIDR subnet, or
+  /// null when [raw] is neither.
+  static (int, int)? _subnet(String raw) {
+    // parseIpv4 trims, and an address with a space in it is not one fw4
+    // reads the same way.
+    if (raw.contains(RegExp(r'\s'))) return null;
+    final parts = raw.split('/');
+    if (parts.length > 2) return null;
+    final octets = parseIpv4(parts.first);
+    if (octets == null) return null;
+    var prefix = 32;
+    if (parts.length == 2) {
+      if (!RegExp(r'^(0|[1-9][0-9]?)$').hasMatch(parts.last)) return null;
+      prefix = int.parse(parts.last);
+      if (prefix > 32) return null;
+    }
+    return (octets.fold(0, (sum, octet) => sum << 8 | octet), prefix);
   }
 
   /// The inclusive port range [raw] covers, or null when it is not one.
@@ -140,6 +189,7 @@ class FirewallPlanner {
     required String destPort,
     required String protocol,
     String destZone = 'lan',
+    String? sourceIp,
     Set<String> takenSections = const {},
   }) => [
     UciAdd(
@@ -150,6 +200,7 @@ class FirewallPlanner {
         'name': name,
         'target': 'DNAT',
         'src': sourceZone,
+        'src_ip': ?sourceIp,
         'src_dport': sourcePort,
         'dest': destZone,
         'dest_ip': destIp,
@@ -160,6 +211,9 @@ class FirewallPlanner {
     ),
   ];
 
+  /// [sourceIp] is left alone when null or unchanged, and removed when
+  /// empty. An unchanged one is not rewritten: LuCI may have stored it as a
+  /// list, which writing it back would flatten.
   static List<UciOperation> planUpdatePortForward({
     required PortForward existing,
     required String name,
@@ -169,23 +223,31 @@ class FirewallPlanner {
     required String destPort,
     required String protocol,
     String? destZone,
-  }) => [
-    UciSet(
-      'firewall',
-      section: existing.section,
-      values: {
-        'name': name,
-        // The edit sheet offers zone dropdowns; leaving these out meant
-        // changing one reported success and did nothing.
-        'src': sourceZone,
-        'dest': ?destZone,
-        'src_dport': sourcePort,
-        'dest_ip': destIp,
-        'dest_port': destPort,
-        'proto': protocol,
-      },
-    ),
-  ];
+    String? sourceIp,
+  }) {
+    final newSourceIp = sourceIp == (existing.sourceIp ?? '') ? null : sourceIp;
+    return [
+      UciSet(
+        'firewall',
+        section: existing.section,
+        values: {
+          'name': name,
+          // The edit sheet offers zone dropdowns; leaving these out meant
+          // changing one reported success and did nothing.
+          'src': sourceZone,
+          'dest': ?destZone,
+          if (newSourceIp != null && newSourceIp.isNotEmpty)
+            'src_ip': newSourceIp,
+          'src_dport': sourcePort,
+          'dest_ip': destIp,
+          'dest_port': destPort,
+          'proto': protocol,
+        },
+      ),
+      if (newSourceIp == '')
+        UciRemove('firewall', section: existing.section, option: 'src_ip'),
+    ];
+  }
 
   static List<UciOperation> planSetForwardEnabled({
     required PortForward forward,

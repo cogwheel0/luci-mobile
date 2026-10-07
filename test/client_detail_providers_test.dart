@@ -1,13 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/models/router_capabilities.dart';
+import 'package:luci_mobile/services/router_service.dart';
 import 'package:luci_mobile/services/mock_api_service.dart';
 import 'package:luci_mobile/services/mock_auth_service.dart';
 import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
+import 'package:luci_mobile/state/client_detail_notifier.dart';
 import 'package:luci_mobile/state/feature_providers.dart';
 
 class _TestAppState extends AppState {
@@ -94,6 +98,70 @@ void main() {
       container.read(featureProvider(RouterFeature.clientBlocking)).available,
       isTrue,
     );
+  });
+
+  // AppState notifies on every 2 s throughput tick. A detail provider that
+  // reloaded on each one re-read every config from the router that often and
+  // flashed the page back to its skeleton (#83).
+  test('the client detail is not reloaded by unrelated app state', () async {
+    const mac = 'AA:BB:CC:DD:EE:FF';
+    final states = <AsyncValue<ClientDetail>>[];
+    container.listen(
+      clientDetailProvider(mac),
+      (_, next) => states.add(next),
+      fireImmediately: true,
+    );
+    await container.read(clientDetailProvider(mac).future);
+    final settled = states.length;
+
+    appState.notifyListeners();
+    await container.pump();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(states, hasLength(settled));
+    expect(container.read(clientDetailProvider(mac)).isLoading, isFalse);
+  });
+
+  // The detail is cached for the session, and a client can move network
+  // between visits: a dashboard refresh has to reach it, or blocking would
+  // target the old zone.
+  test('a new dashboard snapshot reloads the client detail', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final routers = RouterService();
+    await routers.addRouter(
+      model.Router(
+        id: 'router',
+        ipAddress: '192.168.1.1',
+        username: 'root',
+        password: 'password',
+        useHttps: false,
+      ),
+    );
+    final state = AppState.forTesting(
+      apiService: MockApiService(),
+      authService: MockAuthService(),
+      routerService: routers,
+    );
+    final own = ProviderContainer(
+      overrides: [appStateProvider.overrideWith((ref) => state)],
+    );
+    addTearDown(own.dispose);
+
+    const mac = 'AA:BB:CC:DD:EE:FF';
+    final states = <AsyncValue<ClientDetail>>[];
+    own.listen(
+      clientDetailProvider(mac),
+      (_, next) => states.add(next),
+      fireImmediately: true,
+    );
+    await state.fetchDashboardData();
+    await own.read(clientDetailProvider(mac).future);
+    final settled = states.length;
+
+    await state.fetchDashboardData();
+    await own.read(clientDetailProvider(mac).future);
+
+    expect(states.length, greaterThan(settled));
   });
 
   // The apply flow only confirms once the router answers again. Against the

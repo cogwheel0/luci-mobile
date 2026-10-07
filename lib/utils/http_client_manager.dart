@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
@@ -61,6 +64,13 @@ class HttpClientManager {
 
   final Map<String, Dio> _clients = {};
 
+  /// Routers that stopped answering parallel requests, by `host[:port]`.
+  ///
+  /// Kept here rather than in each connection's gate: reboot recovery and
+  /// certificate changes replace the connection, and the router would
+  /// otherwise have to time out again for the app to relearn it.
+  final Set<String> _oneAtATime = {};
+
   /// Maps `host:port` to the SHA-256 fingerprint of the accepted certificate.
   final Map<String, String> _acceptedCertFingerprints = {};
   static const String _acceptedCertsKey = 'accepted_certificates';
@@ -105,7 +115,7 @@ class HttpClientManager {
       return _clients[key]!;
     }
 
-    final client = _createSecureClient(useHttps);
+    final client = _createSecureClient(hostWithPort, useHttps);
     _clients[key] = client;
     return client;
   }
@@ -174,15 +184,11 @@ class HttpClientManager {
   void _closeAndRemoveClients(bool Function(String key) matches) {
     final keysToRemove = _clients.keys.where(matches).toList();
     for (final key in keysToRemove) {
-      final dio = _clients.remove(key);
-      final adapter = dio?.httpClientAdapter;
-      if (adapter is IOHttpClientAdapter) {
-        adapter.close(force: true);
-      }
+      _clients.remove(key)?.httpClientAdapter.close(force: true);
     }
   }
 
-  Dio _createSecureClient(bool useHttps) {
+  Dio _createSecureClient(String hostWithPort, bool useHttps) {
     final dio = Dio(
       BaseOptions(
         connectTimeout: const Duration(seconds: 10),
@@ -222,6 +228,11 @@ class HttpClientManager {
       };
       dio.httpClientAdapter = adapter;
     }
+    dio.httpClientAdapter = _GatedAdapter(
+      dio.httpClientAdapter,
+      oneAtATime: _oneAtATime.contains(hostWithPort),
+      onParallelHang: () => _oneAtATime.add(hostWithPort),
+    );
 
     return dio;
   }
@@ -372,7 +383,9 @@ class HttpClientManager {
       final request = await testClient.getUrl(uri);
       // Never pin a redirect target's certificate under this host.
       request.followRedirects = false;
-      await request.close();
+      // Bounded: a router that completes the handshake and then never
+      // answers would otherwise keep the login spinning with no error.
+      await request.close().timeout(const Duration(seconds: 10));
 
       if (presentedCert == null) {
         // Certificate chains to a trusted CA - nothing to accept.
@@ -537,11 +550,20 @@ class HttpClientManager {
         Logger.warning('Certificate probe failed: $e');
       }
     } finally {
-      testClient.close();
+      // Forced, so a probe that timed out does not leave its socket open.
+      testClient.close(force: true);
     }
 
     return false;
   }
+
+  /// How many requests [getClient]'s client for [hostWithPort] lets run at
+  /// once, for tests.
+  @visibleForTesting
+  int maxInFlightFor(String hostWithPort, bool useHttps) =>
+      (_clients['$hostWithPort-$useHttps']?.httpClientAdapter as _GatedAdapter?)
+          ?._limit ??
+      _GatedAdapter.maxInFlight;
 
   Widget _buildCertDetail(String label, String value) {
     return Padding(
@@ -566,4 +588,122 @@ class HttpClientManager {
       ),
     );
   }
+}
+
+/// The `error` of a [DioException] whose request ran alongside others and
+/// was never answered: the openwrt/luci#9091 hang.
+///
+/// The router is sent one request at a time from then on, so the same
+/// request would be answered now. But LuCI may well have run it and lost
+/// only the reply, so only a read is safe to send again.
+class UnansweredParallelRequest implements Exception {
+  const UnansweredParallelRequest();
+
+  @override
+  String toString() =>
+      'No reply while other requests were in flight (openwrt/luci#9091)';
+}
+
+/// Whether [error] is a request the router left unanswered because it ran
+/// alongside others. See [UnansweredParallelRequest].
+bool isUnansweredParallelRequest(Object error) =>
+    error is DioException && error.error is UnansweredParallelRequest;
+
+/// Caps how many requests are in flight to one router at a time.
+///
+/// Requests over the cap wait here, before the inner adapter starts their
+/// timeouts. Left to the router they wait in uhttpd, which runs only
+/// `max_requests` (3 by default) LuCI requests at once, and their receive
+/// timeout runs out in the queue.
+///
+/// Some LuCI builds hang every request that runs alongside another
+/// (openwrt/luci#9091): the workers uhttpd forks share one ubus socket and
+/// take each other's replies. Nothing answers until the app gives up, and a
+/// retry hangs the same way, so login spun for as long as the app kept
+/// trying. A response that never came while other requests were in flight
+/// is that bug's signature; from then on the router is sent one request at
+/// a time, and the requests it left unanswered fail with
+/// [UnansweredParallelRequest].
+class _GatedAdapter implements HttpClientAdapter {
+  _GatedAdapter(
+    this._inner, {
+    required bool oneAtATime,
+    required this.onParallelHang,
+  }) : _limit = oneAtATime ? 1 : maxInFlight;
+
+  static const maxInFlight = 3;
+
+  final HttpClientAdapter _inner;
+
+  /// Called when the router is found to hang parallel requests, so the
+  /// next connection to it starts one at a time.
+  final void Function() onParallelHang;
+
+  int _limit;
+  int _inFlight = 0;
+  int _started = 0;
+  final Queue<Completer<void>> _waiting = Queue();
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    await _acquire();
+    final number = ++_started;
+    final startedAlone = _inFlight == 1;
+    try {
+      // Cancelled while it waited: Dio has already failed it, so it must
+      // not reach the router now.
+      final cancelToken = options.cancelToken;
+      if (cancelToken != null && cancelToken.isCancelled) {
+        throw DioException.requestCancelled(
+          requestOptions: options,
+          reason: cancelToken.cancelError?.error,
+        );
+      }
+      return await _inner.fetch(options, requestStream, cancelFuture);
+    } on DioException catch (e) {
+      // Other requests were running when this one started, or started
+      // before it gave up. Counting only the ones still open now would miss
+      // the last of a hung burst to time out.
+      final parallel = !startedAlone || _started > number;
+      if (e.type != DioExceptionType.receiveTimeout || !parallel) rethrow;
+      if (_limit > 1) {
+        _limit = 1;
+        onParallelHang();
+        Logger.warning(
+          '${options.uri.host} stopped answering parallel requests; '
+          'sending one at a time (openwrt/luci#9091)',
+        );
+      }
+      throw e.copyWith(error: const UnansweredParallelRequest());
+    } finally {
+      _release();
+    }
+  }
+
+  /// Completes once this request may go out. The slot is handed over by
+  /// [_release], so a request arriving meanwhile cannot take it first.
+  Future<void> _acquire() {
+    if (_inFlight < _limit && _waiting.isEmpty) {
+      _inFlight++;
+      return Future.value();
+    }
+    final turn = Completer<void>();
+    _waiting.add(turn);
+    return turn.future;
+  }
+
+  void _release() {
+    _inFlight--;
+    while (_inFlight < _limit && _waiting.isNotEmpty) {
+      _inFlight++;
+      _waiting.removeFirst().complete();
+    }
+  }
+
+  @override
+  void close({bool force = false}) => _inner.close(force: force);
 }

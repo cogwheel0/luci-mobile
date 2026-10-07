@@ -33,7 +33,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(appStateProvider).fetchDashboardData();
+      final appState = ref.read(appStateProvider);
+      // Logging in has just fetched, or is still fetching; coming back to
+      // this tab later still refreshes.
+      if (!appState.dashboardFetchIsFresh) appState.fetchDashboardData();
       // Initialize arrows after layout
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _updateWirelessArrows();

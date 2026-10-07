@@ -35,6 +35,7 @@ class PortForward {
     this.enabled = true,
     this.protocol = 'tcp udp',
     this.sourceZone = 'wan',
+    this.sourceIp,
     this.sourcePort,
     this.destZone = 'lan',
     this.destIp,
@@ -49,6 +50,9 @@ class PortForward {
   final String protocol;
 
   final String sourceZone;
+
+  /// The only addresses the forward accepts traffic from; null means any.
+  final String? sourceIp;
 
   /// The port reached from outside.
   final String? sourcePort;

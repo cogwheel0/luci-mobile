@@ -58,6 +58,7 @@ class AppState extends ChangeNotifier {
 
   Map<String, dynamic>? _dashboardData;
   bool _isDashboardLoading = false;
+  DateTime? _dashboardSettledAt;
 
   /// What went wrong, not how to say it.
   ///
@@ -163,9 +164,11 @@ class AppState extends ChangeNotifier {
     required IApiService apiService,
     required IAuthService authService,
     IGlInetApiService? glInetApiService,
+    RouterService? routerService,
   }) : _apiService = apiService,
        _authService = authService,
-       _glInetService = glInetApiService;
+       _glInetService = glInetApiService,
+       _routerService = routerService;
 
   static AppState get instance {
     return _instance ??= AppState._();
@@ -444,6 +447,19 @@ class AppState extends ChangeNotifier {
   double get currentRxRate => _throughputService?.currentRxRate ?? 0.0;
   double get currentTxRate => _throughputService?.currentTxRate ?? 0.0;
   bool get isDashboardLoading => _isDashboardLoading;
+
+  /// Whether a dashboard fetch is running or has only just finished, so
+  /// fetching again now would ask the router the same things twice.
+  ///
+  /// Logging in fetches the dashboard and then opens it, and the dashboard
+  /// used to fetch again on opening. A failed fetch counts too: its error is
+  /// what the dashboard should show, not a second wait for the same timeout.
+  bool get dashboardFetchIsFresh =>
+      _isDashboardLoading ||
+      (_dashboardSettledAt != null &&
+          DateTime.now().difference(_dashboardSettledAt!) <
+              const Duration(seconds: 5));
+
   AppFailure? get appFailure => _appFailure;
 
   // Interface-specific throughput getters
@@ -725,9 +741,11 @@ class AppState extends ChangeNotifier {
             }
           }
         }
+        // The fetch starts the throughput poll once it has data. Starting it
+        // here as well ran the poll after a failed fetch too, against a
+        // router that was not answering.
         await fetchDashboardData();
         if (token != _sessionToken) return false;
-        _startThroughputTimer();
         _isLoading = false;
         notifyListeners();
         return true;
@@ -768,8 +786,14 @@ class AppState extends ChangeNotifier {
     }
     // A newer session started while cleanup ran - it owns the state now.
     if (token != _sessionToken) return;
+    // A login, router switch or dashboard fetch this logout overtook returns
+    // without touching these, leaving the login button spinning - or the
+    // dashboard, which skips its own fetch while one is running, loading.
+    _isLoading = false;
+    _isDashboardLoading = false;
     _glInetService?.clearSession();
     _dashboardData = null;
+    _dashboardSettledAt = null;
     _appFailure = null;
     _canReboot = null;
     _rebootAccessUnknown = false;
@@ -777,7 +801,18 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> fetchDashboardData({bool isRetryAfterFallback = false}) async {
+  Future<void> fetchDashboardData({bool isRetryAfterFallback = false}) =>
+      _fetchDashboardData(isRetryAfterFallback: isRetryAfterFallback);
+
+  /// [resentUnanswered] marks the one retry after requests a router left
+  /// unanswered (see below). It is kept apart from [isRetryAfterFallback]
+  /// so that retry does not use up the alternate address: a saved address
+  /// that went away mid-fetch looks like that hang first, and the retry is
+  /// what then finds it gone.
+  Future<void> _fetchDashboardData({
+    required bool isRetryAfterFallback,
+    bool resentUnanswered = false,
+  }) async {
     // A UCI apply is awaiting confirmation. This fetch's fallback path can
     // re-login, which would invalidate the session the pending rollback is
     // bound to and make the router revert the change.
@@ -906,6 +941,14 @@ class AppState extends ChangeNotifier {
       ),
     );
 
+    // Some LuCI builds hang requests that run alongside others
+    // (openwrt/luci#9091), and the first burst after login is how the app
+    // finds out. The router is sent one request at a time from then on, so
+    // whatever this fetch lost to it - optional wireless data included,
+    // which goes missing quietly - comes back if it asks once more. These
+    // are all reads, and `resentUnanswered` keeps it to once.
+    var unanswered = false;
+
     try {
       // Perform all API calls in parallel
       Future<dynamic> callOptionalRpc({
@@ -923,6 +966,7 @@ class AppState extends ChangeNotifier {
             params: params,
           );
         } catch (e, stack) {
+          if (isUnansweredParallelRequest(e)) unanswered = true;
           Logger.warning('Optional RPC $object.$method failed: $e');
           Logger.debug('Optional RPC $object.$method stack: $stack');
           return null;
@@ -1022,6 +1066,14 @@ class AppState extends ChangeNotifier {
         wirelessFuture,
         uciWirelessFuture,
       ]);
+      if (unanswered && !resentUnanswered) {
+        if (token != _sessionToken) return;
+        _isDashboardLoading = false;
+        return await _fetchDashboardData(
+          isRetryAfterFallback: isRetryAfterFallback,
+          resentUnanswered: true,
+        );
+      }
       final wirelessRaw = optionalResults[0];
       final uciWirelessRaw = optionalResults[1];
 
@@ -1185,6 +1237,15 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       // A newer session started; don't surface this fetch's error.
       if (token != _sessionToken) return;
+      // The router did answer - just not in parallel - so this is no reason
+      // to try the other address.
+      if (isUnansweredParallelRequest(e) && !resentUnanswered) {
+        _isDashboardLoading = false;
+        return await _fetchDashboardData(
+          isRetryAfterFallback: isRetryAfterFallback,
+          resentUnanswered: true,
+        );
+      }
       final status = e is DioException ? e.response?.statusCode : null;
       // A rejected session is worth retrying on the other address, and so
       // is any failure to reach the router at all - including the reset
@@ -1236,6 +1297,7 @@ class AppState extends ChangeNotifier {
       // fetch was in flight - drop the stale results instead of clobbering it.
       if (token == _sessionToken) {
         _isDashboardLoading = false;
+        _dashboardSettledAt = DateTime.now();
         notifyListeners();
       }
     }

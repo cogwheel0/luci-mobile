@@ -140,12 +140,19 @@ class ClientDetailLoader {
     final api = ref.watch(apiServiceProvider);
     if (api == null) return const ClientDetail();
 
-    // Watched, not read: a detail page opened before the first dashboard
-    // fetch lands - or right after a router switch clears it - would
-    // otherwise cache a client with no subnets, no zone and no pools for
-    // the rest of the session, which greys out blocking and lets the
-    // reservation dialog accept an address the router would never serve.
-    final appState = ref.watch(appStateProvider);
+    // The dashboard snapshot is watched, not AppState as a whole. A detail
+    // page opened before the first dashboard fetch lands - or right after a
+    // router switch clears it - would otherwise cache a client with no
+    // subnets, no zone and no pools for the rest of the session, which
+    // greys out blocking and lets the reservation dialog accept an address
+    // the router would never serve; and a client that moved network would
+    // keep its old zone after a refresh. Only a dashboard fetch replaces
+    // the snapshot. AppState also notifies on every throughput tick, and
+    // re-reading the router that often flashed the page back to its
+    // skeleton every two seconds.
+    final dashboard = ref.watch(
+      appStateProvider.select((s) => s.dashboardData),
+    );
     final alias = await ref
         .read(clientAliasStoreProvider)
         .aliasFor(session.routerId, mac);
@@ -157,7 +164,7 @@ class ClientDetailLoader {
     // degrades one card rather than blanking the page.
     final (hints, found, configs) = await (
       _fetchHints(session, api),
-      _findStation(session, api),
+      _findStation(session, api, dashboard?['wireless']),
       _fetchConfigs(session, api),
     ).wait;
 
@@ -175,7 +182,7 @@ class ClientDetailLoader {
     // client — its addresses, or the AP it is associated to — and not from
     // whichever interface the router happens to list first. Live lease
     // first: host hints remember addresses a client has since moved off.
-    final rawDump = appState.dashboardData?['interfaceDump'];
+    final rawDump = dashboard?['interfaceDump'];
     final interfaceDump = rawDump is Map ? rawDump : null;
     // Which interfaces face the internet is the firewall's call; with no
     // firewall to ask, only the name can say.
@@ -188,7 +195,7 @@ class ClientDetailLoader {
     final located = ClientConfigPlanner.networkForClient(
       subnets: allSubnets,
       addresses: <String>{
-        ..._leaseAddresses(appState),
+        ..._leaseAddresses(dashboard),
         ?host?.ip,
         ..._hintList(hint, 'ipaddrs'),
       },
@@ -274,9 +281,8 @@ class ClientDetailLoader {
   /// was not found and at least one interface could not be read, because
   /// then "not associated" is not something this router has said.
   Future<({StationInfo? station, List<String> networks, bool failed})>
-  _findStation(RouterSession session, IApiService api) async {
+  _findStation(RouterSession session, IApiService api, Object? wireless) async {
     const none = (station: null, networks: <String>[], failed: false);
-    final wireless = ref.watch(appStateProvider).dashboardData?['wireless'];
     if (wireless is! Map) return none;
 
     final aps = <({String ifname, List<String> networks})>[];
@@ -327,8 +333,8 @@ class ClientDetailLoader {
   }
 
   /// Addresses the dashboard's lease table holds for this client.
-  List<String> _leaseAddresses(dynamic appState) {
-    final leases = appState.dashboardData?['dhcpLeases'];
+  List<String> _leaseAddresses(Map<String, dynamic>? dashboard) {
+    final leases = dashboard?['dhcpLeases'];
     if (leases is! Map) return const [];
     final rows = leases['dhcp_leases'];
     if (rows is! List) return const [];
