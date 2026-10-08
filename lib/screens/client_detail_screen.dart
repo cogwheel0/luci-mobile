@@ -40,12 +40,15 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   /// The name the page shows: the alias if set, else the lease name, else
   /// the MAC. The same name goes on anything written to the router about
   /// this client, so a block rule is recognisable in LuCI.
-  String _displayName(ClientDetail? detail) {
-    final alias = detail?.alias;
-    if (alias != null && alias.isNotEmpty) return alias;
+  String _displayName(String? alias) {
+    if (alias != null && alias.isNotEmpty) {
+      return alias;
+    }
+
     if (client.hostname.isNotEmpty && client.hostname != 'Unknown') {
       return client.hostname;
     }
+
     return client.macAddress;
   }
 
@@ -69,13 +72,49 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final detailAsync = ref.watch(clientDetailProvider(mac));
-    final displayName = _displayName(detailAsync.value);
+    final detailState = ref.watch(
+      clientDetailProvider(mac).select(
+        (async) => (
+          hasValue: async.hasValue,
+          hasError: async.hasError,
+          error: async.error,
+        ),
+      ),
+    );
+
+    final alias = ref.watch(
+      clientDetailProvider(mac).select((async) => async.value?.alias),
+    );
+
+    final displayName = _displayName(alias);
+
+    Widget content;
+
+    if (!detailState.hasValue && !detailState.hasError) {
+      content = Column(
+        children: const [
+          LuciCardSkeleton(contentLines: 3),
+          SizedBox(height: LuciSpacing.md),
+          LuciCardSkeleton(contentLines: 4),
+        ],
+      );
+    } else if (detailState.hasError && !detailState.hasValue) {
+      content = _MessageCard(
+        icon: Icons.error_outline,
+        message: apiErrorText(context, detailState.error!),
+        action: context.l10n.retry,
+        onAction: () => ref.invalidate(clientDetailProvider(mac)),
+      );
+    } else {
+      content = Column(children: _sections(context));
+    }
 
     return Scaffold(
       appBar: LuciAppBar(title: displayName, showBack: true),
       body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(clientDetailProvider(mac)),
+        onRefresh: () async {
+          ref.invalidate(clientDetailProvider(mac));
+        },
         child: ListView(
           padding: const EdgeInsets.all(LuciSpacing.md),
           children: [
@@ -84,26 +123,14 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
               displayName: displayName,
               onRename: _busy
                   ? null
-                  : () => _rename(detailAsync.value, displayName),
+                  : () => _rename(
+                      ref.read(clientDetailProvider(mac)).value,
+                      displayName,
+                    ),
             ),
             if (!_isOwnedBySelectedRouter) _crossRouterBanner(context),
             const SizedBox(height: LuciSpacing.md),
-            ...detailAsync.when(
-              loading: () => const [
-                LuciCardSkeleton(contentLines: 3),
-                SizedBox(height: LuciSpacing.md),
-                LuciCardSkeleton(contentLines: 4),
-              ],
-              error: (error, _) => [
-                _MessageCard(
-                  icon: Icons.error_outline,
-                  message: apiErrorText(context, error),
-                  action: context.l10n.retry,
-                  onAction: () => ref.invalidate(clientDetailProvider(mac)),
-                ),
-              ],
-              data: (detail) => _sections(context, detail),
-            ),
+            content,
           ],
         ),
       ),
@@ -146,41 +173,60 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     );
   }
 
-  List<Widget> _sections(BuildContext context, ClientDetail detail) => [
-    if (detail.station != null || detail.stationUnavailable)
-      _SignalCard(detail: detail),
-    if (detail.station != null) _TrafficCard(station: detail.station!),
-    _AddressesCard(client: client, detail: detail),
-    _reservationCard(context, detail),
-    _wakeCard(context, detail),
-    _blockCard(context, detail),
+  List<Widget> _sections(BuildContext context) => [
+    _SignalCard(mac: mac),
+    _AddressesCard(client: client, mac: mac),
+    _TrafficCard(mac: mac),
+    _reservationCard(context),
+    _wakeCard(context),
+    _blockCard(context),
     const SizedBox(height: LuciSpacing.xl),
   ];
 
   // ------------------------------------------------------------ write cards
 
-  Widget _reservationCard(BuildContext context, ClientDetail detail) {
+  Widget _reservationCard(BuildContext context) {
     final availability = ref.watch(
       featureProvider(RouterFeature.dhcpReservations),
     );
+
+    final reservationState = ref.watch(
+      clientDetailProvider(mac).select(
+        (async) => (
+          hasReservation: async.value?.hasReservation ?? false,
+          reservedIp: async.value?.host?.ip,
+          dhcpUnavailable: async.value?.dhcpUnavailable ?? false,
+        ),
+      ),
+    );
+
+    final hasReservation = reservationState.hasReservation;
+    final reservedIp = reservationState.reservedIp;
+    final dhcpUnavailable = reservationState.dhcpUnavailable;
+
     return _GatedCard(
       title: context.l10n.staticLeaseSection,
       icon: Icons.bookmark_outline,
       availability: availability,
-      writable: _isOwnedBySelectedRouter && !detail.dhcpUnavailable,
+      writable: _isOwnedBySelectedRouter && !dhcpUnavailable,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
             title: Text(context.l10n.reserveThisAddress),
-            subtitle: detail.hasReservation
-                ? Text('${context.l10n.reservedAddress}: ${detail.host!.ip}')
+            subtitle: hasReservation && reservedIp != null
+                ? Text('${context.l10n.reservedAddress}: $reservedIp')
                 : null,
-            value: detail.hasReservation,
-            onChanged:
-                _canWrite(availability, configReadable: !detail.dhcpUnavailable)
-                ? (want) => _toggleReservation(detail, want)
+            value: hasReservation,
+            onChanged: _canWrite(availability, configReadable: !dhcpUnavailable)
+                ? (want) {
+                    final detail = ref.read(clientDetailProvider(mac)).value;
+
+                    if (detail != null) {
+                      _toggleReservation(detail, want);
+                    }
+                  }
                 : null,
           ),
         ],
@@ -192,9 +238,11 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   ///
   /// It lives here rather than on a screen of its own because the MAC is
   /// already known: a standalone WoL page would make the user type it.
-  Widget _wakeCard(BuildContext context, ClientDetail detail) {
+  Widget _wakeCard(BuildContext context) {
     final availability = ref.watch(featureProvider(RouterFeature.wakeOnLan));
+
     final mac = WolService.normaliseMac(widget.client.macAddress);
+
     return _GatedCard(
       title: context.l10n.wakeSection,
       icon: Icons.power_settings_new,
@@ -246,18 +294,29 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     }
   }
 
-  Widget _blockCard(BuildContext context, ClientDetail detail) {
+  Widget _blockCard(BuildContext context) {
     final availability = ref.watch(
       featureProvider(RouterFeature.clientBlocking),
     );
-    final noZone = detail.zone == null && detail.blockRule == null;
+
+    final blockState = ref.watch(
+      clientDetailProvider(mac).select(
+        (async) => (
+          zone: async.value?.zone,
+          blockRule: async.value?.blockRule,
+          firewallUnavailable: async.value?.firewallUnavailable ?? false,
+          isBlocked: async.value?.isBlocked ?? false,
+        ),
+      ),
+    );
+
+    final noZone = blockState.zone == null && blockState.blockRule == null;
+
     return _GatedCard(
       title: context.l10n.accessSection,
       icon: Icons.block_outlined,
       availability: availability,
-      writable: _isOwnedBySelectedRouter && !detail.firewallUnavailable,
-      // Without a resolvable zone the rule would have to guess `lan`, which
-      // is wrong on any guest-VLAN or multi-zone router.
+      writable: _isOwnedBySelectedRouter && !blockState.firewallUnavailable,
       extraNote: noZone ? context.l10n.noZoneForClient : null,
       child: SwitchListTile.adaptive(
         contentPadding: EdgeInsets.zero,
@@ -266,14 +325,20 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
           context.l10n.blockClientDescription,
           style: LuciTextStyles.cardSubtitle(context),
         ),
-        value: detail.isBlocked,
+        value: blockState.isBlocked,
         onChanged:
             _canWrite(
                   availability,
-                  configReadable: !detail.firewallUnavailable,
+                  configReadable: !blockState.firewallUnavailable,
                 ) &&
                 !noZone
-            ? (want) => _toggleBlock(detail, want)
+            ? (want) {
+                final detail = ref.read(clientDetailProvider(mac)).value;
+
+                if (detail != null) {
+                  _toggleBlock(detail, want);
+                }
+              }
             : null,
       ),
     );
@@ -331,7 +396,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       ClientConfigPlanner.planBlock(
         mac: mac,
         zone: zone ?? '',
-        displayName: _displayName(detail),
+        displayName: _displayName(detail.alias),
         existing: rule,
       ),
     );
@@ -453,82 +518,296 @@ class _IdentityCard extends StatelessWidget {
   }
 }
 
-class _SignalCard extends StatelessWidget {
-  const _SignalCard({required this.detail});
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.label, required this.value, this.onTap});
 
-  final ClientDetail detail;
+  final String label;
+  final Widget value;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    if (detail.station == null) {
-      return _MessageCard(
-        icon: Icons.signal_wifi_statusbar_null,
-        message: context.l10n.signalUnavailable,
-      );
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: LuciSpacing.xs),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: LuciTextStyles.detailLabel(context)),
+            Flexible(child: value),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailValue<T> extends ConsumerWidget {
+  const _DetailValue({
+    required this.mac,
+    required this.selector,
+    required this.format,
+  });
+
+  final String mac;
+  final T? Function(ClientDetail?) selector;
+  final String Function(T value) format;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final value = ref.watch(
+      clientDetailProvider(mac).select((async) => selector(async.value)),
+    );
+
+    if (value == null) {
+      return const SizedBox.shrink();
     }
-    final s = detail.station!;
+
+    return Text(
+      format(value),
+      style: LuciTextStyles.detailValue(context),
+      textAlign: TextAlign.end,
+    );
+  }
+}
+
+class _ConditionalDetailRow<T> extends ConsumerWidget {
+  const _ConditionalDetailRow({
+    required this.mac,
+    required this.label,
+    required this.selector,
+    required this.format,
+  });
+
+  final String mac;
+  final String label;
+  final T? Function(ClientDetail?) selector;
+  final String Function(T value) format;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final value = ref.watch(
+      clientDetailProvider(mac).select((async) => selector(async.value)),
+    );
+
+    if (value == null) {
+      return const SizedBox.shrink();
+    }
+
+    return _DetailRow(
+      label: label,
+      value: Text(
+        format(value),
+        style: LuciTextStyles.detailValue(context),
+        textAlign: TextAlign.end,
+      ),
+    );
+  }
+}
+
+class _SignalCard extends ConsumerWidget {
+  const _SignalCard({required this.mac});
+
+  final String mac;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stationExists = ref.watch(
+      clientDetailProvider(mac).select((async) => async.value?.station != null),
+    );
+
+    final unavailable = ref.watch(
+      clientDetailProvider(
+        mac,
+      ).select((async) => async.value?.stationUnavailable ?? false),
+    );
+
+    if (!stationExists) {
+      if (unavailable) {
+        return _MessageCard(
+          icon: Icons.signal_wifi_statusbar_null,
+          message: context.l10n.signalUnavailable,
+        );
+      }
+
+      return const SizedBox.shrink();
+    }
+
     return _SectionCard(
       title: context.l10n.signal,
       icon: Icons.network_wifi,
       rows: [
-        if (s.signal != null) (context.l10n.signal, '${s.signal} dBm'),
-        if (s.noise != null) (context.l10n.noiseFloor, '${s.noise} dBm'),
-        if (s.snr != null) (context.l10n.signalToNoise, '${s.snr} dB'),
-        if (s.rxRateKbps != null)
-          (context.l10n.downloadRate, _rate(s.rxRateKbps!)),
-        if (s.txRateKbps != null)
-          (context.l10n.uploadRate, _rate(s.txRateKbps!)),
-        if (s.connectedSeconds != null)
-          (
-            context.l10n.connectedFor,
-            Client.formatDuration(s.connectedSeconds!),
+        _DetailRow(
+          label: context.l10n.signal,
+          value: _DetailValue<int>(
+            mac: mac,
+            selector: (detail) => detail?.station?.signal,
+            format: (value) => '$value dBm',
           ),
+        ),
+        _DetailRow(
+          label: context.l10n.noiseFloor,
+          value: _DetailValue<int>(
+            mac: mac,
+            selector: (detail) => detail?.station?.noise,
+            format: (value) => '$value dBm',
+          ),
+        ),
+        _DetailRow(
+          label: context.l10n.signalToNoise,
+          value: _DetailValue<int>(
+            mac: mac,
+            selector: (detail) => detail?.station?.snr,
+            format: (value) => '$value dB',
+          ),
+        ),
+        _DetailRow(
+          label: context.l10n.downloadRate,
+          value: _DetailValue<int>(
+            mac: mac,
+            selector: (detail) => detail?.station?.rxRateKbps,
+            format: _rate,
+          ),
+        ),
+        _DetailRow(
+          label: context.l10n.uploadRate,
+          value: _DetailValue<int>(
+            mac: mac,
+            selector: (detail) => detail?.station?.txRateKbps,
+            format: _rate,
+          ),
+        ),
+        _DetailRow(
+          label: context.l10n.connectedFor,
+          value: _DetailValue<int>(
+            mac: mac,
+            selector: (detail) => detail?.station?.connectedSeconds,
+            format: Client.formatDuration,
+          ),
+        ),
       ],
     );
   }
 
-  static String _rate(int kbps) => kbps >= 1000
-      ? '${(kbps / 1000).toStringAsFixed(1)} Mbit/s'
-      : '$kbps kbit/s';
+  static String _rate(int kbps) {
+    return kbps >= 1000
+        ? '${(kbps / 1000).toStringAsFixed(1)} Mbit/s'
+        : '$kbps kbit/s';
+  }
 }
 
-class _TrafficCard extends StatelessWidget {
-  const _TrafficCard({required this.station});
+class _TrafficCard extends ConsumerWidget {
+  const _TrafficCard({required this.mac});
 
-  final StationInfo station;
+  final String mac;
 
   @override
-  Widget build(BuildContext context) => _SectionCard(
-    title: context.l10n.trafficSection,
-    icon: Icons.swap_vert,
-    rows: [
-      if (station.rxBytes != null)
-        (context.l10n.downloaded, formatBytes(station.rxBytes!)),
-      if (station.txBytes != null)
-        (context.l10n.uploaded, formatBytes(station.txBytes!)),
-    ],
-  );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stationExists = ref.watch(
+      clientDetailProvider(mac).select((async) => async.value?.station != null),
+    );
+
+    if (!stationExists) {
+      return const SizedBox.shrink();
+    }
+
+    return _SectionCard(
+      title: context.l10n.trafficSection,
+      icon: Icons.swap_vert,
+      rows: [
+        _ConditionalDetailRow<int>(
+          mac: mac,
+          label: context.l10n.downloaded,
+          selector: (detail) => detail?.station?.rxBytes,
+          format: formatBytes,
+        ),
+        _ConditionalDetailRow<int>(
+          mac: mac,
+          label: context.l10n.uploaded,
+          selector: (detail) => detail?.station?.txBytes,
+          format: formatBytes,
+        ),
+      ],
+    );
+  }
 }
 
-class _AddressesCard extends StatelessWidget {
-  const _AddressesCard({required this.client, required this.detail});
+class _AddressesCard extends ConsumerWidget {
+  const _AddressesCard({required this.client, required this.mac});
 
   final Client client;
-  final ClientDetail detail;
+  final String mac;
 
   @override
-  Widget build(BuildContext context) {
-    final ipv6 = <String>{...?client.ipv6Addresses, ...detail.hintIpv6};
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hintIpv6 = ref.watch(
+      clientDetailProvider(
+        mac,
+      ).select((async) => async.value?.hintIpv6 ?? const <String>[]),
+    );
+
+    final ipv6 = <String>{...?client.ipv6Addresses, ...hintIpv6};
+
     return _SectionCard(
       title: context.l10n.addressesSection,
       icon: Icons.language,
-      copyable: true,
       rows: [
         if (client.ipAddress != 'N/A')
-          (context.l10n.ipAddress, client.ipAddress),
-        for (final addr in ipv6) (context.l10n.ipv6Address, addr),
-        (context.l10n.macAddress, client.macAddress),
-        if (client.dnsName != null) (context.l10n.dnsName, client.dnsName!),
+          _DetailRow(
+            label: context.l10n.ipAddress,
+            value: Text(
+              client.ipAddress,
+              style: LuciTextStyles.detailValue(context),
+              textAlign: TextAlign.end,
+            ),
+            onTap: () => copyToClipboard(
+              context,
+              client.ipAddress,
+              label: context.l10n.ipAddress,
+            ),
+          ),
+
+        for (final addr in ipv6)
+          _DetailRow(
+            label: context.l10n.ipv6Address,
+            value: Text(
+              addr,
+              style: LuciTextStyles.detailValue(context),
+              textAlign: TextAlign.end,
+            ),
+            onTap: () =>
+                copyToClipboard(context, addr, label: context.l10n.ipv6Address),
+          ),
+
+        _DetailRow(
+          label: context.l10n.macAddress,
+          value: Text(
+            client.macAddress,
+            style: LuciTextStyles.detailValue(context),
+            textAlign: TextAlign.end,
+          ),
+          onTap: () => copyToClipboard(
+            context,
+            client.macAddress,
+            label: context.l10n.macAddress,
+          ),
+        ),
+
+        if (client.dnsName != null)
+          _DetailRow(
+            label: context.l10n.dnsName,
+            value: Text(
+              client.dnsName!,
+              style: LuciTextStyles.detailValue(context),
+              textAlign: TextAlign.end,
+            ),
+            onTap: () => copyToClipboard(
+              context,
+              client.dnsName!,
+              label: context.l10n.dnsName,
+            ),
+          ),
       ],
     );
   }
@@ -539,17 +818,16 @@ class _SectionCard extends StatelessWidget {
     required this.title,
     required this.icon,
     required this.rows,
-    this.copyable = false,
   });
 
   final String title;
   final IconData icon;
-  final List<(String, String)> rows;
-  final bool copyable;
+  final List<Widget> rows;
 
   @override
   Widget build(BuildContext context) {
     if (rows.isEmpty) return const SizedBox.shrink();
+
     return Padding(
       padding: const EdgeInsets.only(bottom: LuciSpacing.md),
       child: LuciCardStyles.standardCardWrapper(
@@ -565,28 +843,7 @@ class _SectionCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: LuciSpacing.sm),
-            for (final (label, value) in rows)
-              InkWell(
-                onTap: copyable
-                    ? () => copyToClipboard(context, value, label: label)
-                    : null,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: LuciSpacing.xs),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(label, style: LuciTextStyles.detailLabel(context)),
-                      Flexible(
-                        child: Text(
-                          value,
-                          style: LuciTextStyles.detailValue(context),
-                          textAlign: TextAlign.end,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            ...rows,
           ],
         ),
       ),
