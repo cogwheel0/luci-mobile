@@ -532,5 +532,21 @@
   "notifyIntervalNote": "Android no ejecuta comprobaciones en segundo plano más de cada 15 minutos, y puede retrasarlas para ahorrar batería.",
   "notifyAwayNote": "Las comprobaciones solo funcionan en la red del router. Fuera de casa se omiten en vez de informarse como una caída.",
   "changeBlockedByOthers": "El router aún tiene cambios sin guardar en {configs}. Aplicar ahora también los confirmaría: descártalos o aplícalos primero.",
-  "changeLeftStaged": "El cambio falló y quedan cambios sin guardar en el router en {configs}. Descártalos o aplícalos en LuCI."
+  "changeLeftStaged": "El cambio falló y quedan cambios sin guardar en el router en {configs}. Descártalos o aplícalos en LuCI.",
+  "language": "Idioma",
+  "appearance": "Apariencia",
+  "dynamicColor": "Colores Material You",
+  "dynamicColorDescription": "Usar los colores del fondo de pantalla (Android 12+)",
+  "accentColor": "Color de acento",
+  "amoledBlack": "Negro AMOLED",
+  "amoledBlackDescription": "Tema oscuro negro puro para pantallas OLED",
+  "security": "Seguridad",
+  "appLock": "Bloqueo de la app",
+  "appLockDescription": "Pedir huella, rostro o bloqueo de pantalla para abrir la app",
+  "appLockReason": "Desbloquear LuCI Mobile",
+  "appLocked": "LuCI Mobile está bloqueada",
+  "unlock": "Desbloquear",
+  "appLockUnavailable": "Configura primero un bloqueo de pantalla en este dispositivo",
+  "shareWifi": "Compartir Wi-Fi",
+  "wifiQrHint": "Escanea con la cámara de un teléfono para unirte a esta red"
 }

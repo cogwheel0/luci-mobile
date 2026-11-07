@@ -532,5 +532,21 @@
   "notifyIntervalNote": "Android führt Hintergrundprüfungen höchstens alle 15 Minuten aus und kann sie zum Stromsparen weiter verzögern.",
   "notifyAwayNote": "Prüfungen funktionieren nur im Netzwerk des Routers. Unterwegs werden sie übersprungen statt als Ausfall gemeldet.",
   "changeBlockedByOthers": "Auf dem Router sind noch ungespeicherte Änderungen in {configs}. Ein Anwenden würde auch diese übernehmen – verwirf oder übernimm sie zuerst.",
-  "changeLeftStaged": "Die Änderung ist fehlgeschlagen; in {configs} liegen noch ungespeicherte Änderungen auf dem Router. Verwirf oder übernimm sie in LuCI."
+  "changeLeftStaged": "Die Änderung ist fehlgeschlagen; in {configs} liegen noch ungespeicherte Änderungen auf dem Router. Verwirf oder übernimm sie in LuCI.",
+  "language": "Sprache",
+  "appearance": "Darstellung",
+  "dynamicColor": "Material-You-Farben",
+  "dynamicColorDescription": "Farben aus dem Hintergrundbild verwenden (Android 12+)",
+  "accentColor": "Akzentfarbe",
+  "amoledBlack": "AMOLED-Schwarz",
+  "amoledBlackDescription": "Rein schwarzes dunkles Design für OLED-Displays",
+  "security": "Sicherheit",
+  "appLock": "App-Sperre",
+  "appLockDescription": "Zum Öffnen Fingerabdruck, Gesicht oder Displaysperre verlangen",
+  "appLockReason": "LuCI Mobile entsperren",
+  "appLocked": "LuCI Mobile ist gesperrt",
+  "unlock": "Entsperren",
+  "appLockUnavailable": "Richte zuerst eine Displaysperre auf diesem Gerät ein",
+  "shareWifi": "WLAN teilen",
+  "wifiQrHint": "Mit der Handykamera scannen, um diesem Netzwerk beizutreten"
 }

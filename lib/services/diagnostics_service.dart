@@ -6,15 +6,24 @@ import 'package:luci_mobile/state/router_session.dart';
 
 /// A network tool the router can run on the user's behalf.
 enum DiagnosticTool {
-  ping('/bin/ping'),
-  traceroute('/usr/bin/traceroute'),
-  nslookup('/usr/bin/nslookup');
+  ping(['/bin/ping', '/usr/bin/ping']),
+  traceroute(['/usr/bin/traceroute', '/bin/traceroute', '/usr/sbin/traceroute']),
+  nslookup(['/usr/bin/nslookup', '/bin/nslookup']);
 
-  const DiagnosticTool(this.path);
+  const DiagnosticTool(this.paths);
 
-  /// Absolute path, because rpcd's `file.exec` resolves nothing.
-  final String path;
+  /// Absolute paths, tried in order, because rpcd's `file.exec` resolves
+  /// nothing and LuCI's ACL lists each tool under the exact path it expects.
+  /// Builds differ in where busybox links (or a full package installs) the
+  /// binary, so a refusal or "not found" on one path moves on to the next.
+  final List<String> paths;
+
+  /// The preferred path.
+  String get path => paths.first;
 }
+
+/// One way of running a command that rpcd may or may not allow.
+typedef _ExecCandidate = ({String command, List<String> params});
 
 @immutable
 class DiagnosticResult {
@@ -63,12 +72,23 @@ class DiagnosticsService {
     DiagnosticTool tool,
     String target,
   ) async {
-    return _exec(session, tool.path, argsFor(tool, target));
+    final args = argsFor(tool, target);
+    return _execFirst(session, [
+      for (final path in tool.paths) (command: path, params: args),
+    ]);
   }
 
   /// Reads the kernel ring buffer.
+  ///
+  /// rpcd matches `file.exec` against LuCI's ACL *including arguments*:
+  /// the stock grant is for exactly `/bin/dmesg -r`, so a bare `dmesg` is
+  /// refused even for root (GitHub issue #91). `-r` prints raw `<prio>`
+  /// prefixes, which [LogEntry.parseKernel] turns into levels.
   Future<DiagnosticResult> kernelLog(RouterSession session) async {
-    return _exec(session, '/bin/dmesg', const []);
+    return _execFirst(session, const [
+      (command: '/bin/dmesg', params: ['-r']),
+      (command: '/bin/dmesg', params: []),
+    ]);
   }
 
   /// Reads the system log.
@@ -77,11 +97,55 @@ class DiagnosticsService {
   /// an `file.exec` — which is already a ubus call — deadlocks until rpcd
   /// times out. Callers must be ready for this to fail and say so rather than
   /// showing an empty log as if the router had nothing to report.
+  ///
+  /// The commands are tried in the order LuCI itself uses them, because that
+  /// is what the router's ACL grants (GitHub issue #91): 23.05+ ships
+  /// `/usr/libexec/syslog-wrapper`, older releases grant exactly
+  /// `logread -e ^`. Only [lines] of the newest output are kept.
   Future<DiagnosticResult> systemLog(
     RouterSession session, {
-    int lines = 200,
+    int lines = 500,
   }) async {
-    return _exec(session, '/sbin/logread', ['-l', '$lines']);
+    final result = await _execFirst(session, [
+      (command: '/usr/libexec/syslog-wrapper', params: const []),
+      (command: '/sbin/logread', params: const ['-e', '^']),
+      (command: '/usr/sbin/logread', params: const ['-e', '^']),
+      (command: '/sbin/logread', params: ['-l', '$lines']),
+    ]);
+    return DiagnosticResult(
+      output: tailLines(result.output, lines),
+      exitCode: result.exitCode,
+      stderr: result.stderr,
+    );
+  }
+
+  /// The last [count] non-empty lines of [output].
+  @visibleForTesting
+  static String tailLines(String output, int count) {
+    final all = output.split('\n').where((l) => l.trim().isNotEmpty).toList();
+    if (all.length <= count) return all.join('\n');
+    return all.sublist(all.length - count).join('\n');
+  }
+
+  /// Runs the first of [candidates] the router lets this session run.
+  ///
+  /// Moves on only when a candidate is refused or missing; any other
+  /// failure (timeout, dead session) is the answer and is rethrown at once.
+  Future<DiagnosticResult> _execFirst(
+    RouterSession session,
+    List<_ExecCandidate> candidates,
+  ) async {
+    RpcException? last;
+    for (final c in candidates) {
+      try {
+        return await _exec(session, c.command, c.params);
+      } on RpcException catch (e) {
+        if (!(e.isAccessDenied || e.isUnavailable)) rethrow;
+        last = e;
+      }
+    }
+    throw last ??
+        const RpcException(object: 'file', method: 'exec', status: 4);
   }
 
   /// Runs [command] and returns whatever it printed, whatever it exited with.
@@ -180,5 +244,40 @@ class LogEntry {
   static List<LogEntry> parseAll(String output) => [
     for (final line in output.split('\n'))
       if (line.trim().isNotEmpty) parse(line),
+  ];
+
+  static const _kernelLevels = [
+    'emerg',
+    'alert',
+    'crit',
+    'err',
+    'warn',
+    'notice',
+    'info',
+    'debug',
+  ];
+
+  /// Parses a `dmesg -r` line: `<6>[   12.345678] eth0: link up`.
+  ///
+  /// Lines without the raw prefix (a plain `dmesg`) still get their uptime
+  /// stamp split off; anything else is kept verbatim.
+  static LogEntry parseKernel(String line) {
+    final match = RegExp(
+      r'^(?:<(\d+)>)?\[\s*([\d.]+)\]\s?(.*)$',
+    ).firstMatch(line);
+    if (match == null) return LogEntry(raw: line, message: line);
+    final prio = int.tryParse(match.group(1) ?? '');
+    return LogEntry(
+      raw: line,
+      timestamp: '${match.group(2)}s',
+      facility: 'kern',
+      level: prio == null ? 'info' : _kernelLevels[prio & 7],
+      message: match.group(3),
+    );
+  }
+
+  static List<LogEntry> parseAllKernel(String output) => [
+    for (final line in output.split('\n'))
+      if (line.trim().isNotEmpty) parseKernel(line),
   ];
 }

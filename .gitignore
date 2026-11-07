@@ -143,3 +143,10 @@ GoogleService-Info.plist
 !**/ios/**/default.pbxuser
 !**/ios/**/default.perspectivev3
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
+
+# Local release secrets and outputs
+.mega
+dist/
+claude.md
+CLAUDE.md
+android/keystore/

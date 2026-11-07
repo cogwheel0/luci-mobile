@@ -79,7 +79,11 @@ class _FailingRestartApiService extends MockApiService {
     required Map<String, Object> values,
     BuildContext? context,
   }) async {
-    calls.add('set $config.$section $values');
+    final call = 'set $config.$section $values';
+    calls.add(call);
+    if (failWanDelete && call == _wanRestore) {
+      throw Exception('forced WAN membership rollback failure');
+    }
     return [0, {}];
   }
 
@@ -123,15 +127,15 @@ class _FailingRestartApiService extends MockApiService {
   }) async {
     final call = '$command ${params.join(' ')}';
     calls.add(call);
-    if (failWanDelete && call.startsWith('/sbin/uci del_list firewall.')) {
-      throw Exception('forced WAN membership rollback failure');
-    }
     if (call == '/sbin/wifi down radio0') {
       throw Exception('forced restart failure');
     }
     return [0, {}];
   }
 }
+
+const _wanAdd = 'set firewall.wan_zone {network: [wan, wwan]}';
+const _wanRestore = 'set firewall.wan_zone {network: [wan]}';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -153,9 +157,10 @@ void main() {
 
     expect(connected, isFalse);
     expect(api.calls, contains('delete wireless.wifinet0'));
+    expect(api.calls, contains(_wanAdd));
     expect(
       api.calls,
-      contains('/sbin/uci del_list firewall.@zone[1].network=wwan'),
+      contains(_wanRestore),
     );
     expect(api.calls, contains('delete network.wwan'));
     expect(api.calls, contains("set wireless.radio0 {disabled: 0}"));
@@ -185,7 +190,7 @@ void main() {
     expect(api.calls, contains('delete wireless.wifinet0'));
     expect(
       api.calls,
-      isNot(contains('/sbin/uci del_list firewall.@zone[1].network=wwan')),
+      isNot(contains(_wanRestore)),
     );
     expect(api.calls, isNot(contains('delete network.wwan')));
     expect(
@@ -256,7 +261,7 @@ void main() {
     expect(connected, isFalse);
     expect(
       api.calls,
-      contains('/sbin/uci del_list firewall.@zone[1].network=wwan'),
+      contains(_wanRestore),
     );
     expect(api.calls, isNot(contains('delete network.wwan')));
     expect(

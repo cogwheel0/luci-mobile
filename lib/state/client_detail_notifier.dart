@@ -202,12 +202,19 @@ class ClientDetailLoader {
       wirelessNetworks: stationNetworks,
     );
     final network = located?.name;
-    // A reservation is checked against the client's own subnet when it is
-    // known; otherwise against every LAN-side one, so an address that no
-    // interface would ever serve is still refused.
-    final subnets = located?.subnet != null
-        ? [located!.subnet!]
-        : allSubnets.where((s) => !s.upstream).toList();
+    // A reservation is checked against every LAN-side subnet, the
+    // client's own first, so an address no interface would ever serve is
+    // still refused. Only the client's own subnet was allowed before, and
+    // the network picked for it follows the AP the client is on - with two
+    // LAN subnets that refused the very address the client already had
+    // (GitHub issue #90).
+    final lanSide = allSubnets.where((s) => !s.upstream).toList();
+    final own = located?.subnet;
+    final subnets = [
+      ?own,
+      for (final s in lanSide)
+        if (!identical(s, own)) s,
+    ];
 
     return ClientDetail(
       alias: alias,

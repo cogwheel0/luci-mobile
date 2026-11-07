@@ -167,10 +167,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       unawaited(Navigator.of(context).pushReplacementNamed('/'));
     } else {
       if (mounted) {
+        _prefillFromSavedRouter();
         setState(() {
           _isCheckingAutoLogin = false;
         });
       }
+    }
+  }
+
+  /// After a logout the form starts filled in with the router the user was
+  /// on, so signing back in (or letting a password manager do it) is one tap
+  /// rather than retyping the address (GitHub issue #38).
+  void _prefillFromSavedRouter() {
+    final router = ref.read(appStateProvider).selectedRouter;
+    if (router == null || _ipController.text.isNotEmpty) return;
+    final scheme = router.useHttps ? 'https://' : '';
+    _ipController.text = '$scheme${router.ipAddress}';
+    _usernameController.text = router.username;
+    _passwordController.text = router.password;
+    final alt = router.alternateAddress;
+    if (alt != null && alt.isNotEmpty) {
+      _alternateController.text =
+          '${router.alternateUseHttps == true ? 'https://' : ''}$alt';
+      _showAlternateAddress = true;
     }
   }
 

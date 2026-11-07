@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LuCI Mobile</title>
+  <meta name="description" content="Управление роутером OpenWrt с телефона: панель, клиенты, Wi-Fi, файрвол, логи. Material You, AMOLED, русский язык.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23305f9e'/%3E%3Cpath fill='white' transform='translate(3 3) scale(.75)' d='M20.2 5.9l.8-.8C19.6 3.7 17.8 3 16 3s-3.6.7-5 2.1l.8.8C13 4.8 14.5 4.2 16 4.2s3 .6 4.2 1.7zm-.9.8c-.9-.9-2.1-1.4-3.3-1.4s-2.4.5-3.3 1.4l.8.8c.7-.7 1.6-1 2.5-1s1.8.3 2.5 1l.8-.8zM19 13h-2V9h-2v4H5c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2zM8 18H6v-2h2v2zm3.5 0h-2v-2h2v2zm3.5 0h-2v-2h2v2z'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --bg: #f8f9ff; --surface: #ffffff; --surface2: #ecedf4; --text: #191c20; --muted: #43474e;
+      --primary: #305f9e; --on-primary: #ffffff; --primary-c: #d5e3ff; --on-primary-c: #001b3c; --line: #dde2ec;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #000000; --surface: #111318; --surface2: #1d2026; --text: #e1e2e9; --muted: #c3c6cf;
+        --primary: #a7c8ff; --on-primary: #003061; --primary-c: #144684; --on-primary-c: #d5e3ff; --line: #2b2f36;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #000000; --surface: #111318; --surface2: #1d2026; --text: #e1e2e9; --muted: #c3c6cf;
+      --primary: #a7c8ff; --on-primary: #003061; --primary-c: #144684; --on-primary-c: #d5e3ff; --line: #2b2f36;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 0 16px; }
+    header { padding: 20px 0; display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 20px; }
+    .logo { width: 40px; height: 40px; border-radius: 12px; background: var(--primary); display: grid; place-items: center; }
+    .logo svg { width: 24px; height: 24px; fill: var(--on-primary); }
+    h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 24px 0 12px; }
+    .lead { color: var(--muted); font-size: 18px; max-width: 640px; }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 20px; margin: 16px 0; }
+    .release { background: var(--primary-c); color: var(--on-primary-c); border: 0; }
+    .btn { display: inline-block; padding: 12px 22px; border-radius: 999px; background: var(--primary); color: var(--on-primary); text-decoration: none; font-weight: 600; }
+    .btn.ghost { background: transparent; color: inherit; border: 1px solid currentColor; }
+    .meta { font-size: 14px; opacity: .85; margin-top: 8px; }
+    code { font: 12px/1.4 ui-monospace, monospace; word-break: break-all; display: block; background: var(--surface2); color: var(--text); padding: 8px 10px; border-radius: 10px; margin-top: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .grid .card { margin: 0; }
+    h2 { margin-top: 40px; }
+    h3 { margin: 0 0 6px; font-size: 17px; }
+    .grid p { margin: 0; color: var(--muted); }
+    footer { color: var(--muted); font-size: 14px; padding: 40px 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo"><svg viewBox="0 0 24 24"><path d="M20.2 5.9l.8-.8C19.6 3.7 17.8 3 16 3s-3.6.7-5 2.1l.8.8C13 4.8 14.5 4.2 16 4.2s3 .6 4.2 1.7zm-.9.8c-.9-.9-2.1-1.4-3.3-1.4s-2.4.5-3.3 1.4l.8.8c.7-.7 1.6-1 2.5-1s1.8.3 2.5 1l.8-.8zM19 13h-2V9h-2v4H5c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2zM8 18H6v-2h2v2zm3.5 0h-2v-2h2v2zm3.5 0h-2v-2h2v2z"/></svg></div>
+      LuCI Mobile
+    </header>
+
+    <h1>Роутер OpenWrt — в кармане</h1>
+    <p class="lead">Панель, клиенты, Wi-Fi, файрвол, логи и диагностика через тот же rpcd, что и веб-LuCI.
+      Material You, AMOLED-тема, русский язык, блокировка по отпечатку.</p>
+
+    <div class="card release" id="current">
+      <div>Загружаю информацию о версии…</div>
+    </div>
+    <div class="card" id="previous" hidden></div>
+
+    <h2>Возможности</h2>
+    <div class="grid">
+      <div class="card"><h3>Оформление</h3><p>Цвета Material You из обоев, свой акцентный цвет, чисто чёрная AMOLED-тема, выбор языка прямо в приложении.</p></div>
+      <div class="card"><h3>Wi-Fi по QR</h3><p>Покажите гостю QR-код сети — камера телефона подключится сама. Пароль копируется одним касанием.</p></div>
+      <div class="card"><h3>Блокировка</h3><p>Отпечаток, лицо или PIN экрана при открытии и после 30 секунд в фоне. Выход больше не входит обратно сам.</p></div>
+      <div class="card"><h3>Логи и диагностика</h3><p>Системный и журнал ядра, ping, traceroute и DNS работают в рамках прав LuCI — и под root, и под ограниченной учёткой.</p></div>
+    </div>
+
+    <footer>Android 7.0+ · APK подписан, сверяйте SHA-256 перед установкой. Форк <a href="https://github.com/cogwheel0/luci-mobile" style="color:inherit">cogwheel0/luci-mobile</a> (GPL-3.0).</footer>
+  </div>
+  <script>
+    const fmtSize = b => (b / 1048576).toFixed(1).replace('.', ',') + ' МБ';
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    function block(r, title, primary) {
+      return `<div style="font-size:14px;opacity:.85">${title}</div>
+        <div style="font-size:28px;font-weight:700;margin:4px 0 12px">Версия ${esc(r.version)}</div>
+        <a class="btn${primary ? '' : ' ghost'}" href="${esc(r.url)}" rel="noopener">Скачать APK</a>
+        <div class="meta">${esc(r.file)} · ${fmtSize(r.size)} · ${esc(r.date)} · Android ${esc(r.minAndroid)}+</div>
+        <code>SHA-256: ${esc(r.sha256)}</code>`;
+    }
+    fetch('release.json', {cache: 'no-store'}).then(r => r.json()).then(r => {
+      document.getElementById('current').innerHTML = block(r, 'Текущая версия', true);
+      if (r.previous) {
+        const p = document.getElementById('previous');
+        p.innerHTML = block(r.previous, 'Предыдущая версия — для отката', false);
+        p.hidden = false;
+      }
+    }).catch(() => {
+      document.getElementById('current').textContent = 'Не удалось загрузить release.json';
+    });
+  </script>
+</body>
+</html>

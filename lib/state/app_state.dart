@@ -130,6 +130,23 @@ class AppState extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
   static const String _themeModeKey = 'themeMode';
 
+  // Appearance: pure-black dark theme, wallpaper colours, accent, language.
+  bool _amoledBlack = false;
+  bool _dynamicColor = true;
+  int _accentColor = 0xFF2196F3;
+  Locale? _locale;
+  bool _appLockEnabled = false;
+  static const String _amoledKey = 'appearance_amoled';
+  static const String _dynamicColorKey = 'appearance_dynamic_color';
+  static const String _accentColorKey = 'appearance_accent';
+  static const String _localeKey = 'appearance_locale';
+  static const String _appLockKey = 'app_lock_enabled';
+
+  /// Set by an explicit logout so the login screen that follows does not
+  /// sign straight back in with the saved router (GitHub issue #88).
+  /// Cleared by the next manual login.
+  static const String _autoLoginSuspendedKey = 'auto_login_suspended';
+
   // Clients view mode (aggregate across routers)
   bool _clientsAggregateAllRouters = true;
   static const String _clientsAggregateKey = 'clients_aggregate_all';
@@ -178,6 +195,7 @@ class AppState extends ChangeNotifier {
     await _loadReviewerMode();
     _initializeServices();
     await _loadThemeMode();
+    await _loadAppearance();
     await loadRouters(); // Load routers on app start (sets selectedRouter)
     await _migrateGlobalDashboardPreferencesIfNeeded(); // Proactively migrate legacy prefs
     await _loadClientsViewMode();
@@ -265,6 +283,90 @@ class AppState extends ChangeNotifier {
     );
     _initializeServices();
     notifyListeners();
+  }
+
+  bool _appearanceLoaded = false;
+
+  /// True once the saved appearance and lock settings have been read.
+  bool get appearanceLoaded => _appearanceLoaded;
+  bool get amoledBlack => _amoledBlack;
+  bool get dynamicColor => _dynamicColor;
+  Color get accentColor => Color(_accentColor);
+  Locale? get locale => _locale;
+  bool get appLockEnabled => _appLockEnabled;
+
+  Future<void> _loadAppearance() async {
+    try {
+      await _readAppearance();
+    } catch (e, stack) {
+      Logger.exception('Failed to read appearance settings', e, stack);
+    } finally {
+      _appearanceLoaded = true;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _readAppearance() async {
+    final amoled = await _secureStorageService.readValue(_amoledKey);
+    final dyn = await _secureStorageService.readValue(_dynamicColorKey);
+    final accent = await _secureStorageService.readValue(_accentColorKey);
+    final locale = await _secureStorageService.readValue(_localeKey);
+    final lock = await _secureStorageService.readValue(_appLockKey);
+    _amoledBlack = amoled == 'true';
+    _dynamicColor = dyn != 'false';
+    _accentColor = int.tryParse(accent ?? '') ?? _accentColor;
+    _locale = parseLocaleTag(locale);
+    _appLockEnabled = lock == 'true';
+  }
+
+  /// `zh_Hant` / `ru` / `en` → [Locale]; empty or null means "follow the
+  /// system".
+  static Locale? parseLocaleTag(String? tag) {
+    if (tag == null || tag.isEmpty) return null;
+    final parts = tag.split('_');
+    if (parts.length == 2 && parts[1].length == 4) {
+      return Locale.fromSubtags(languageCode: parts[0], scriptCode: parts[1]);
+    }
+    return parts.length == 2 ? Locale(parts[0], parts[1]) : Locale(parts[0]);
+  }
+
+  static String localeTag(Locale locale) => [
+    locale.languageCode,
+    if (locale.scriptCode != null) locale.scriptCode!,
+    if (locale.countryCode != null) locale.countryCode!,
+  ].join('_');
+
+  Future<void> setAmoledBlack(bool value) async {
+    _amoledBlack = value;
+    notifyListeners();
+    await _secureStorageService.writeValue(_amoledKey, '$value');
+  }
+
+  Future<void> setDynamicColor(bool value) async {
+    _dynamicColor = value;
+    notifyListeners();
+    await _secureStorageService.writeValue(_dynamicColorKey, '$value');
+  }
+
+  Future<void> setAccentColor(Color color) async {
+    _accentColor = color.toARGB32();
+    notifyListeners();
+    await _secureStorageService.writeValue(_accentColorKey, '$_accentColor');
+  }
+
+  Future<void> setLocale(Locale? locale) async {
+    _locale = locale;
+    notifyListeners();
+    await _secureStorageService.writeValue(
+      _localeKey,
+      locale == null ? '' : localeTag(locale),
+    );
+  }
+
+  Future<void> setAppLockEnabled(bool value) async {
+    _appLockEnabled = value;
+    notifyListeners();
+    await _secureStorageService.writeValue(_appLockKey, '$value');
   }
 
   Future<void> _loadThemeMode() async {
@@ -463,36 +565,91 @@ class AppState extends ChangeNotifier {
   AppFailure? get appFailure => _appFailure;
 
   // Interface-specific throughput getters
+  // The dashboard chart is download (↓) and upload (↑) as the network's
+  // users see it. On the uplink that is the device's rx and tx; on a LAN
+  // bridge or AP the router *transmits* what clients download, so the two
+  // swap (GitHub issue #81).
+  Set<String> _downstreamDevices = const {};
+
+  /// Devices to sum for the "all interfaces" chart, recording which devices
+  /// face clients so a single-interface chart can orient itself.
+  Set<String> _updateThroughputDevices(Map<String, dynamic>? interfaceDump) {
+    final split = throughputDevices(interfaceDump);
+    _downstreamDevices = split.downstream;
+    return split.upstream.isNotEmpty ? split.upstream : split.downstream;
+  }
+
+  /// Splits [interfaceDump]'s devices into uplinks (an interface carrying a
+  /// default route, or named `wan*`) and everything else but loopback.
+  @visibleForTesting
+  static ({Set<String> upstream, Set<String> downstream}) throughputDevices(
+    Map<String, dynamic>? interfaceDump,
+  ) {
+    final upstream = <String>{};
+    final all = <String>{};
+    final list = interfaceDump?['interface'];
+    if (list is List) {
+      for (final iface in list) {
+        if (iface is! Map) continue;
+        final name = iface['interface']?.toString();
+        if (name == null || name == 'loopback' || name == 'lo') continue;
+        final devices = <String>{
+          if (iface['device'] is String) iface['device'] as String,
+          if (iface['l3_device'] is String) iface['l3_device'] as String,
+        };
+        all.addAll(devices);
+        final routes = iface['route'];
+        final hasDefault =
+            routes is List &&
+            routes.any(
+              (r) =>
+                  r is Map &&
+                  (r['target'] == '0.0.0.0' || r['target'] == '::') &&
+                  (r['mask'] == 0 || r['mask'] == '0'),
+            );
+        if (hasDefault || name.startsWith('wan')) upstream.addAll(devices);
+      }
+    }
+    return (upstream: upstream, downstream: all.difference(upstream));
+  }
+
+  bool _isDownstream(String? device) =>
+      device != null && _downstreamDevices.contains(device);
+
   List<double> getRxHistoryForInterface(String interface) {
-    final deviceName = _getDeviceNameForInterface(interface);
-    return _throughputService?.getRxHistoryForInterface(
-          deviceName ?? interface,
-        ) ??
-        [];
+    final d = _getDeviceNameForInterface(interface) ?? interface;
+    final s = _throughputService;
+    if (s == null) return [];
+    return _isDownstream(d)
+        ? s.getTxHistoryForInterface(d)
+        : s.getRxHistoryForInterface(d);
   }
 
   List<double> getTxHistoryForInterface(String interface) {
-    final deviceName = _getDeviceNameForInterface(interface);
-    return _throughputService?.getTxHistoryForInterface(
-          deviceName ?? interface,
-        ) ??
-        [];
+    final d = _getDeviceNameForInterface(interface) ?? interface;
+    final s = _throughputService;
+    if (s == null) return [];
+    return _isDownstream(d)
+        ? s.getRxHistoryForInterface(d)
+        : s.getTxHistoryForInterface(d);
   }
 
   double getCurrentRxRateForInterface(String interface) {
-    final deviceName = _getDeviceNameForInterface(interface);
-    return _throughputService?.getCurrentRxRateForInterface(
-          deviceName ?? interface,
-        ) ??
-        0.0;
+    final d = _getDeviceNameForInterface(interface) ?? interface;
+    final s = _throughputService;
+    if (s == null) return 0.0;
+    return _isDownstream(d)
+        ? s.getCurrentTxRateForInterface(d)
+        : s.getCurrentRxRateForInterface(d);
   }
 
   double getCurrentTxRateForInterface(String interface) {
-    final deviceName = _getDeviceNameForInterface(interface);
-    return _throughputService?.getCurrentTxRateForInterface(
-          deviceName ?? interface,
-        ) ??
-        0.0;
+    final d = _getDeviceNameForInterface(interface) ?? interface;
+    final s = _throughputService;
+    if (s == null) return 0.0;
+    return _isDownstream(d)
+        ? s.getCurrentRxRateForInterface(d)
+        : s.getCurrentTxRateForInterface(d);
   }
 
   Future<void> loadRouters() async {
@@ -741,6 +898,11 @@ class AppState extends ChangeNotifier {
             }
           }
         }
+        if (!fromRouter) {
+          try {
+            await _secureStorageService.deleteValue(_autoLoginSuspendedKey);
+          } catch (_) {}
+        }
         // The fetch starts the throughput poll once it has data. Starting it
         // here as well ran the poll after a failed fetch too, against a
         // router that was not answering.
@@ -783,6 +945,13 @@ class AppState extends ChangeNotifier {
         e,
         StackTrace.current,
       );
+    }
+    // An explicit logout means "ask me again": the login screen that
+    // follows must not sign back in with the saved router (issue #88).
+    try {
+      await _secureStorageService.writeValue(_autoLoginSuspendedKey, 'true');
+    } catch (_) {
+      // Storage is best-effort here; the in-memory logout still happens.
     }
     // A newer session started while cleanup ran - it owns the state now.
     if (token != _sessionToken) return;
@@ -1141,26 +1310,9 @@ class AppState extends ChangeNotifier {
         }
       }
 
-      // Throughput calculation - collect ALL interface devices
-      final wanDeviceNames = <String>{};
-      if (interfaceDump != null && interfaceDump['interface'] is List) {
-        for (final interface in interfaceDump['interface']) {
-          if (interface is Map<String, dynamic>) {
-            final ifname = interface['interface'] as String?;
-            // Skip only loopback interface
-            if (ifname != null && ifname != 'loopback' && ifname != 'lo') {
-              final device = interface['device'] as String?;
-              final l3Device = interface['l3_device'] as String?;
-              if (device != null) {
-                wanDeviceNames.add(device);
-              }
-              if (l3Device != null && l3Device != device) {
-                wanDeviceNames.add(l3Device);
-              }
-            }
-          }
-        }
-      }
+      // Throughput: count only the uplink, so ↓ is what the network
+      // downloads (GitHub issue #81) - see [throughputDevices].
+      final wanDeviceNames = _updateThroughputDevices(interfaceDump);
 
       // Update throughput data using the service
       // Check if we should track specific interface
@@ -1520,26 +1672,9 @@ class AppState extends ChangeNotifier {
       if (result is List && result.length > 1 && result[0] == 0) {
         final networkData = result[1] as Map<String, dynamic>?;
 
-        // Get ALL device names from cached dashboard data (except loopback)
-        final wanDeviceNames = <String>{};
-        final interfaceDump =
-            _dashboardData?['interfaceDump'] as Map<String, dynamic>?;
-        if (interfaceDump != null && interfaceDump['interface'] is List) {
-          for (final interface in interfaceDump['interface']) {
-            if (interface is Map<String, dynamic>) {
-              final ifname = interface['interface'] as String?;
-              final device = interface['device'] as String?;
-              final l3Device = interface['l3_device'] as String?;
-              // Include all interfaces except loopback
-              if (ifname != null && ifname != 'loopback' && ifname != 'lo') {
-                if (device != null) wanDeviceNames.add(device);
-                if (l3Device != null && l3Device != device) {
-                  wanDeviceNames.add(l3Device);
-                }
-              }
-            }
-          }
-        }
+        final wanDeviceNames = _updateThroughputDevices(
+          _dashboardData?['interfaceDump'] as Map<String, dynamic>?,
+        );
 
         // Check if we should track specific interface
         final prefs = _dashboardPreferences;
@@ -2349,7 +2484,8 @@ class AppState extends ChangeNotifier {
 
       var createdNetwork = false;
       var addedToWan = false;
-      var wanZoneIndex = -1;
+      String? wanZoneSection;
+      var wanZoneNetworks = <String>[];
       var createdStation = false;
       var updatedStation = false;
       var restartAttempted = false;
@@ -2409,7 +2545,6 @@ class AppState extends ChangeNotifier {
             'Invalid firewall configuration response',
           );
         }
-        var zoneIndex = 0;
         var foundInWan = false;
         for (final entry in firewallSections.entries) {
           final section = entry.value;
@@ -2417,22 +2552,25 @@ class AppState extends ChangeNotifier {
             continue;
           }
           if (section['name']?.toString() == 'wan') {
-            wanZoneIndex = zoneIndex;
-            foundInWan = uciList(section['network']).contains(staNetworkName);
+            wanZoneSection = entry.key;
+            wanZoneNetworks = uciList(section['network']);
+            foundInWan = wanZoneNetworks.contains(staNetworkName);
             break;
           }
-          zoneIndex++;
         }
-        if (!foundInWan && wanZoneIndex >= 0) {
-          await _apiService!.systemExec(
+        // Through ubus `uci.set`, not `file.exec /sbin/uci`: LuCI's ACL
+        // grants no exec on the uci binary, so that path was refused for
+        // every account, root included.
+        if (!foundInWan && wanZoneSection != null) {
+          await _apiService!.uciSet(
             ip,
             auth,
             https,
-            command: '/sbin/uci',
-            params: [
-              'add_list',
-              'firewall.@zone[$wanZoneIndex].network=$staNetworkName',
-            ],
+            config: 'firewall',
+            section: wanZoneSection,
+            values: {
+              'network': [...wanZoneNetworks, staNetworkName],
+            },
             context: context?.mounted == true ? context : null,
           );
           addedToWan = true;
@@ -2621,15 +2759,13 @@ class AppState extends ChangeNotifier {
           var wanMembershipRolledBack = !addedToWan;
           if (addedToWan) {
             await attemptRollback('WAN firewall membership', () async {
-              await _apiService!.systemExec(
+              await _apiService!.uciSet(
                 ip,
                 auth,
                 https,
-                command: '/sbin/uci',
-                params: [
-                  'del_list',
-                  'firewall.@zone[$wanZoneIndex].network=$staNetworkName',
-                ],
+                config: 'firewall',
+                section: wanZoneSection!,
+                values: {'network': wanZoneNetworks},
                 context: context?.mounted == true ? context : null,
               );
               await _apiService!.uciCommit(
@@ -2911,6 +3047,15 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> isAutoLoginSuspended() async {
+    try {
+      return await _secureStorageService.readValue(_autoLoginSuspendedKey) ==
+          'true';
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> tryAutoLogin({BuildContext? context}) async {
     if (_reviewerModeEnabled) {
       return await _authService!.tryAutoLogin(
@@ -2921,6 +3066,9 @@ class AppState extends ChangeNotifier {
         context: context,
       );
     }
+
+    // The user logged out on purpose: wait for them to sign in again.
+    if (await isAutoLoginSuspended()) return false;
 
     // Ensure routers are loaded (constructor fires _initialize async,
     // so it may not have finished by the time login_screen calls us)
@@ -3099,6 +3247,18 @@ class AppState extends ChangeNotifier {
         }
       }
 
+      // Names from the signed-in router's host hints (issue #75). Other
+      // routers have no session to ask.
+      final sysauth = _authService?.sysauth;
+      final ip =
+          _authService?.ipAddress ?? _routerService?.selectedRouter?.activeAddress;
+      if (!_reviewerModeEnabled && sysauth != null && ip != null) {
+        _applyHostHintNames(
+          clients,
+          await _hostHintsFor(ip, sysauth, _authService!.useHttps),
+        );
+      }
+
       final list = clients.values.toList();
       _sortClients(list);
       return list;
@@ -3262,6 +3422,12 @@ class AppState extends ChangeNotifier {
         }
       }
 
+      // Names from /etc/ethers, /etc/hosts and static leases (issue #75).
+      _applyHostHintNames(
+        clientMap,
+        await _hostHintsFor(activeIp, _authService!.sysauth!, activeHttps),
+      );
+
       // Enrich with GL.iNet data
       _enrichClientsWithGlInet(clientMap);
 
@@ -3286,6 +3452,50 @@ class AppState extends ChangeNotifier {
     if (model.contains('MT3000') || model.contains('MT2500')) return 2;
     return null;
   }
+
+  /// `luci-rpc.getHostHints`, or nothing: names are a nicety, never a
+  /// reason for the client list to fail.
+  Future<Map<String, dynamic>> _hostHintsFor(
+    String ip,
+    String sysauth,
+    bool useHttps,
+  ) async {
+    try {
+      return await _apiService!.fetchHostHints(ip, sysauth, useHttps);
+    } catch (e) {
+      Logger.warning('Host hints unavailable: $e');
+      return const {};
+    }
+  }
+
+  static bool _isUnnamed(String hostname) =>
+      hostname.isEmpty ||
+      hostname == 'Unknown' ||
+      hostname == '*' ||
+      hostname == 'N/A';
+
+  /// Names clients the DHCP lease left anonymous - a device with a static
+  /// address, or one that sent no hostname - from the router's host hints,
+  /// which carry `/etc/ethers`, `/etc/hosts` and static-lease names.
+  @visibleForTesting
+  static void applyHostHintNames(
+    Map<String, Client> clients,
+    Map<String, dynamic> hints,
+  ) {
+    for (final mac in clients.keys.toList()) {
+      final client = clients[mac]!;
+      if (!_isUnnamed(client.hostname)) continue;
+      final hint = hints[mac];
+      final name = hint is Map ? hint['name']?.toString().trim() : null;
+      if (name == null || name.isEmpty) continue;
+      clients[mac] = client.copyWith(hostname: name);
+    }
+  }
+
+  void _applyHostHintNames(
+    Map<String, Client> clients,
+    Map<String, dynamic> hints,
+  ) => applyHostHintNames(clients, hints);
 
   /// Enrich client map with GL.iNet API data (band, online, device class).
   void _enrichClientsWithGlInet(Map<String, Client> clients) {

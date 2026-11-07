@@ -532,5 +532,21 @@
   "notifyIntervalNote": "Android 的后台检查最快每 15 分钟一次，并可能为省电进一步延后。",
   "notifyAwayNote": "检查仅在路由器所在网络内有效。不在家时会跳过，而不会误报为断网。",
   "changeBlockedByOthers": "路由器在 {configs} 中仍有未保存的更改。现在应用会一并提交它们，请先放弃或应用这些更改。",
-  "changeLeftStaged": "更改失败，路由器上 {configs} 中仍有未保存的更改。请在 LuCI 中放弃或应用它们。"
+  "changeLeftStaged": "更改失败，路由器上 {configs} 中仍有未保存的更改。请在 LuCI 中放弃或应用它们。",
+  "language": "语言",
+  "appearance": "外观",
+  "dynamicColor": "Material You 配色",
+  "dynamicColorDescription": "使用壁纸颜色（Android 12+）",
+  "accentColor": "强调色",
+  "amoledBlack": "AMOLED 纯黑",
+  "amoledBlackDescription": "适用于 OLED 屏幕的纯黑深色主题",
+  "security": "安全",
+  "appLock": "应用锁",
+  "appLockDescription": "打开应用时需要指纹、面容或锁屏验证",
+  "appLockReason": "解锁 LuCI Mobile",
+  "appLocked": "LuCI Mobile 已锁定",
+  "unlock": "解锁",
+  "appLockUnavailable": "请先在此设备上设置锁屏",
+  "shareWifi": "分享 Wi-Fi",
+  "wifiQrHint": "用手机相机扫描即可加入此网络"
 }

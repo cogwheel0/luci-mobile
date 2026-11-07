@@ -532,5 +532,21 @@
   "notifyIntervalNote": "Android nie uruchamia sprawdzeń w tle częściej niż co 15 minut i może je opóźniać, by oszczędzać baterię.",
   "notifyAwayNote": "Sprawdzenia działają tylko w sieci routera. Poza domem są pomijane, a nie zgłaszane jako awaria.",
   "changeBlockedByOthers": "Router ma wciąż niezapisane zmiany w {configs}. Zastosowanie teraz zatwierdziłoby także je — najpierw je odrzuć lub zastosuj.",
-  "changeLeftStaged": "Zmiana nie powiodła się, a na routerze pozostały niezapisane zmiany w {configs}. Odrzuć je lub zastosuj w LuCI."
+  "changeLeftStaged": "Zmiana nie powiodła się, a na routerze pozostały niezapisane zmiany w {configs}. Odrzuć je lub zastosuj w LuCI.",
+  "language": "Język",
+  "appearance": "Wygląd",
+  "dynamicColor": "Kolory Material You",
+  "dynamicColorDescription": "Używaj kolorów z tapety (Android 12+)",
+  "accentColor": "Kolor akcentu",
+  "amoledBlack": "Czerń AMOLED",
+  "amoledBlackDescription": "Czysto czarny ciemny motyw dla ekranów OLED",
+  "security": "Bezpieczeństwo",
+  "appLock": "Blokada aplikacji",
+  "appLockDescription": "Wymagaj odcisku palca, twarzy lub blokady ekranu przy otwieraniu",
+  "appLockReason": "Odblokuj LuCI Mobile",
+  "appLocked": "LuCI Mobile jest zablokowana",
+  "unlock": "Odblokuj",
+  "appLockUnavailable": "Najpierw ustaw blokadę ekranu na tym urządzeniu",
+  "shareWifi": "Udostępnij Wi-Fi",
+  "wifiQrHint": "Zeskanuj aparatem telefonu, aby połączyć się z tą siecią"
 }

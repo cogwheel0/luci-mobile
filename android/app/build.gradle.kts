@@ -29,13 +29,17 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.cogwheel.LuCIMobile"
+        applicationId = "com.cogwheel.LuCIMobile.relkin"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Only real phones: no x86/x86_64 native libraries in the APK.
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     signingConfigs {
@@ -67,6 +71,13 @@ android {
         }
     }
 
+    // Prebuilt plugin libraries (jni) bypass abiFilters; drop x86 here too.
+    packaging {
+        jniLibs {
+            excludes += listOf("lib/x86/**", "lib/x86_64/**")
+        }
+    }
+
     dependenciesInfo {
         // Disables dependency metadata when building APKs (for IzzyOnDroid/F-Droid)
         includeInApk = false
@@ -84,6 +95,8 @@ kotlin {
 dependencies {
     implementation("androidx.core:core:1.12.0")
     implementation("androidx.activity:activity:1.8.2")
+    // AppCompat theme for local_auth's biometric prompt on older Android.
+    implementation("androidx.appcompat:appcompat:1.7.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 

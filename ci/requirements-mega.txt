@@ -1,0 +1,2 @@
+mega.py==1.0.8
+# после него: pip install -U "tenacity>=8" (mega.py пинит старый tenacity, который не работает на Python 3.11+)

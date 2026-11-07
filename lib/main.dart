@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +15,7 @@ import 'package:luci_mobile/screens/login_screen.dart';
 import 'package:luci_mobile/screens/main_screen.dart';
 import 'package:luci_mobile/screens/settings_screen.dart';
 import 'package:luci_mobile/screens/splash_screen.dart';
+import 'package:luci_mobile/widgets/app_lock_gate.dart';
 
 export 'package:luci_mobile/state/app_state_provider.dart'
     show appStateProvider;
@@ -45,45 +47,80 @@ Future<void> _initBackgroundMonitor() async {
 class LuCIApp extends ConsumerWidget {
   const LuCIApp({super.key});
 
+  static const _appBarTheme = AppBarTheme(
+    // Edge-to-edge display handled natively in MainActivity
+    backgroundColor: Colors.transparent,
+    elevation: 0,
+    scrolledUnderElevation: 0,
+  );
+
+  /// Pure black surfaces for OLED screens: black pixels are switched off,
+  /// which saves power and reads as true black rather than dark grey.
+  static ColorScheme _amoled(ColorScheme scheme) => scheme.copyWith(
+    surface: Colors.black,
+    surfaceDim: Colors.black,
+    surfaceContainerLowest: Colors.black,
+    surfaceContainerLow: const Color(0xFF0A0A0A),
+    surfaceContainer: const Color(0xFF111111),
+    surfaceContainerHigh: const Color(0xFF181818),
+    surfaceContainerHighest: const Color(0xFF202020),
+  );
+
+  static ThemeData _theme(ColorScheme scheme, {bool amoled = false}) =>
+      ThemeData(
+        colorScheme: scheme,
+        useMaterial3: true,
+        appBarTheme: _appBarTheme,
+        scaffoldBackgroundColor: amoled ? Colors.black : null,
+        canvasColor: amoled ? Colors.black : null,
+      );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appState = ref.watch(appStateProvider);
-    return MaterialApp(
-      onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
-      localizationsDelegates: luciLocalizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      localeListResolutionCallback: (locales, supported) =>
-          resolveLuciLocale(locales, supported) ?? supported.first,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-        // Edge-to-edge display handled natively in MainActivity
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-        ),
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-        // Edge-to-edge display handled natively in MainActivity
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-        ),
-      ),
-      themeMode: appState.themeMode,
-      initialRoute: '/splash',
-      routes: {
-        '/splash': (context) => const SplashScreen(),
-        '/login': (context) => const LoginScreen(),
-        '/': (context) => const MainScreen(),
-        '/settings': (context) => const SettingsScreen(),
+    return DynamicColorBuilder(
+      builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+        // Material You: the wallpaper's palette on Android 12+, when the
+        // user wants it and the platform has one; the chosen accent
+        // otherwise.
+        final useDynamic =
+            appState.dynamicColor && lightDynamic != null && darkDynamic != null;
+        final seed = appState.accentColor;
+        final light = useDynamic
+            ? lightDynamic.harmonized()
+            : ColorScheme.fromSeed(seedColor: seed);
+        var dark = useDynamic
+            ? darkDynamic.harmonized()
+            : ColorScheme.fromSeed(
+                seedColor: seed,
+                brightness: Brightness.dark,
+              );
+        if (appState.amoledBlack) dark = _amoled(dark);
+
+        return MaterialApp(
+          onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
+          localizationsDelegates: luciLocalizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          // A language picked in the app wins over the system's.
+          locale: appState.locale,
+          localeListResolutionCallback: (locales, supported) =>
+              resolveLuciLocale(locales, supported) ?? supported.first,
+          theme: _theme(light),
+          darkTheme: _theme(dark, amoled: appState.amoledBlack),
+          themeMode: appState.themeMode,
+          builder: (context, child) => AppLockGate(
+            enabled: appState.appLockEnabled,
+            ready: appState.appearanceLoaded,
+            child: child ?? const SizedBox.shrink(),
+          ),
+          initialRoute: '/splash',
+          routes: {
+            '/splash': (context) => const SplashScreen(),
+            '/login': (context) => const LoginScreen(),
+            '/': (context) => const MainScreen(),
+            '/settings': (context) => const SettingsScreen(),
+          },
+        );
       },
     );
   }

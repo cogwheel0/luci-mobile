@@ -532,5 +532,21 @@
   "notifyIntervalNote": "Android nespouští kontroly na pozadí častěji než jednou za 15 minut a může je kvůli baterii dále odložit.",
   "notifyAwayNote": "Kontroly fungují jen v síti routeru. Mimo domov se přeskočí, místo aby se hlásily jako výpadek.",
   "changeBlockedByOthers": "Router má stále neuložené změny v {configs}. Použití by potvrdilo i je — nejprve je zahoďte nebo použijte.",
-  "changeLeftStaged": "Změna selhala a na routeru zůstaly neuložené změny v {configs}. Zahoďte je nebo je použijte v LuCI."
+  "changeLeftStaged": "Změna selhala a na routeru zůstaly neuložené změny v {configs}. Zahoďte je nebo je použijte v LuCI.",
+  "language": "Jazyk",
+  "appearance": "Vzhled",
+  "dynamicColor": "Barvy Material You",
+  "dynamicColorDescription": "Použít barvy z tapety (Android 12+)",
+  "accentColor": "Barva zvýraznění",
+  "amoledBlack": "AMOLED černá",
+  "amoledBlackDescription": "Čistě černý tmavý motiv pro OLED displeje",
+  "security": "Zabezpečení",
+  "appLock": "Zámek aplikace",
+  "appLockDescription": "Vyžadovat otisk prstu, obličej nebo zámek obrazovky při otevření",
+  "appLockReason": "Odemkněte LuCI Mobile",
+  "appLocked": "LuCI Mobile je zamčená",
+  "unlock": "Odemknout",
+  "appLockUnavailable": "Nejprve na zařízení nastavte zámek obrazovky",
+  "shareWifi": "Sdílet Wi-Fi",
+  "wifiQrHint": "Naskenujte fotoaparátem telefonu a připojte se k této síti"
 }

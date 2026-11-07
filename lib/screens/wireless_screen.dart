@@ -14,6 +14,7 @@ import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_apply_progress.dart';
 import 'package:luci_mobile/widgets/luci_feature_gate.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
+import 'package:luci_mobile/widgets/wifi_qr_sheet.dart';
 
 /// Every SSID on the router, grouped by the radio that hosts it.
 class WirelessScreen extends ConsumerStatefulWidget {
@@ -277,9 +278,20 @@ class _NetworkRow extends StatelessWidget {
       ),
       title: Text(network.ssid ?? l10n.hiddenNetwork),
       subtitle: Text(badges.join(' · ')),
-      trailing: Switch.adaptive(
-        value: !network.disabled,
-        onChanged: busy ? null : onToggle,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (network.isAccessPoint && (network.ssid ?? '').isNotEmpty)
+            IconButton(
+              tooltip: l10n.shareWifi,
+              icon: const Icon(Icons.qr_code_2),
+              onPressed: () => showWifiQrSheet(context, network),
+            ),
+          Switch.adaptive(
+            value: !network.disabled,
+            onChanged: busy ? null : onToggle,
+          ),
+        ],
       ),
     );
   }

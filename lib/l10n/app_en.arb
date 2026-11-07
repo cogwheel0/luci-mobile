@@ -886,5 +886,21 @@
         "type": "String"
       }
     }
-  }
+  },
+  "language": "Language",
+  "appearance": "Appearance",
+  "dynamicColor": "Material You colors",
+  "dynamicColorDescription": "Use colors from your wallpaper (Android 12+)",
+  "accentColor": "Accent color",
+  "amoledBlack": "AMOLED black",
+  "amoledBlackDescription": "Pure black dark theme for OLED screens",
+  "security": "Security",
+  "appLock": "App lock",
+  "appLockDescription": "Require fingerprint, face or screen lock to open the app",
+  "appLockReason": "Unlock LuCI Mobile",
+  "appLocked": "LuCI Mobile is locked",
+  "unlock": "Unlock",
+  "appLockUnavailable": "Set up a screen lock on this device first",
+  "shareWifi": "Share Wi-Fi",
+  "wifiQrHint": "Scan with a phone camera to join this network"
 }

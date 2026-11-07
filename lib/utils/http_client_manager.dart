@@ -663,8 +663,32 @@ class _GatedAdapter implements HttpClientAdapter {
           reason: cancelToken.cancelError?.error,
         );
       }
-      return await _inner.fetch(options, requestStream, cancelFuture);
+      final response = await _inner.fetch(
+        options,
+        requestStream,
+        cancelFuture,
+      );
+      // Small routers running the Lua LuCI (22.03 and older) answer HTTP 500
+      // when several requests land at once and the dispatcher runs out of
+      // memory (GitHub issue #89). That is the same "not in parallel"
+      // answer as the hang below, and is handled the same way.
+      final parallel = !startedAlone || _started > number;
+      if (response.statusCode >= 500 && parallel && _limit > 1) {
+        _limit = 1;
+        onParallelHang();
+        Logger.warning(
+          '${options.uri.host} answered HTTP ${response.statusCode} to '
+          'parallel requests; sending one at a time',
+        );
+        unawaited(response.stream.listen(null).cancel());
+        throw DioException(
+          requestOptions: options,
+          error: const UnansweredParallelRequest(),
+        );
+      }
+      return response;
     } on DioException catch (e) {
+      if (e.error is UnansweredParallelRequest) rethrow;
       // Other requests were running when this one started, or started
       // before it gave up. Counting only the ones still open now would miss
       // the last of a hung burst to time out.

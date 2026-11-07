@@ -532,5 +532,21 @@
   "notifyIntervalNote": "Android n’exécute pas les vérifications en arrière-plan plus souvent que toutes les 15 minutes, et peut les retarder pour économiser la batterie.",
   "notifyAwayNote": "Les vérifications ne fonctionnent que sur le réseau du routeur. En dehors, elles sont ignorées plutôt que signalées comme une panne.",
   "changeBlockedByOthers": "Le routeur a encore des modifications non enregistrées dans {configs}. Appliquer maintenant les validerait aussi — annulez-les ou appliquez-les d'abord.",
-  "changeLeftStaged": "La modification a échoué et des changements non enregistrés subsistent sur le routeur dans {configs}. Annulez-les ou appliquez-les dans LuCI."
+  "changeLeftStaged": "La modification a échoué et des changements non enregistrés subsistent sur le routeur dans {configs}. Annulez-les ou appliquez-les dans LuCI.",
+  "language": "Langue",
+  "appearance": "Apparence",
+  "dynamicColor": "Couleurs Material You",
+  "dynamicColorDescription": "Utiliser les couleurs du fond d'écran (Android 12+)",
+  "accentColor": "Couleur d'accent",
+  "amoledBlack": "Noir AMOLED",
+  "amoledBlackDescription": "Thème sombre noir pur pour écrans OLED",
+  "security": "Sécurité",
+  "appLock": "Verrouillage de l'app",
+  "appLockDescription": "Exiger l'empreinte, le visage ou le verrouillage de l'écran pour ouvrir l'app",
+  "appLockReason": "Déverrouiller LuCI Mobile",
+  "appLocked": "LuCI Mobile est verrouillé",
+  "unlock": "Déverrouiller",
+  "appLockUnavailable": "Configurez d'abord un verrouillage d'écran sur cet appareil",
+  "shareWifi": "Partager le Wi-Fi",
+  "wifiQrHint": "Scannez avec l'appareil photo d'un téléphone pour rejoindre ce réseau"
 }

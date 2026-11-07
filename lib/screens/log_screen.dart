@@ -52,11 +52,16 @@ class _LogScreenState extends ConsumerState<LogScreen> {
       _error = null;
     });
     try {
-      final result = _source == _LogSource.system
+      final isSystem = _source == _LogSource.system;
+      final result = isSystem
           ? await service.systemLog(session)
           : await service.kernelLog(session);
       if (!mounted) return;
-      setState(() => _entries = LogEntry.parseAll(result.output));
+      setState(
+        () => _entries = isSystem
+            ? LogEntry.parseAll(result.output)
+            : LogEntry.parseAllKernel(result.output),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() {

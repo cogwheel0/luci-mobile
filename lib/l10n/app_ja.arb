@@ -532,5 +532,21 @@
   "notifyIntervalNote": "Android はバックグラウンド確認を 15 分より短い間隔では実行せず、省電力のためさらに遅れることがあります。",
   "notifyAwayNote": "確認はルーターのネットワーク上でのみ動作します。外出中はスキップされ、障害としては報告されません。",
   "changeBlockedByOthers": "ルーターには {configs} に未保存の変更が残っています。いま適用するとそれらも確定します。先に破棄するか適用してください。",
-  "changeLeftStaged": "変更に失敗し、ルーターの {configs} に未保存の変更が残っています。LuCI で破棄するか適用してください。"
+  "changeLeftStaged": "変更に失敗し、ルーターの {configs} に未保存の変更が残っています。LuCI で破棄するか適用してください。",
+  "language": "言語",
+  "appearance": "外観",
+  "dynamicColor": "Material You の配色",
+  "dynamicColorDescription": "壁紙の色を使用 (Android 12+)",
+  "accentColor": "アクセントカラー",
+  "amoledBlack": "AMOLED ブラック",
+  "amoledBlackDescription": "OLED 画面向けの純黒ダークテーマ",
+  "security": "セキュリティ",
+  "appLock": "アプリロック",
+  "appLockDescription": "アプリを開くときに指紋・顔・画面ロックを要求",
+  "appLockReason": "LuCI Mobile のロックを解除",
+  "appLocked": "LuCI Mobile はロックされています",
+  "unlock": "ロック解除",
+  "appLockUnavailable": "まずこのデバイスで画面ロックを設定してください",
+  "shareWifi": "Wi-Fi を共有",
+  "wifiQrHint": "スマートフォンのカメラでスキャンしてこのネットワークに接続"
 }
