@@ -287,6 +287,10 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                                 Icons.apartment,
                                 Icons.router,
                               ],
+                              materialVisualDensity: VisualDensity.compact,
+                              materialPadding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
                               selectedIndex: _aggregateAllRouters ? 0 : 1,
                               onValueChanged: (index) {
                                 setState(() {

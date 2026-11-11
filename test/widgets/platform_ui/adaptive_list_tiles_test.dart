@@ -1,5 +1,6 @@
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -115,6 +116,83 @@ void main() {
     });
   });
 
+  group('native AdaptiveSwitch', () {
+    for (final accepts in [false, true]) {
+      testWidgets(
+        accepts
+            ? 'keeps a change its parent accepts'
+            : 'returns to the value when its parent declines a change',
+        (tester) async {
+          PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+          PlatformUiCapabilities.debugIOSMajorVersionOverride = 26;
+          PlatformUiCapabilities.debugNativeIOS26Override = true;
+          final messenger = tester.binding.defaultBinaryMessenger;
+          int? viewId;
+          messenger.setMockMethodCallHandler(SystemChannels.platform_views, (
+            call,
+          ) async {
+            if (call.method == 'create') {
+              viewId = (call.arguments as Map)['id'] as int;
+            }
+            return null;
+          });
+          addTearDown(
+            () => messenger.setMockMethodCallHandler(
+              SystemChannels.platform_views,
+              null,
+            ),
+          );
+
+          var value = false;
+          await tester.pumpWidget(
+            _host(
+              StatefulBuilder(
+                builder: (context, setState) => AdaptiveSwitch(
+                  value: value,
+                  semanticLabel: 'Reserve this address',
+                  // Declining stands for a cancelled confirmation.
+                  onChanged: (next) {
+                    if (accepts) setState(() => value = next);
+                  },
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(viewId, isNotNull);
+
+          final channel = MethodChannel('CupertinoNativeSwitch_$viewId');
+          final sent = <MethodCall>[];
+          messenger.setMockMethodCallHandler(channel, (call) async {
+            sent.add(call);
+            return null;
+          });
+          addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+          // The user flips the native switch on.
+          await messenger.handlePlatformMessage(
+            channel.name,
+            const StandardMethodCodec().encodeMethodCall(
+              const MethodCall('valueChanged', {'value': true}),
+            ),
+            (_) {},
+          );
+          await tester.pump();
+
+          final resets = sent.where((call) => call.method == 'setValue');
+          expect(value, accepts);
+          expect(
+            resets.map((call) => (call.arguments as Map)['value']),
+            accepts ? isEmpty : [false],
+          );
+          await tester.pumpWidget(const SizedBox());
+          await tester.pump(const Duration(seconds: 1));
+        },
+        variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+      );
+    }
+  });
+
   group('AdaptiveCheckboxListTile', () {
     testWidgets('Android keeps the Material row and its control side', (
       tester,
@@ -220,6 +298,32 @@ void main() {
     expect(find.byIcon(Icons.route), findsOneWidget);
     await tester.tap(find.text('Traceroute'));
     expect(selected, 1);
+  });
+
+  testWidgets('Material segments keep the theme text style and take density '
+      'and padding', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android;
+    await tester.pumpWidget(
+      _host(
+        AdaptiveSegmentedControl(
+          labels: const ['All', 'Selected'],
+          selectedIndex: 0,
+          materialVisualDensity: VisualDensity.compact,
+          materialPadding: const EdgeInsets.symmetric(horizontal: 8),
+          onValueChanged: (_) {},
+        ),
+      ),
+    );
+
+    final style = tester
+        .widget<SegmentedButton<int>>(find.byType(SegmentedButton<int>))
+        .style!;
+    expect(style.textStyle, isNull);
+    expect(style.visualDensity, VisualDensity.compact);
+    expect(
+      style.padding!.resolve(const {}),
+      const EdgeInsets.symmetric(horizontal: 8),
+    );
   });
 
   testWidgets('iOS segments stay text when given Material icons', (

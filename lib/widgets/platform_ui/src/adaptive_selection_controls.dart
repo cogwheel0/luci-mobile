@@ -8,7 +8,7 @@ import 'package:luci_mobile/services/haptics.dart';
 import 'adaptive_controls.dart';
 import 'platform_ui_capabilities.dart';
 
-class AdaptiveSwitch extends StatelessWidget {
+class AdaptiveSwitch extends StatefulWidget {
   const AdaptiveSwitch({
     super.key,
     required this.value,
@@ -27,8 +27,18 @@ class AdaptiveSwitch extends StatelessWidget {
   final String? semanticLabel;
 
   @override
+  State<AdaptiveSwitch> createState() => _AdaptiveSwitchState();
+}
+
+class _AdaptiveSwitchState extends State<AdaptiveSwitch> {
+  bool get value => widget.value;
+  ValueChanged<bool>? get onChanged => widget.onChanged;
+  Color? get activeColor => widget.activeColor;
+  Color? get thumbColor => widget.thumbColor;
+
+  @override
   Widget build(BuildContext context) {
-    final label = semanticLabel;
+    final label = widget.semanticLabel;
     if (PlatformUiCapabilities.usesNativeIOS26 && thumbColor == null) {
       var nativeValue = value;
       void change(bool next) {
@@ -36,6 +46,11 @@ class AdaptiveSwitch extends StatelessWidget {
         if (next == nativeValue) return;
         nativeValue = next;
         onChanged?.call(next);
+        // The native switch flips itself, but [value] is the truth. A
+        // parent that declines the change (a cancelled confirmation, a
+        // failed save) need not rebuild, so rebuild here: CNSwitch then
+        // sets the native switch back to [value] unless it was accepted.
+        if (mounted) setState(() {});
       }
 
       return CNSwitch(
@@ -358,6 +373,8 @@ class AdaptiveSegmentedControl extends StatelessWidget {
     this.selectedTextColor,
     this.semanticLabel,
     this.materialIcons,
+    this.materialVisualDensity,
+    this.materialPadding,
   });
 
   final List<String> labels;
@@ -368,6 +385,13 @@ class AdaptiveSegmentedControl extends StatelessWidget {
   /// Icons Material shows beside each label. iOS segments stay text, as
   /// the platform's do; use [sfSymbols] for icon-only segments everywhere.
   final List<IconData>? materialIcons;
+
+  /// Material's segment density. Given one, Material sizes the control
+  /// itself rather than holding it to [height].
+  final VisualDensity? materialVisualDensity;
+
+  /// Material's padding inside each segment.
+  final EdgeInsetsGeometry? materialPadding;
   final Color? color;
   final double height;
   final bool shrinkWrap;
@@ -472,11 +496,13 @@ class AdaptiveSegmentedControl extends StatelessWidget {
     }
 
     Widget control = ConstrainedBox(
-      constraints: BoxConstraints(minHeight: height),
+      constraints: BoxConstraints(
+        minHeight: materialVisualDensity == null ? height : 0,
+      ),
       child: SegmentedButton<int>(
         style: SegmentedButton.styleFrom(
-          textStyle: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(fontSize: 14),
+          visualDensity: materialVisualDensity,
+          padding: materialPadding,
         ),
         segments: [
           for (var index = 0; index < count; index++)

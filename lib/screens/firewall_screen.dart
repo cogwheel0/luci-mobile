@@ -175,6 +175,7 @@ class _ForwardsTab extends StatelessWidget {
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, i) {
                 final f = state.forwards[i];
+                final name = f.name ?? '${f.sourceZone}:${f.sourcePort ?? "?"}';
                 return ListTile(
                   onTap: busy ? null : () => onEdit(f),
                   leading: Icon(
@@ -183,7 +184,7 @@ class _ForwardsTab extends StatelessWidget {
                         ? Theme.of(context).colorScheme.primary
                         : Theme.of(context).colorScheme.outline,
                   ),
-                  title: Text(f.name ?? '${f.sourceZone}:${f.sourcePort}'),
+                  title: Text(name),
                   // The whole point of a forward is the mapping, so show it
                   // rather than making the user open the row to find out.
                   subtitle: Text(
@@ -195,7 +196,7 @@ class _ForwardsTab extends StatelessWidget {
                   ),
                   trailing: AdaptiveSwitch(
                     value: f.enabled,
-                    semanticLabel: f.name ?? '${f.sourceZone}:${f.sourcePort}',
+                    semanticLabel: name,
                     onChanged: busy ? null : (v) => onToggle(f, v),
                   ),
                 );
