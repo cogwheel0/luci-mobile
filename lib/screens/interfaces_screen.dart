@@ -1759,12 +1759,10 @@ class _WifiToggleRowState extends ConsumerState<_WifiToggleRow> {
     if (mounted) {
       setState(() => _isToggling = false);
       if (!success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.l10n.failedToToggleInterface),
-            backgroundColor: Theme.of(context).colorScheme.error,
-            behavior: SnackBarBehavior.floating,
-          ),
+        AdaptiveSnackBar.show(
+          context,
+          message: context.l10n.failedToToggleInterface,
+          type: AdaptiveSnackBarType.error,
         );
       }
     }
@@ -1971,24 +1969,14 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
     if (!mounted) return;
 
     if (success) {
-      final messenger = ScaffoldMessenger.of(context);
+      // This sheet closes before the report shows.
+      final report = AdaptiveSnackBar.reporter(context);
+      final message = context.l10n.wifiUpdated(ssid);
       Navigator.of(context).pop();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Text(context.l10n.wifiUpdated(ssid)),
-            ],
-          ),
-          backgroundColor: Colors.green.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          duration: const Duration(seconds: 3),
-        ),
+      report.show(
+        message: message,
+        type: AdaptiveSnackBarType.success,
+        duration: const Duration(seconds: 3),
       );
     } else {
       setState(() {
@@ -2333,37 +2321,17 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
 
     if (!mounted) return;
 
-    final messenger = ScaffoldMessenger.of(context);
-    final errorColor = Theme.of(context).colorScheme.error;
+    // This dialog closes before the report shows.
+    final report = AdaptiveSnackBar.reporter(context);
+    final message = success
+        ? context.l10n.interfaceRemoved(widget.ssid)
+        : context.l10n.removeInterfaceFailed;
     Navigator.of(context).pop();
-
-    if (success) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Text(context.l10n.interfaceRemoved(widget.ssid)),
-            ],
-          ),
-          backgroundColor: Colors.green.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    } else {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(context.l10n.removeInterfaceFailed),
-          backgroundColor: errorColor,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+    report.show(
+      message: message,
+      type: success ? AdaptiveSnackBarType.success : AdaptiveSnackBarType.error,
+      duration: const Duration(seconds: 3),
+    );
   }
 
   @override

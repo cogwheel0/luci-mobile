@@ -32,6 +32,8 @@ class AdaptiveSnackBar {
         contextOverlay != null &&
         action == null &&
         nativeDuration != null) {
+      // The toast replaces a banner left up by a longer message.
+      _dismissIOSBanner();
       final style = switch (type) {
         AdaptiveSnackBarType.info => CNToastStyle.info,
         AdaptiveSnackBarType.success => CNToastStyle.success,
@@ -49,41 +51,28 @@ class AdaptiveSnackBar {
     }
 
     if (!PlatformUiCapabilities.isIOS) {
-      final status = _statusColors(context, type);
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(
-          content: Text(
-            message,
-            style: status == null ? null : TextStyle(color: status.onBase),
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      if (messenger == null) return;
+      // As on iOS, the newest message replaces the one showing, so a
+      // long-lived one (a reboot in progress) cannot hold back its result.
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          _materialSnackBar(
+            Theme.of(context),
+            message: message,
+            type: type,
+            duration: duration,
+            action: action,
+            onActionPressed: onActionPressed,
           ),
-          duration: duration,
-          backgroundColor:
-              status?.base ??
-              switch (type) {
-                AdaptiveSnackBarType.info => Theme.of(
-                  context,
-                ).snackBarTheme.backgroundColor,
-                AdaptiveSnackBarType.success => Colors.green.shade700,
-                AdaptiveSnackBarType.warning => Colors.orange.shade700,
-                AdaptiveSnackBarType.error => Colors.red.shade700,
-              },
-          action: action == null
-              ? null
-              : SnackBarAction(
-                  label: action,
-                  textColor: status?.onBase,
-                  onPressed: onActionPressed ?? () {},
-                ),
-        ),
-      );
+        );
       return;
     }
 
     final overlay = contextOverlay ?? Navigator.maybeOf(context)?.overlay;
     if (overlay == null) return;
-    final previousEntry = _activeIOSEntry;
-    if (previousEntry?.mounted == true) previousEntry!.remove();
-    _activeIOSEntry = null;
+    _dismissIOSBanner();
     late final OverlayEntry entry;
     entry = OverlayEntry(
       builder: (context) => _IOSBanner(
@@ -102,21 +91,119 @@ class AdaptiveSnackBar {
     overlay.insert(entry);
   }
 
-  /// Palette-driven status colors. Conduit reads these from its theme
-  /// extension; this app has no such palette, so the system colors below
-  /// always apply.
-  static ({Color base, Color onBase})? _statusColors(
-    BuildContext context,
-    AdaptiveSnackBarType type,
-  ) => null;
+  static void _dismissIOSBanner() {
+    final entry = _activeIOSEntry;
+    if (entry?.mounted == true) entry!.remove();
+    _activeIOSEntry = null;
+  }
 
+  /// luci-mobile's Material snackbars: information in the theme's plain
+  /// bar; a success, warning or error floats, in green with a check, in
+  /// orange, or in the theme's error colour.
+  static SnackBar _materialSnackBar(
+    ThemeData theme, {
+    required String message,
+    required AdaptiveSnackBarType type,
+    required Duration duration,
+    String? action,
+    VoidCallback? onActionPressed,
+  }) {
+    final scheme = theme.colorScheme;
+    final (
+      Color? background,
+      Color? foreground,
+      IconData? icon,
+    ) = switch (type) {
+      AdaptiveSnackBarType.info => (null, null, null),
+      AdaptiveSnackBarType.success => (
+        Colors.green.shade700,
+        Colors.white,
+        Icons.check_circle,
+      ),
+      AdaptiveSnackBarType.warning => (
+        Colors.orange.shade700,
+        Colors.white,
+        Icons.warning_amber_rounded,
+      ),
+      AdaptiveSnackBarType.error => (scheme.error, scheme.onError, null),
+    };
+    final text = Text(
+      message,
+      style: foreground == null ? null : TextStyle(color: foreground),
+    );
+    final floating = type != AdaptiveSnackBarType.info;
+    return SnackBar(
+      content: icon == null
+          ? text
+          : Row(
+              children: [
+                Icon(icon, color: foreground, size: 20),
+                const SizedBox(width: 8),
+                Expanded(child: text),
+              ],
+            ),
+      duration: duration,
+      backgroundColor: background,
+      behavior: floating ? SnackBarBehavior.floating : null,
+      shape: floating
+          ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+          : null,
+      action: action == null
+          ? null
+          : SnackBarAction(
+              label: action,
+              textColor: foreground,
+              onPressed: onActionPressed ?? () {},
+            ),
+    );
+  }
+
+  /// The native toast's nearest length; past six seconds the Flutter banner
+  /// shows instead, since it keeps any duration.
   static CNToastDuration? _nativeDuration(Duration value) {
-    if (value == const Duration(seconds: 2)) return CNToastDuration.short;
-    if (value == const Duration(milliseconds: 3500)) {
-      return CNToastDuration.medium;
+    if (value <= const Duration(milliseconds: 2500)) {
+      return CNToastDuration.short;
     }
-    if (value == const Duration(seconds: 5)) return CNToastDuration.long;
+    if (value <= const Duration(seconds: 4)) return CNToastDuration.medium;
+    if (value <= const Duration(seconds: 6)) return CNToastDuration.long;
     return null;
+  }
+
+  /// Keeps where to report a result that arrives after an await: through
+  /// [context] while it is mounted, else through the root navigator, which
+  /// outlives any page. Take it before the await.
+  static AdaptiveSnackBarReporter reporter(BuildContext context) =>
+      AdaptiveSnackBarReporter._(
+        context,
+        Navigator.of(context, rootNavigator: true).context,
+      );
+}
+
+/// Reports through a page while it is mounted, else through the root
+/// navigator. From [AdaptiveSnackBar.reporter].
+class AdaptiveSnackBarReporter {
+  AdaptiveSnackBarReporter._(this._context, this._fallback);
+
+  final BuildContext _context;
+  final BuildContext _fallback;
+
+  void show({
+    required String message,
+    AdaptiveSnackBarType type = AdaptiveSnackBarType.info,
+    Duration duration = const Duration(seconds: 4),
+    String? action,
+    VoidCallback? onActionPressed,
+  }) {
+    final target = _context.mounted ? _context : _fallback;
+    if (!target.mounted) return;
+    AdaptiveSnackBar.show(
+      target,
+      message: message,
+      type: type,
+      duration: duration,
+      action: action,
+      onActionPressed: onActionPressed,
+    );
   }
 }
 

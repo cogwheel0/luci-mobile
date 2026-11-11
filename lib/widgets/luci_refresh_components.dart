@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 import '../design/luci_design_system.dart';
 import '../l10n/luci_localizations.dart';
@@ -101,16 +102,10 @@ class _LuciPullToRefreshState extends State<LuciPullToRefresh>
     } catch (e) {
       // Handle any errors that might occur during refresh
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.l10n.refreshFailed(e)),
-            backgroundColor: Theme.of(context).colorScheme.error,
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.all(LuciSpacing.md),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(LuciSpacing.sm),
-            ),
-          ),
+        AdaptiveSnackBar.show(
+          context,
+          message: context.l10n.refreshFailed(e),
+          type: AdaptiveSnackBarType.error,
         );
       }
     }

@@ -268,11 +268,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       mode: LaunchMode.externalApplication,
     );
     if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.l10n.couldNotOpenGithubIssues),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
+      AdaptiveSnackBar.show(
+        context,
+        message: context.l10n.couldNotOpenGithubIssues,
+        type: AdaptiveSnackBarType.error,
       );
     }
   }

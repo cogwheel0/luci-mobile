@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 /// Live state of an in-flight apply, pushed in from the changeset service.
 class ApplyProgress extends ChangeNotifier {
@@ -142,7 +143,6 @@ Future<ApplyOutcome?> runApply(
   required Future<ApplyOutcome?> Function(ApplyProgress progress) work,
 }) async {
   final progress = ApplyProgress();
-  final messenger = ScaffoldMessenger.of(context);
   try {
     final outcome = await LuciApplyProgressDialog.run<ApplyOutcome?>(
       context,
@@ -150,8 +150,10 @@ Future<ApplyOutcome?> runApply(
       work: () => work(progress),
     );
     if (context.mounted) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(applyOutcomeMessage(context, outcome))),
+      AdaptiveSnackBar.show(
+        context,
+        message: applyOutcomeMessage(context, outcome),
+        type: applyOutcomeType(outcome),
       );
     }
     return outcome;
@@ -164,6 +166,14 @@ Future<ApplyOutcome?> runApply(
 ///
 /// Shared by every configuration screen: when each kept its own copy, a new
 /// outcome had to be remembered in five places, and the wording drifted.
+/// How an apply's report reads: applied, rolled back, or failed.
+AdaptiveSnackBarType applyOutcomeType(ApplyOutcome? outcome) =>
+    switch (outcome?.phase) {
+      ApplyPhase.confirmed => AdaptiveSnackBarType.success,
+      ApplyPhase.rolledBack => AdaptiveSnackBarType.warning,
+      _ => AdaptiveSnackBarType.error,
+    };
+
 String applyOutcomeMessage(BuildContext context, ApplyOutcome? outcome) {
   final l10n = context.l10n;
   if (outcome == null) return l10n.changeFailed;
