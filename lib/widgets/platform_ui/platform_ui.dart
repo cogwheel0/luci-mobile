@@ -10,6 +10,7 @@ export 'src/sf_symbols.dart';
 export 'src/adaptive_glass_controls.dart';
 export 'src/adaptive_selection_controls.dart';
 export 'src/adaptive_feedback.dart';
+export 'src/adaptive_form_sheet.dart';
 export 'src/adaptive_info_popover.dart';
 export 'src/adaptive_inputs.dart';
 export 'src/placeholder_caret_gap.dart';
