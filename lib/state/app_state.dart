@@ -3196,12 +3196,24 @@ class AppState extends ChangeNotifier {
               )
             : client;
         // Prefer entries that have more info (hostname length as heuristic)
-        if (!clients.containsKey(macNorm) ||
-            (enriched.hostname.isNotEmpty &&
-                enriched.hostname.length >
-                    (clients[macNorm]?.hostname.length ?? 0))) {
-          clients[macNorm] = enriched;
-        }
+        final previous = clients[macNorm];
+        final kept =
+            previous == null ||
+                (enriched.hostname.isNotEmpty &&
+                    enriched.hostname.length > previous.hostname.length)
+            ? enriched
+            : previous;
+        // Presence is the client's, not the lease's: one router still
+        // seeing it outweighs another's stale lease, whichever lease is
+        // kept for display.
+        clients[macNorm] = previous == null
+            ? kept
+            : kept.withOnline(
+                ClientPresence.mergeOnline([
+                  previous.isOnline,
+                  enriched.isOnline,
+                ]),
+              );
       }
 
       // Add wireless stations not in DHCP leases (AP-mode fallback)
@@ -3292,6 +3304,10 @@ class AppState extends ChangeNotifier {
           _authService!.ipAddress ??
           _routerService!.selectedRouter!.activeAddress;
       final activeHttps = _authService!.useHttps;
+      // Captured with the address: after an await the session may be
+      // another router's, whose token must not go to this one.
+      final sysauth = _authService!.sysauth!;
+      final token = _sessionToken;
 
       final wireless = <String>{};
       Object? wirelessError;
@@ -3300,7 +3316,7 @@ class AppState extends ChangeNotifier {
         final stationsMap = await _apiService!
             .fetchAllAssociatedWirelessMacsWithContext(
               ipAddress: activeIp,
-              sysauth: _authService!.sysauth!,
+              sysauth: sysauth,
               useHttps: activeHttps,
             );
         stationsMap.forEach(
@@ -3318,7 +3334,7 @@ class AppState extends ChangeNotifier {
       try {
         final callRes = await _apiService!.call(
           activeIp,
-          _authService!.sysauth!,
+          sysauth,
           activeHttps,
           object: 'luci-rpc',
           method: 'getDHCPLeases',
@@ -3376,13 +3392,18 @@ class AppState extends ChangeNotifier {
         }
       }
 
+      // A switch or logout since: these are the previous session's
+      // clients, and must not be stamped as the new router's.
+      if (token != _sessionToken) return const [];
+
       // Names and presence beyond the leases; GL.iNet's own data, where
       // there is any, is applied after and wins.
       final presence = await _fetchClientPresence(
         activeIp,
-        _authService!.sysauth!,
+        sysauth,
         activeHttps,
       );
+      if (token != _sessionToken) return const [];
       _applyPresence(clientMap, presence, normalizedWireless);
 
       // Enrich with GL.iNet data
@@ -3427,8 +3448,11 @@ class AppState extends ChangeNotifier {
         params: {'command': command, 'params': params},
       );
       final body = result is List && result.length > 1 ? result[1] : null;
-      if (body is Map && body['code'] == 0 && body['stdout'] is String) {
-        neighbours = ClientPresence.parseNeighbours(body['stdout'] as String);
+      // rpcd leaves `stdout` out when the command printed nothing: an
+      // empty table, which says no one is there, not that it is unknown.
+      if (body is Map && body['code'] == 0) {
+        final out = body['stdout'];
+        neighbours = ClientPresence.parseNeighbours(out is String ? out : '');
       }
     } catch (e) {
       Logger.debug('Neighbour table unavailable: $e');

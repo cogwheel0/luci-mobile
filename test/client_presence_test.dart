@@ -111,6 +111,64 @@ void main() {
       );
     });
 
+    // After an address change the old entry lingers beside the current
+    // one, in either order; a current REACHABLE entry must win.
+    test('a current entry wins over a stale one, in either order', () {
+      const old = '192.168.1.40 dev br-lan lladdr aa:bb:cc:00:00:40 STALE';
+      const failed = '192.168.1.41 dev br-lan lladdr aa:bb:cc:00:00:40 FAILED';
+      const now = '192.168.1.42 dev br-lan lladdr aa:bb:cc:00:00:40 REACHABLE';
+      for (final lines in [
+        [old, now],
+        [now, old],
+        [failed, now],
+        [now, failed],
+      ]) {
+        expect(
+          ClientPresence(
+            neighbours: ClientPresence.parseNeighbours(lines.join('\n')),
+          ).isOnline(
+            mac: 'aa:bb:cc:00:00:40',
+            ip: '192.168.1.42',
+            associated: false,
+          ),
+          isTrue,
+          reason: lines.join(' / '),
+        );
+      }
+      // STALE beside FAILED: cannot tell.
+      expect(
+        ClientPresence(
+          neighbours: ClientPresence.parseNeighbours('$old\n$failed'),
+        ).isOnline(
+          mac: 'aa:bb:cc:00:00:40',
+          ip: '192.168.1.40',
+          associated: false,
+        ),
+        isNull,
+      );
+    });
+
+    // rpcd leaves stdout out when a command prints nothing.
+    test('an empty table says no one is there', () {
+      expect(
+        ClientPresence(
+          neighbours: ClientPresence.parseNeighbours(''),
+        ).isOnline(mac: 'aa:bb:cc:00:00:20', ip: null, associated: false),
+        isFalse,
+      );
+    });
+
+    // The all-routers list: one router still seeing a client outweighs
+    // another router's stale lease for it.
+    test('answers from several routers combine', () {
+      expect(ClientPresence.mergeOnline([false, true]), isTrue);
+      expect(ClientPresence.mergeOnline([true, false]), isTrue);
+      expect(ClientPresence.mergeOnline([false, null]), isNull);
+      expect(ClientPresence.mergeOnline([false, false]), isFalse);
+      expect(ClientPresence.mergeOnline([]), isNull);
+      expect(ClientPresence.mergeOnline([], ifNone: false), isFalse);
+    });
+
     test('with no table to ask, presence is unknown', () {
       expect(
         const ClientPresence().isOnline(

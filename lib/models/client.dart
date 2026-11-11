@@ -317,4 +317,26 @@ class Client {
       routerLabel: routerLabel ?? this.routerLabel,
     );
   }
+
+  /// This client with [isOnline] exactly, null included; [copyWith] cannot
+  /// set it back to unknown.
+  Client withOnline(bool? isOnline) => Client(
+    ipAddress: ipAddress,
+    macAddress: macAddress,
+    hostname: hostname,
+    hostId: hostId,
+    leaseTime: leaseTime,
+    vendor: vendor,
+    dnsName: dnsName,
+    clientId: clientId,
+    activeTime: activeTime,
+    expiresAt: expiresAt,
+    connectionType: connectionType,
+    ipv6Addresses: ipv6Addresses,
+    wifiBand: wifiBand,
+    isOnline: isOnline,
+    deviceClass: deviceClass,
+    routerId: routerId,
+    routerLabel: routerLabel,
+  );
 }

@@ -97,28 +97,44 @@ class ClientPresence {
     final table = neighbours;
     if (table == null) return null;
     final normalised = StationInfo.normalizeMac(mac);
-    Neighbour? entry;
-    for (final n in table) {
-      if (n.mac == normalised) {
-        entry = n;
-        break;
-      }
-    }
-    // By address only for an entry with no MAC: one that has a MAC is
-    // another device's if it is not this one's.
-    if (entry == null && ip != null) {
-      for (final n in table) {
-        if (n.ip == ip && n.mac == null) {
-          entry = n;
-          break;
-        }
-      }
-    }
-    return switch (entry?.state) {
-      NeighbourState.present => true,
-      NeighbourState.unconfirmed => null,
-      NeighbourState.gone || null => false,
+    // Every entry that is this client's, not just the first: after an
+    // address change the old one can linger, FAILED or STALE, beside the
+    // REACHABLE current one, in either order. By address only for an entry
+    // with no MAC: one that has a MAC is another device's if it is not this
+    // one's.
+    final states = {
+      for (final n in table)
+        if (n.mac == normalised || (n.mac == null && ip != null && n.ip == ip))
+          n.state,
     };
+    return mergeOnline(
+      states.map(
+        (s) => switch (s) {
+          NeighbourState.present => true,
+          NeighbourState.unconfirmed => null,
+          NeighbourState.gone => false,
+        },
+      ),
+      // Absent from a table that was read: not there.
+      ifNone: false,
+    );
+  }
+
+  /// One answer from several: online if any says so, else unknown if any
+  /// cannot tell, else offline. [ifNone] when there are none.
+  ///
+  /// Also how the all-routers list combines routers: a client one router
+  /// still sees is online, whatever another's stale lease says.
+  static bool? mergeOnline(Iterable<bool?> answers, {bool? ifNone}) {
+    var any = false;
+    var unknown = false;
+    for (final a in answers) {
+      any = true;
+      if (a == true) return true;
+      if (a == null) unknown = true;
+    }
+    if (!any) return ifNone;
+    return unknown ? null : false;
   }
 
   /// What this router knows about the client behind [lease], as extra lease
