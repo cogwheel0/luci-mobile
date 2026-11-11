@@ -15,6 +15,15 @@ const double kCupertinoNativeControlSymbolExtent = 20;
 
 /// Flutter icon fallback for the SF Symbols used by the adaptive UI.
 IconData? cupertinoIconForSFSymbol(String symbol) => switch (symbol) {
+  // luci-mobile's tab bar.
+  'square.grid.2x2' => CupertinoIcons.square_grid_2x2,
+  'square.grid.2x2.fill' => CupertinoIcons.square_grid_2x2_fill,
+  'network' => CupertinoIcons.globe,
+  'person.2' => CupertinoIcons.person_2,
+  'person.2.fill' => CupertinoIcons.person_2_fill,
+  'waveform.path.ecg' => CupertinoIcons.waveform_path_ecg,
+  'gearshape' => CupertinoIcons.gear_alt,
+  'gearshape.fill' => CupertinoIcons.gear_alt_fill,
   'bubble.left' => CupertinoIcons.chat_bubble,
   'bubble.left.fill' => CupertinoIcons.chat_bubble_fill,
   'doc.text' => CupertinoIcons.doc_text,

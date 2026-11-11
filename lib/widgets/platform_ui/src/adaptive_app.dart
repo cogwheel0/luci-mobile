@@ -97,7 +97,58 @@ class AdaptiveApp extends StatelessWidget {
     this.material,
     this.cupertino,
     this.scaffoldMessengerKey,
-  });
+  }) : home = null,
+       routes = const {},
+       initialRoute = null,
+       onGenerateRoute = null,
+       onUnknownRoute = null,
+       navigatorKey = null,
+       navigatorObservers = const [],
+       _usesRouter = true;
+
+  /// The same root for an app on a [Navigator] with named [routes] rather
+  /// than a [Router]: [MaterialApp] or [CupertinoApp] with the same
+  /// navigator arguments. Added for luci-mobile; Conduit uses [AdaptiveApp.router].
+  const AdaptiveApp({
+    super.key,
+    this.home,
+    this.routes = const {},
+    this.initialRoute,
+    this.onGenerateRoute,
+    this.onUnknownRoute,
+    this.navigatorKey,
+    this.navigatorObservers = const [],
+    this.builder,
+    this.title = '',
+    this.onGenerateTitle,
+    this.themeMode,
+    this.materialLightTheme,
+    this.materialDarkTheme,
+    this.cupertinoLightTheme,
+    this.cupertinoDarkTheme,
+    this.locale,
+    this.localizationsDelegates,
+    this.localeListResolutionCallback,
+    this.localeResolutionCallback,
+    this.supportedLocales = const <Locale>[Locale('en', 'US')],
+    this.material,
+    this.cupertino,
+    this.scaffoldMessengerKey,
+  }) : routerConfig = null,
+       routeInformationProvider = null,
+       routeInformationParser = null,
+       routerDelegate = null,
+       backButtonDispatcher = null,
+       _usesRouter = false;
+
+  final Widget? home;
+  final Map<String, WidgetBuilder> routes;
+  final String? initialRoute;
+  final RouteFactory? onGenerateRoute;
+  final RouteFactory? onUnknownRoute;
+  final GlobalKey<NavigatorState>? navigatorKey;
+  final List<NavigatorObserver> navigatorObservers;
+  final bool _usesRouter;
 
   final RouterConfig<Object>? routerConfig;
   final RouteInformationProvider? routeInformationProvider;
@@ -145,6 +196,42 @@ class AdaptiveApp extends StatelessWidget {
     if (!PlatformUiCapabilities.isIOS) {
       final data =
           material?.call(context, _platformTarget) ?? const MaterialAppData();
+      if (!_usesRouter) {
+        return MaterialApp(
+          navigatorKey: navigatorKey,
+          home: home,
+          routes: routes,
+          initialRoute: initialRoute,
+          onGenerateRoute: onGenerateRoute,
+          onUnknownRoute: onUnknownRoute,
+          navigatorObservers: navigatorObservers,
+          builder: builder,
+          title: title,
+          onGenerateTitle: onGenerateTitle,
+          color: data.color,
+          theme: materialLightTheme,
+          darkTheme: materialDarkTheme,
+          themeMode: themeMode ?? ThemeMode.system,
+          locale: locale,
+          localizationsDelegates: localizationsDelegates,
+          localeListResolutionCallback: localeListResolutionCallback,
+          localeResolutionCallback: localeResolutionCallback,
+          supportedLocales: supportedLocales,
+          debugShowMaterialGrid: data.debugShowMaterialGrid,
+          showPerformanceOverlay: data.showPerformanceOverlay,
+          checkerboardRasterCacheImages: data.checkerboardRasterCacheImages,
+          checkerboardOffscreenLayers: data.checkerboardOffscreenLayers,
+          showSemanticsDebugger: data.showSemanticsDebugger,
+          debugShowCheckedModeBanner: data.debugShowCheckedModeBanner,
+          shortcuts: data.shortcuts,
+          actions: data.actions,
+          restorationScopeId: data.restorationScopeId,
+          scrollBehavior: data.scrollBehavior,
+          highContrastTheme: data.highContrastTheme,
+          highContrastDarkTheme: data.highContrastDarkTheme,
+          scaffoldMessengerKey: scaffoldMessengerKey,
+        );
+      }
       return MaterialApp.router(
         routerConfig: routerConfig,
         routeInformationProvider: routeInformationProvider,
@@ -228,32 +315,61 @@ class AdaptiveApp extends StatelessWidget {
 
     return _PlatformBrightnessBuilder(
       themeMode: themeMode ?? ThemeMode.system,
-      builder: (appBrightness) => CupertinoApp.router(
-        routerConfig: routerConfig,
-        routeInformationProvider: routeInformationProvider,
-        routeInformationParser: routeInformationParser,
-        routerDelegate: routerDelegate,
-        backButtonDispatcher: backButtonDispatcher,
-        builder: effectiveBuilder,
-        title: title,
-        onGenerateTitle: onGenerateTitle,
-        color: data.color,
-        theme: appBrightness == Brightness.dark ? darkTheme : lightTheme,
-        locale: locale,
-        localizationsDelegates: localizationsDelegates,
-        localeListResolutionCallback: localeListResolutionCallback,
-        localeResolutionCallback: localeResolutionCallback,
-        supportedLocales: supportedLocales,
-        showPerformanceOverlay: data.showPerformanceOverlay,
-        checkerboardRasterCacheImages: data.checkerboardRasterCacheImages,
-        checkerboardOffscreenLayers: data.checkerboardOffscreenLayers,
-        showSemanticsDebugger: data.showSemanticsDebugger,
-        debugShowCheckedModeBanner: data.debugShowCheckedModeBanner,
-        shortcuts: data.shortcuts,
-        actions: data.actions,
-        restorationScopeId: data.restorationScopeId,
-        scrollBehavior: data.scrollBehavior,
-      ),
+      builder: (appBrightness) => _usesRouter
+          ? CupertinoApp.router(
+              routerConfig: routerConfig,
+              routeInformationProvider: routeInformationProvider,
+              routeInformationParser: routeInformationParser,
+              routerDelegate: routerDelegate,
+              backButtonDispatcher: backButtonDispatcher,
+              builder: effectiveBuilder,
+              title: title,
+              onGenerateTitle: onGenerateTitle,
+              color: data.color,
+              theme: appBrightness == Brightness.dark ? darkTheme : lightTheme,
+              locale: locale,
+              localizationsDelegates: localizationsDelegates,
+              localeListResolutionCallback: localeListResolutionCallback,
+              localeResolutionCallback: localeResolutionCallback,
+              supportedLocales: supportedLocales,
+              showPerformanceOverlay: data.showPerformanceOverlay,
+              checkerboardRasterCacheImages: data.checkerboardRasterCacheImages,
+              checkerboardOffscreenLayers: data.checkerboardOffscreenLayers,
+              showSemanticsDebugger: data.showSemanticsDebugger,
+              debugShowCheckedModeBanner: data.debugShowCheckedModeBanner,
+              shortcuts: data.shortcuts,
+              actions: data.actions,
+              restorationScopeId: data.restorationScopeId,
+              scrollBehavior: data.scrollBehavior,
+            )
+          : CupertinoApp(
+              navigatorKey: navigatorKey,
+              home: home,
+              routes: routes,
+              initialRoute: initialRoute,
+              onGenerateRoute: onGenerateRoute,
+              onUnknownRoute: onUnknownRoute,
+              navigatorObservers: navigatorObservers,
+              builder: effectiveBuilder,
+              title: title,
+              onGenerateTitle: onGenerateTitle,
+              color: data.color,
+              theme: appBrightness == Brightness.dark ? darkTheme : lightTheme,
+              locale: locale,
+              localizationsDelegates: localizationsDelegates,
+              localeListResolutionCallback: localeListResolutionCallback,
+              localeResolutionCallback: localeResolutionCallback,
+              supportedLocales: supportedLocales,
+              showPerformanceOverlay: data.showPerformanceOverlay,
+              checkerboardRasterCacheImages: data.checkerboardRasterCacheImages,
+              checkerboardOffscreenLayers: data.checkerboardOffscreenLayers,
+              showSemanticsDebugger: data.showSemanticsDebugger,
+              debugShowCheckedModeBanner: data.debugShowCheckedModeBanner,
+              shortcuts: data.shortcuts,
+              actions: data.actions,
+              restorationScopeId: data.restorationScopeId,
+              scrollBehavior: data.scrollBehavior,
+            ),
     );
   }
 }

@@ -1,7 +1,9 @@
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 class LuciAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String? title;
@@ -25,6 +27,7 @@ class LuciAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformUiCapabilities.isIOS) return _buildCupertino(context);
     final theme = Theme.of(context);
     return AppBar(
       automaticallyImplyLeading: false,
@@ -65,8 +68,37 @@ class LuciAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
+  /// The iOS navigation bar: translucent, its title centred, the system
+  /// back chevron, and the actions trailing.
+  Widget _buildCupertino(BuildContext context) {
+    final trailing = actions;
+    return CupertinoNavigationBar(
+      automaticallyImplyLeading: false,
+      automaticallyImplyMiddle: false,
+      // The page's own colour, slightly translucent so iOS still blurs what
+      // passes under it: the Cupertino default (white, or black in dark
+      // mode) read as a band across the Material page below.
+      backgroundColor:
+          backgroundColor ??
+          Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
+      leading: showBack
+          ? CupertinoNavigationBarBackButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+            )
+          : null,
+      middle: titleWidget ?? (title != null ? Text(title!) : null),
+      trailing: trailing == null || trailing.isEmpty
+          ? null
+          : Row(mainAxisSize: MainAxisSize.min, children: trailing),
+    );
+  }
+
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize => Size.fromHeight(
+    PlatformUiCapabilities.isIOS
+        ? kMinInteractiveDimensionCupertino
+        : kToolbarHeight,
+  );
 }
 
 class LuciSectionHeader extends StatelessWidget {

@@ -18,6 +18,7 @@ import 'package:luci_mobile/screens/manage_routers_screen.dart';
 import 'package:luci_mobile/screens/wifi_scan_screen.dart';
 import 'package:luci_mobile/utils/http_client_manager.dart';
 import 'package:luci_mobile/state/app_state.dart';
+import 'package:luci_mobile/navigation/tab_bar_inset.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -284,7 +285,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Scaffold(
       appBar: LuciAppBar(title: context.l10n.settings),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(vertical: LuciSpacing.sm),
+        padding: EdgeInsets.only(
+          top: LuciSpacing.sm,
+          bottom: LuciSpacing.sm + TabBarInset.of(context),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

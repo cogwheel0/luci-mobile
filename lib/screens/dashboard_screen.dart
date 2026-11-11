@@ -13,6 +13,7 @@ import 'package:luci_mobile/widgets/luci_animation_system.dart';
 import 'package:luci_mobile/models/glinet_data.dart';
 import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/utils/wifi_utils.dart';
+import 'package:luci_mobile/navigation/tab_bar_inset.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -1743,7 +1744,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               _buildInterfaceStatusCards(appState),
               const SizedBox(height: 12),
               // Extra padding to ensure scroll behavior for RefreshIndicator
-              const SizedBox(height: 100),
+              SizedBox(height: 100 + TabBarInset.of(context)),
             ];
 
             return Padding(
@@ -1764,8 +1765,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: SizedBox(
                   height: constraints.maxHeight,
+                  // Clear of the iOS 26 tab bar that floats over the page.
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      0,
+                      16,
+                      TabBarInset.of(context),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
