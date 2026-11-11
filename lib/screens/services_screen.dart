@@ -43,7 +43,6 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
     if (session == null || api == null) return;
 
     setState(() => _busyService = service.name);
-    final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
     try {
       await api.rcInit(
@@ -55,12 +54,18 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
       );
       if (!mounted) return;
       ref.invalidate(servicesProvider);
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.serviceActionDone(service.name))),
+      AdaptiveSnackBar.show(
+        context,
+        message: l10n.serviceActionDone(service.name),
+        type: AdaptiveSnackBarType.success,
       );
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(apiErrorText(context, e))));
+      AdaptiveSnackBar.show(
+        context,
+        message: apiErrorText(context, e),
+        type: AdaptiveSnackBarType.error,
+      );
     } finally {
       if (mounted) setState(() => _busyService = null);
     }

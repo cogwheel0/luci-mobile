@@ -31,6 +31,9 @@ void main() {
       message: 'Prompt saved',
       type: AdaptiveSnackBarType.success,
     );
+    // From a navigator's own context the native toast is shown from a
+    // context inside its overlay, a frame later.
+    await tester.pump();
     await tester.pump();
 
     expect(tester.takeException(), isNull);

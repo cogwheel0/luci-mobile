@@ -345,10 +345,8 @@ Future<void> copyToClipboard(
   String value, {
   required String label,
 }) async {
-  final messenger = ScaffoldMessenger.of(context);
+  final report = AdaptiveSnackBar.reporter(context);
   final message = context.l10n.copiedToClipboard(label);
   await Clipboard.setData(ClipboardData(text: value));
-  messenger.showSnackBar(
-    SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
-  );
+  report.show(message: message, duration: const Duration(seconds: 2));
 }

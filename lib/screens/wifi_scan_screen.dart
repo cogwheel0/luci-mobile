@@ -169,31 +169,18 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
       setState(() => _isRestarting = false);
 
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                Text(context.l10n.radioRestarted(_selectedRadio!)),
-              ],
-            ),
-            backgroundColor: Colors.green.shade700,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            duration: const Duration(seconds: 3),
-          ),
+        AdaptiveSnackBar.show(
+          context,
+          message: context.l10n.radioRestarted(_selectedRadio!),
+          type: AdaptiveSnackBarType.success,
+          duration: const Duration(seconds: 3),
         );
         _loadRadioDevices();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.l10n.radioRestartFailed),
-            backgroundColor: Theme.of(context).colorScheme.error,
-            behavior: SnackBarBehavior.floating,
-          ),
+        AdaptiveSnackBar.show(
+          context,
+          message: context.l10n.radioRestartFailed,
+          type: AdaptiveSnackBarType.error,
         );
       }
     } catch (e) {
@@ -910,22 +897,10 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
 
     if (success) {
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Expanded(child: Text(context.l10n.connectingToNetwork(ssid))),
-            ],
-          ),
-          backgroundColor: Colors.green.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          duration: const Duration(seconds: 4),
-        ),
+      AdaptiveSnackBar.show(
+        context,
+        message: context.l10n.connectingToNetwork(ssid),
+        type: AdaptiveSnackBarType.success,
       );
     } else {
       setState(() {

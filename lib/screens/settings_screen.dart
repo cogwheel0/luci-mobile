@@ -53,40 +53,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   void _showRouterBackOnlineMessage() {
-    if (mounted) {
-      final theme = Theme.of(context);
-      final colorScheme = theme.colorScheme;
-      // Dismiss the warning snackbar
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle, color: colorScheme.onPrimary, size: 20),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  context.l10n.routerBackOnline,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onPrimary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: colorScheme.primary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.symmetric(
-            horizontal: LuciSpacing.lg,
-            vertical: LuciSpacing.md,
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
+    if (!mounted) return;
+    // Replaces the rebooting warning, which stays up until now.
+    AdaptiveSnackBar.show(
+      context,
+      message: context.l10n.routerBackOnline,
+      type: AdaptiveSnackBarType.success,
+      duration: const Duration(seconds: 3),
+    );
   }
 
   Future<void> _showLogoutDialog(BuildContext context) async {
@@ -128,47 +102,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       destructive: true,
     );
     if (!confirmed || !context.mounted) return;
-    // Captured now: the reboot can outlive this screen, and the result
+    // Captured now: the reboot can outlive this screen, and its outcome
     // still has somewhere to show.
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final messenger = ScaffoldMessenger.of(context);
-    // Show persistent warning snackbar
-    messenger.showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              Icons.warning_amber_rounded,
-              color: colorScheme.onPrimary,
-              size: 20,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                l10n.rebootingConnectionInterrupted,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onPrimary,
-                ),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: colorScheme.primary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        duration: const Duration(days: 1), // effectively indefinite
-      ),
+    final report = AdaptiveSnackBar.reporter(context);
+    // Up until the router is back or the command fails, a reboot that was
+    // sent needs no second message saying so. Only this screen hears that
+    // the router is back, so the warning is bounded to about a reboot's
+    // length rather than left up after the user moves on.
+    report.show(
+      message: l10n.rebootingConnectionInterrupted,
+      type: AdaptiveSnackBarType.warning,
+      duration: const Duration(minutes: 2),
     );
     final success = await appState.reboot();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          success ? l10n.rebootCommandSent : l10n.rebootCommandFailed,
-        ),
-      ),
-    );
+    if (!success) {
+      report.show(
+        message: l10n.rebootCommandFailed,
+        type: AdaptiveSnackBarType.error,
+      );
+    }
   }
 
   Future<void> _showAboutDialog(BuildContext context) async {
@@ -205,11 +157,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       mode: LaunchMode.externalApplication,
                     );
                     if (!success && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(context.l10n.couldNotOpenRepository),
-                          backgroundColor: Theme.of(context).colorScheme.error,
-                        ),
+                      AdaptiveSnackBar.show(
+                        context,
+                        message: context.l10n.couldNotOpenRepository,
+                        type: AdaptiveSnackBarType.error,
                       );
                     }
                   },

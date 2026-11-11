@@ -230,19 +230,24 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     if (session == null || wol == null) return;
 
     setState(() => _wakeBusy = true);
-    final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
     try {
       final sent = await wol.wake(session, mac);
       if (!mounted) return;
       // Nothing acknowledges a magic packet, so the wording promises only
       // that it was sent — not that anything woke up.
-      messenger.showSnackBar(
-        SnackBar(content: Text(sent ? l10n.wakeSent : l10n.wakeFailed)),
+      AdaptiveSnackBar.show(
+        context,
+        message: sent ? l10n.wakeSent : l10n.wakeFailed,
+        type: sent ? AdaptiveSnackBarType.success : AdaptiveSnackBarType.error,
       );
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(apiErrorText(context, e))));
+      AdaptiveSnackBar.show(
+        context,
+        message: apiErrorText(context, e),
+        type: AdaptiveSnackBarType.error,
+      );
     } finally {
       if (mounted) setState(() => _wakeBusy = false);
     }

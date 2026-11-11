@@ -85,21 +85,22 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
     if (password == null || !mounted) return;
 
     setState(() => _busy = true);
-    final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
     try {
       final error = await ref
           .read(passwordMutationsProvider)
           .change(password, context: mounted ? context : null);
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(switch (error) {
-            null => l10n.passwordChanged,
-            PasswordChangeError.rejected => l10n.passwordRejected,
-            _ => l10n.changeFailed,
-          }),
-        ),
+      AdaptiveSnackBar.show(
+        context,
+        message: switch (error) {
+          null => l10n.passwordChanged,
+          PasswordChangeError.rejected => l10n.passwordRejected,
+          _ => l10n.changeFailed,
+        },
+        type: error == null
+            ? AdaptiveSnackBarType.success
+            : AdaptiveSnackBarType.error,
       );
     } finally {
       if (mounted) setState(() => _busy = false);

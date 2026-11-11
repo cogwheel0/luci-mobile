@@ -16,6 +16,10 @@ class AdaptiveSnackBar {
 
   static OverlayEntry? _activeIOSEntry;
 
+  /// Counts messages asked for, so one shown a frame late can tell that a
+  /// newer one has replaced it.
+  static int _latest = 0;
+
   static void show(
     BuildContext context, {
     required String message,
@@ -24,66 +28,70 @@ class AdaptiveSnackBar {
     String? action,
     VoidCallback? onActionPressed,
   }) {
+    final id = ++_latest;
     // A navigator's own context (kept by callers whose page may be gone by
     // the time they report) sits above that navigator's overlay.
     final contextOverlay = Overlay.maybeOf(context);
+    final navigatorOverlay =
+        contextOverlay ?? Navigator.maybeOf(context)?.overlay;
     final nativeDuration = _nativeDuration(duration);
     if (PlatformUiCapabilities.usesNativeIOS26 &&
-        contextOverlay != null &&
+        navigatorOverlay != null &&
         action == null &&
         nativeDuration != null) {
+      // The toast replaces a banner left up by a longer message.
+      _dismissIOSBanner();
       final style = switch (type) {
         AdaptiveSnackBarType.info => CNToastStyle.info,
         AdaptiveSnackBarType.success => CNToastStyle.success,
         AdaptiveSnackBarType.warning => CNToastStyle.warning,
         AdaptiveSnackBarType.error => CNToastStyle.error,
       };
-      CNToast.show(
-        context: context,
-        message: message,
-        position: CNToastPosition.top,
-        duration: nativeDuration,
-        style: style,
-      );
+      void showToast(BuildContext toastContext) {
+        // Older toasts still waiting are dropped, so this one follows only
+        // the one on screen; CNToast has no way to dismiss that one early.
+        CNToast.clear();
+        CNToast.show(
+          context: toastContext,
+          message: message,
+          position: CNToastPosition.top,
+          duration: nativeDuration,
+          style: style,
+        );
+      }
+
+      if (contextOverlay != null) {
+        showToast(context);
+      } else {
+        _withContextIn(navigatorOverlay, () => id == _latest, showToast);
+      }
       return;
     }
 
     if (!PlatformUiCapabilities.isIOS) {
-      final status = _statusColors(context, type);
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(
-          content: Text(
-            message,
-            style: status == null ? null : TextStyle(color: status.onBase),
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      if (messenger == null) return;
+      // As on iOS, the newest message replaces the one showing and any
+      // waiting, so a long-lived one (a reboot in progress) cannot hold back
+      // its result, even when they arrive while a bar is still closing.
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          _materialSnackBar(
+            Theme.of(context),
+            message: message,
+            type: type,
+            duration: duration,
+            action: action,
+            onActionPressed: onActionPressed,
           ),
-          duration: duration,
-          backgroundColor:
-              status?.base ??
-              switch (type) {
-                AdaptiveSnackBarType.info => Theme.of(
-                  context,
-                ).snackBarTheme.backgroundColor,
-                AdaptiveSnackBarType.success => Colors.green.shade700,
-                AdaptiveSnackBarType.warning => Colors.orange.shade700,
-                AdaptiveSnackBarType.error => Colors.red.shade700,
-              },
-          action: action == null
-              ? null
-              : SnackBarAction(
-                  label: action,
-                  textColor: status?.onBase,
-                  onPressed: onActionPressed ?? () {},
-                ),
-        ),
-      );
+        );
       return;
     }
 
     final overlay = contextOverlay ?? Navigator.maybeOf(context)?.overlay;
     if (overlay == null) return;
-    final previousEntry = _activeIOSEntry;
-    if (previousEntry?.mounted == true) previousEntry!.remove();
-    _activeIOSEntry = null;
+    _dismissIOSBanner();
     late final OverlayEntry entry;
     entry = OverlayEntry(
       builder: (context) => _IOSBanner(
@@ -92,9 +100,13 @@ class AdaptiveSnackBar {
         duration: duration,
         action: action,
         onActionPressed: onActionPressed,
+        // Only while it's still the banner showing: one replaced by a newer
+        // message (say, one its own action showed) was removed then, and
+        // `mounted` can read true until the overlay rebuilds.
         onDismiss: () {
-          if (entry.mounted) entry.remove();
-          if (identical(_activeIOSEntry, entry)) _activeIOSEntry = null;
+          if (!identical(_activeIOSEntry, entry)) return;
+          _activeIOSEntry = null;
+          entry.remove();
         },
       ),
     );
@@ -102,21 +114,149 @@ class AdaptiveSnackBar {
     overlay.insert(entry);
   }
 
-  /// Palette-driven status colors. Conduit reads these from its theme
-  /// extension; this app has no such palette, so the system colors below
-  /// always apply.
-  static ({Color base, Color onBase})? _statusColors(
-    BuildContext context,
-    AdaptiveSnackBarType type,
-  ) => null;
+  static void _dismissIOSBanner() {
+    final entry = _activeIOSEntry;
+    _activeIOSEntry = null;
+    // Inserted this frame, it has not mounted yet but is in the overlay;
+    // a dismissed one has already cleared this reference.
+    entry?.remove();
+  }
 
+  /// Calls [use] with a context inside [overlay], from a zero-size entry
+  /// inserted for the purpose: CNToast finds its overlay from a context,
+  /// and a navigator's own context sits above that navigator's overlay.
+  /// That is a frame later, so [stillWanted] is asked first: a newer message
+  /// asked for meanwhile replaces this one rather than following it.
+  static void _withContextIn(
+    OverlayState overlay,
+    bool Function() stillWanted,
+    void Function(BuildContext context) use,
+  ) {
+    var used = false;
+    late final OverlayEntry probe;
+    probe = OverlayEntry(
+      builder: (probeContext) {
+        if (!used) {
+          used = true;
+          // Not during build: showing inserts the toast's own entry.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (stillWanted() && probeContext.mounted) use(probeContext);
+            if (probe.mounted) probe.remove();
+          });
+        }
+        return const SizedBox.shrink();
+      },
+    );
+    overlay.insert(probe);
+  }
+
+  /// luci-mobile's Material snackbars: information in the theme's plain
+  /// bar; a success, warning or error floats, in green with a check, in
+  /// orange, or in the theme's error colour.
+  static SnackBar _materialSnackBar(
+    ThemeData theme, {
+    required String message,
+    required AdaptiveSnackBarType type,
+    required Duration duration,
+    String? action,
+    VoidCallback? onActionPressed,
+  }) {
+    final scheme = theme.colorScheme;
+    final (
+      Color? background,
+      Color? foreground,
+      IconData? icon,
+    ) = switch (type) {
+      AdaptiveSnackBarType.info => (null, null, null),
+      AdaptiveSnackBarType.success => (
+        Colors.green.shade700,
+        Colors.white,
+        Icons.check_circle,
+      ),
+      AdaptiveSnackBarType.warning => (
+        Colors.orange.shade700,
+        Colors.white,
+        Icons.warning_amber_rounded,
+      ),
+      AdaptiveSnackBarType.error => (scheme.error, scheme.onError, null),
+    };
+    final text = Text(
+      message,
+      style: foreground == null ? null : TextStyle(color: foreground),
+    );
+    final floating = type != AdaptiveSnackBarType.info;
+    return SnackBar(
+      content: icon == null
+          ? text
+          : Row(
+              children: [
+                Icon(icon, color: foreground, size: 20),
+                const SizedBox(width: 8),
+                Expanded(child: text),
+              ],
+            ),
+      duration: duration,
+      backgroundColor: background,
+      behavior: floating ? SnackBarBehavior.floating : null,
+      shape: floating
+          ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+          : null,
+      action: action == null
+          ? null
+          : SnackBarAction(
+              label: action,
+              textColor: foreground,
+              onPressed: onActionPressed ?? () {},
+            ),
+    );
+  }
+
+  /// The native toast's nearest length; past six seconds the Flutter banner
+  /// shows instead, since it keeps any duration.
   static CNToastDuration? _nativeDuration(Duration value) {
-    if (value == const Duration(seconds: 2)) return CNToastDuration.short;
-    if (value == const Duration(milliseconds: 3500)) {
-      return CNToastDuration.medium;
+    if (value <= const Duration(milliseconds: 2500)) {
+      return CNToastDuration.short;
     }
-    if (value == const Duration(seconds: 5)) return CNToastDuration.long;
+    if (value <= const Duration(seconds: 4)) return CNToastDuration.medium;
+    if (value <= const Duration(seconds: 6)) return CNToastDuration.long;
     return null;
+  }
+
+  /// Keeps where to report a result that arrives after an await: through
+  /// [context] while it is mounted, else through the root navigator, which
+  /// outlives any page. Take it before the await.
+  static AdaptiveSnackBarReporter reporter(BuildContext context) =>
+      AdaptiveSnackBarReporter._(
+        context,
+        Navigator.of(context, rootNavigator: true).context,
+      );
+}
+
+/// Reports through a page while it is mounted, else through the root
+/// navigator. From [AdaptiveSnackBar.reporter].
+class AdaptiveSnackBarReporter {
+  AdaptiveSnackBarReporter._(this._context, this._fallback);
+
+  final BuildContext _context;
+  final BuildContext _fallback;
+
+  void show({
+    required String message,
+    AdaptiveSnackBarType type = AdaptiveSnackBarType.info,
+    Duration duration = const Duration(seconds: 4),
+    String? action,
+    VoidCallback? onActionPressed,
+  }) {
+    final target = _context.mounted ? _context : _fallback;
+    if (!target.mounted) return;
+    AdaptiveSnackBar.show(
+      target,
+      message: message,
+      type: type,
+      duration: duration,
+      action: action,
+      onActionPressed: onActionPressed,
+    );
   }
 }
 
@@ -180,62 +320,70 @@ class _IOSBannerState extends State<_IOSBanner> {
       right: 12,
       child: SafeArea(
         bottom: false,
-        child: Semantics(
-          liveRegion: true,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: PlatformUiCapabilities.usesNativeIOS26
-                  ? null
-                  : bannerColor,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x26000000),
-                  blurRadius: 18,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Stack(
-              fit: StackFit.passthrough,
-              children: [
-                if (PlatformUiCapabilities.usesNativeIOS26)
-                  Positioned.fill(
-                    child: AdaptiveGlassBackdrop(
-                      borderRadius: BorderRadius.circular(14),
+        // Swiped up out of the way, as iOS banners are; it covers the
+        // navigation bar while it shows.
+        child: GestureDetector(
+          onVerticalDragEnd: (details) {
+            if ((details.primaryVelocity ?? 0) < 0) widget.onDismiss();
+          },
+          child: Semantics(
+            liveRegion: true,
+            onDismiss: widget.onDismiss,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: PlatformUiCapabilities.usesNativeIOS26
+                    ? null
+                    : bannerColor,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x26000000),
+                    blurRadius: 18,
+                    offset: Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Stack(
+                fit: StackFit.passthrough,
+                children: [
+                  if (PlatformUiCapabilities.usesNativeIOS26)
+                    Positioned.fill(
+                      child: AdaptiveGlassBackdrop(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(icon, color: tint, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          widget.message,
-                          style: TextStyle(
-                            color: CupertinoColors.label.resolveFrom(context),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(icon, color: tint, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            widget.message,
+                            style: TextStyle(
+                              color: CupertinoColors.label.resolveFrom(context),
+                            ),
                           ),
                         ),
-                      ),
-                      if (widget.action != null)
-                        CupertinoButton(
-                          padding: const EdgeInsets.only(left: 10),
-                          minimumSize: const Size(36, 36),
-                          onPressed: () {
-                            widget.onActionPressed?.call();
-                            widget.onDismiss();
-                          },
-                          child: Text(widget.action!),
-                        ),
-                    ],
+                        if (widget.action != null)
+                          CupertinoButton(
+                            padding: const EdgeInsets.only(left: 10),
+                            minimumSize: const Size(36, 36),
+                            onPressed: () {
+                              widget.onActionPressed?.call();
+                              widget.onDismiss();
+                            },
+                            child: Text(widget.action!),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
