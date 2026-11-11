@@ -157,13 +157,63 @@ void main() {
       expect(result.output, contains('Booting Linux'));
       expect(api.asked, ['/bin/dmesg -r']);
     });
+
+    // "No log entries" would say the router had nothing to report; it was
+    // the read that failed.
+    test('a reader that fails and prints nothing is an error', () async {
+      final api = _AclApi({
+        '/usr/libexec/syslog-wrapper': [
+          0,
+          {'code': 1, 'stdout': '', 'stderr': 'Failed to connect to ubus'},
+        ],
+        '/bin/dmesg -r': [0, {}],
+      });
+      final service = DiagnosticsService(api);
+
+      await expectLater(
+        service.systemLog(_session),
+        throwsA(
+          isA<RpcException>().having(
+            (e) => e.detail,
+            'detail',
+            'Failed to connect to ubus',
+          ),
+        ),
+      );
+      // Not retried: the older forms are ones this router would refuse.
+      expect(api.asked, ['/usr/libexec/syslog-wrapper']);
+      await expectLater(
+        service.kernelLog(_session),
+        throwsA(
+          isA<RpcException>().having(
+            (e) => e.detail,
+            'detail',
+            'no exit status',
+          ),
+        ),
+      );
+    });
+
+    test('output that did arrive is kept whatever the exit code', () async {
+      final api = _AclApi({
+        '/usr/libexec/syslog-wrapper': [
+          0,
+          {'code': 1, 'stdout': 'partial\n', 'stderr': ''},
+        ],
+      });
+
+      final result = await DiagnosticsService(api).systemLog(_session);
+
+      expect(result.output, 'partial');
+    });
   });
 
   test('dmesg -r priorities become severities', () {
     final warn = LogEntry.parse('<4>[   12.5] mt7915e: firmware timeout');
     expect(warn.isWarning, isTrue);
     expect(warn.message, '[   12.5] mt7915e: firmware timeout');
-    expect(warn.raw, warn.message);
+    // Copy and the filter use raw: it is the line as the router printed it.
+    expect(warn.raw, '<4>[   12.5] mt7915e: firmware timeout');
 
     // Facility bits (here: user, 1 << 3) do not change the severity.
     expect(LogEntry.parse('<11>[ 1.0] oops').isProblem, isTrue);

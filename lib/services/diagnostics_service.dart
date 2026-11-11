@@ -89,7 +89,27 @@ class DiagnosticsService {
   /// Reads the kernel ring buffer.
   Future<DiagnosticResult> kernelLog(RouterSession session) async {
     final (command, params) = kernelLogCommand;
-    return _exec(session, command, params);
+    return _requireLog(await _exec(session, command, params));
+  }
+
+  /// [result], unless it is a failed run that printed nothing.
+  ///
+  /// Unlike ping, a log reader that exits non-zero with no output has not
+  /// reported an empty log; it has failed to read one. Handing back the
+  /// empty output would show "no log entries". Output that did arrive is
+  /// kept whatever the exit code: a partial log beats none.
+  static DiagnosticResult _requireLog(DiagnosticResult result) {
+    if (result.succeeded || result.output.trim().isNotEmpty) return result;
+    final stderr = result.stderr?.trim() ?? '';
+    throw RpcException(
+      object: 'file',
+      method: 'exec',
+      detail: stderr.isNotEmpty
+          ? stderr
+          : result.exitCode < 0
+          ? 'no exit status'
+          : 'exit code ${result.exitCode}',
+    );
   }
 
   /// Reads the last [lines] lines of the system log.
@@ -109,7 +129,9 @@ class DiagnosticsService {
     RpcException? last;
     for (final (command, params) in systemLogCommands) {
       try {
-        final result = await _exec(session, command, params);
+        // A reader that ran and failed is not retried: the others are older
+        // releases' forms, which this router's ACL would refuse anyway.
+        final result = _requireLog(await _exec(session, command, params));
         return DiagnosticResult(
           output: lastLines(result.output, lines),
           exitCode: result.exitCode,
@@ -224,8 +246,10 @@ class LogEntry {
     if (kernel != null) {
       final priority = int.parse(kernel.group(1)!);
       final message = kernel.group(2)!;
+      // `raw` keeps the prefix: it is what Copy and the filter use, and a
+      // pasted kernel line should be the line the router printed.
       return LogEntry(
-        raw: message,
+        raw: line,
         level: _severities[priority & 7],
         message: message,
       );
