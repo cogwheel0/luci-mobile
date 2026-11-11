@@ -26,7 +26,12 @@ String apiErrorText(BuildContext context, Object error) {
       info.call ?? '?',
       info.package ?? '?',
     ),
-    ApiErrorKind.httpStatus => l10n.errorHttpStatus(info.status ?? 0),
+    // The call, untranslated like the router's own words, after the
+    // sentence: which call got the HTTP error is what a report needs.
+    ApiErrorKind.httpStatus =>
+      info.call == null
+          ? l10n.errorHttpStatus(info.status ?? 0)
+          : '${l10n.errorHttpStatus(info.status ?? 0)} (${info.call})',
     ApiErrorKind.unreachable => l10n.errorUnreachable,
     ApiErrorKind.rpcFailed =>
       info.detail == null || info.detail!.isEmpty

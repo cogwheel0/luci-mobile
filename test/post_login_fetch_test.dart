@@ -228,6 +228,27 @@ void main() {
       expect(routers.selectedRouter!.activeAddressIndex, 1);
     });
 
+    // #89: either of these failing blanked the dashboard and the
+    // Interfaces page with it; they only add throughput and a client count.
+    test('loads without device counters or leases', () async {
+      final api = _Router(
+        timesOut: {'luci-rpc.getNetworkDevices', 'luci-rpc.getDHCPLeases'},
+      );
+      final state = stateFor(api);
+
+      await state.fetchDashboardData();
+
+      expect(state.appFailure, isNull);
+      expect(state.dashboardData, isNotNull);
+      expect(state.dashboardData!['boardInfo'], isNotNull);
+      expect(state.dashboardData!['interfaceDump'], isNotNull);
+      expect(state.dashboardData!['networkDevices'], isNull);
+      expect(state.dashboardData!['dhcpLeases'], isNull);
+      // No counters, no sample: a zero would be drawn as real throughput.
+      expect(state.rxHistory, isEmpty);
+      expect(state.txHistory, isEmpty);
+    });
+
     test('reports an ordinary timeout without asking again', () async {
       final api = _Router(timesOut: {'system.board'});
       final state = stateFor(api);

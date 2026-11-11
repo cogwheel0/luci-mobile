@@ -1051,6 +1051,21 @@ class AppState extends ChangeNotifier {
         params: {'config': 'wireless'},
       );
 
+      // Device counters and leases are optional too. Without counters the
+      // dashboard loses throughput and per-interface traffic; without
+      // leases, the client count. Either failing used to blank the whole
+      // dashboard and the Interfaces page with it (#89).
+      final networkDevicesFuture = callOptionalRpc(
+        object: 'luci-rpc',
+        method: 'getNetworkDevices',
+        params: {},
+      );
+      final leasesFuture = callOptionalRpc(
+        object: 'luci-rpc',
+        method: 'getDHCPLeases',
+        params: {},
+      );
+
       final results = await Future.wait([
         _apiService!.call(
           ip,
@@ -1072,24 +1087,8 @@ class AppState extends ChangeNotifier {
           ip,
           sysauth,
           useHttps,
-          object: 'luci-rpc',
-          method: 'getNetworkDevices',
-          params: {},
-        ),
-        _apiService!.call(
-          ip,
-          sysauth,
-          useHttps,
           object: 'network.interface',
           method: 'dump',
-          params: {},
-        ),
-        _apiService!.call(
-          ip,
-          sysauth,
-          useHttps,
-          object: 'luci-rpc',
-          method: 'getDHCPLeases',
           params: {},
         ),
       ]);
@@ -1122,15 +1121,30 @@ class AppState extends ChangeNotifier {
 
       final boardInfoData = getData(results[0]);
       final sysInfoData = getData(results[1]);
-      final networkData = getData(results[2]) as Map<String, dynamic>?;
-      final interfaceDump = getData(results[3]) as Map<String, dynamic>?;
-      final dhcpLeases = getData(results[4]) as Map<String, dynamic>?;
+      final interfaceDump = getData(results[2]) as Map<String, dynamic>?;
 
-      // Await optional wireless futures in parallel (won't throw — wired-only routers are fine)
+      // Await the optional futures (they don't throw: each failure is logged
+      // and comes back as null)
       final optionalResults = await Future.wait([
         wirelessFuture,
         uciWirelessFuture,
+        networkDevicesFuture,
+        leasesFuture,
       ]);
+      Map<String, dynamic>? optionalMap(dynamic raw, String label) {
+        if (raw == null) return null;
+        final data = getOptionalData(raw, label);
+        return data is Map<String, dynamic> ? data : null;
+      }
+
+      final networkData = optionalMap(
+        optionalResults[2],
+        'luci-rpc.getNetworkDevices',
+      );
+      final dhcpLeases = optionalMap(
+        optionalResults[3],
+        'luci-rpc.getDHCPLeases',
+      );
       if (unanswered && !resentUnanswered) {
         if (token != _sessionToken) return;
         _isDashboardLoading = false;
@@ -1226,11 +1240,15 @@ class AppState extends ChangeNotifier {
       // stale results instead of clobbering the current router's data.
       if (token != _sessionToken) return;
 
-      _throughputService?.updateThroughput(
-        networkData,
-        wanDeviceNames,
-        specificInterface: specificInterface,
-      );
+      // No counters, no sample: a zero would be drawn as real throughput.
+      // The two-second poll asks for them again.
+      if (networkData != null) {
+        _throughputService?.updateThroughput(
+          networkData,
+          wanDeviceNames,
+          specificInterface: specificInterface,
+        );
+      }
 
       GlInetData? glInetData;
       final routerModel = boardInfoData?['model']?.toString() ?? '';
