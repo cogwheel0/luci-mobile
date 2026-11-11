@@ -169,12 +169,16 @@ class SecureStorageService {
   ///
   /// Kept apart from the saved routers on purpose: signing out must not
   /// forget them, but must stop start-up from signing straight back in.
+  ///
+  /// A failed read counts as signed out. The cost of that is one login
+  /// screen; the cost of the opposite is signing in with a stored password
+  /// the user may have just signed out of.
   Future<bool> isSignedOut() async {
     try {
       return await _storage.read(key: _signedOutKey) == 'true';
     } catch (e, stack) {
       Logger.exception('Failed to read signed-out flag', e, stack);
-      return false;
+      return true;
     }
   }
 

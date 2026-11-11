@@ -336,6 +336,41 @@ void main() {
       await state.logout();
       expect(await state.tryAutoLogin(), isTrue);
     });
+
+    // The login it overtook must not clear the logout's flag on its way
+    // out, in this run or the next.
+    test('Log out during a sign-in wins', () async {
+      final auth = _SlowAuth();
+      final state = AppState.forTesting(
+        apiService: _Router(),
+        authService: auth,
+        routerService: routers,
+      );
+      addTearDown(state.dispose);
+
+      final login = state.login(
+        '192.168.1.1',
+        'root',
+        'password',
+        false,
+        fromRouter: true,
+      );
+      final logout = state.logout(userInitiated: true);
+      auth.answer.complete();
+
+      expect(await login, isFalse);
+      await logout;
+      expect(await state.tryAutoLogin(), isFalse);
+      expect(await routers.isSignedOut(), isTrue);
+    });
+
+    test('flag writes land in the order they were made', () async {
+      // Neither awaited before the next: a login's clear, then a logout.
+      final cleared = routers.setSignedOut(false);
+      final set = routers.setSignedOut(true);
+      await Future.wait([cleared, set]);
+      expect(await routers.isSignedOut(), isTrue);
+    });
   });
 
   test('logging out during a login leaves the login button idle', () async {

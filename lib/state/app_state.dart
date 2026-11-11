@@ -89,6 +89,11 @@ class AppState extends ChangeNotifier {
   // already switched to router B).
   int _sessionToken = 0;
 
+  /// The user pressed Log out in this run of the app and has not signed in
+  /// since. The stored flag says the same across restarts; this copy holds
+  /// even if storage would not take the write.
+  bool _signedOutThisRun = false;
+
   // Guards against overlapping throughput polls on slow links.
   bool _throughputUpdateInFlight = false;
 
@@ -747,8 +752,10 @@ class AppState extends ChangeNotifier {
         await fetchDashboardData();
         if (token != _sessionToken) return false;
         // Signing in - by hand, or by picking a saved router - ends a
-        // sign-out. Cleared last, so a logout that overtakes this login
-        // writes its flag after this delete, not before it.
+        // sign-out. Cleared last, after the final session check and with
+        // no await before the write is queued, so a logout that overtakes
+        // this login queues its write after this delete.
+        _signedOutThisRun = false;
         try {
           await _routerService?.setSignedOut(false);
         } catch (e, stack) {
@@ -787,6 +794,9 @@ class AppState extends ChangeNotifier {
     _cancelRebootPolling();
     _isRebooting = false;
     if (userInitiated) {
+      // Held in memory as well: if storage refuses the write, the login
+      // screen this logout opens must still not sign straight back in.
+      _signedOutThisRun = true;
       try {
         await _routerService?.setSignedOut(true);
       } catch (e, stack) {
@@ -2959,7 +2969,9 @@ class AppState extends ChangeNotifier {
 
     // The user signed out: show them the login screen, not the router they
     // just left. It ends when they sign in again.
-    if (await _routerService!.isSignedOut()) return false;
+    if (_signedOutThisRun || await _routerService!.isSignedOut()) {
+      return false;
+    }
 
     // If we have a selected router, use loginWithFallback
     final router = _routerService?.selectedRouter;

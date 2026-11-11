@@ -65,8 +65,20 @@ class RouterService {
   /// start-up must not sign in to [selectedRouter] on its own.
   Future<bool> isSignedOut() => _secureStorageService.isSignedOut();
 
-  Future<void> setSignedOut(bool signedOut) =>
-      _secureStorageService.setSignedOut(signedOut);
+  /// Writes of the flag, one after another in the order they were asked
+  /// for. The storage plugin does not promise to finish two calls in the
+  /// order it got them, and a login's delete finishing after a later
+  /// logout's write would forget that logout.
+  Future<void> _signedOutWrites = Future.value();
+
+  Future<void> setSignedOut(bool signedOut) {
+    final write = _signedOutWrites.then(
+      (_) => _secureStorageService.setSignedOut(signedOut),
+    );
+    // A failed write must not stop the ones queued after it.
+    _signedOutWrites = write.then<void>((_) {}, onError: (_) {});
+    return write;
+  }
 
   model.Router? selectRouter(String id) {
     if (_routers.isEmpty) return null;
