@@ -1,5 +1,6 @@
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -90,6 +91,74 @@ void main() {
       expect(find.byType(AlertDialog), findsNothing);
       expect(answers, [false]);
     });
+  });
+
+  // The native alert answers over the cn_alert channel, with the index of
+  // the action chosen, or nothing when it was dismissed or failed. Answering
+  // that channel here checks how confirm reads each reply.
+  group('iOS 26 native alert', () {
+    setUp(() {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 26;
+      PlatformUiCapabilities.debugNativeIOS26Override = true;
+    });
+
+    for (final (outcome, reply, answer) in [
+      ('confirming', <String, Object?>{'index': 1}, true),
+      ('cancelling', <String, Object?>{'index': 0}, false),
+      ('a dismissed or failed alert', null, false),
+    ]) {
+      testWidgets('$outcome answers $answer', (tester) async {
+        const channel = MethodChannel('cn_alert');
+        final messenger = tester.binding.defaultBinaryMessenger;
+        Map<Object?, Object?>? sent;
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          if (call.method != 'show') return null;
+          sent = call.arguments as Map<Object?, Object?>;
+          return reply;
+        });
+        addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+        final answers = await _openConfirm(
+          tester,
+          cupertino: true,
+          destructive: true,
+        );
+
+        expect(answers, [answer]);
+        expect(find.byType(CupertinoAlertDialog), findsNothing);
+        expect(sent!['title'], 'Remove router?');
+        expect(sent!['message'], 'It will be forgotten on this device.');
+        final actions = (sent!['actions']! as List)
+            .cast<Map<Object?, Object?>>();
+        expect(
+          [for (final action in actions) (action['label'], action['style'])],
+          [('Cancel', 'cancel'), ('Remove', 'destructive')],
+        );
+      }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+    }
+
+    testWidgets('a non-destructive confirmation is the preferred action', (
+      tester,
+    ) async {
+      const channel = MethodChannel('cn_alert');
+      final messenger = tester.binding.defaultBinaryMessenger;
+      Map<Object?, Object?>? sent;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        sent = call.arguments as Map<Object?, Object?>;
+        return <String, Object?>{'index': 1};
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+      final answers = await _openConfirm(tester, cupertino: true);
+
+      expect(answers, [true]);
+      final remove = (sent!['actions']! as List)
+          .cast<Map<Object?, Object?>>()
+          .last;
+      expect(remove['style'], 'default');
+      expect(remove['preferred'], isTrue);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
   });
 
   group('before iOS 26', () {

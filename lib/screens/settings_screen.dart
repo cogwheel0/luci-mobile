@@ -92,6 +92,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _showLogoutDialog(BuildContext context) async {
     final appState = ref.read(appStateProvider);
     final l10n = context.l10n;
+    // Capture the navigator before any awaits: once the alert closes, the
+    // user can switch tabs while logging out, which removes this screen,
+    // and the session must still end on the login screen.
+    final navigator = Navigator.of(context);
     final confirmed = await AdaptiveAlertDialog.confirm(
       context: context,
       title: l10n.logoutQuestion,
@@ -104,14 +108,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await appState.logout(userInitiated: true);
     // Clear all accepted certificates on logout
     await HttpClientManager().clearAcceptedCertificates();
-    if (context.mounted) {
-      unawaited(
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (Route<dynamic> route) => false,
-        ),
-      );
-    }
+    unawaited(
+      navigator.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (Route<dynamic> route) => false,
+      ),
+    );
   }
 
   Future<void> _showRebootDialog(BuildContext context) async {
