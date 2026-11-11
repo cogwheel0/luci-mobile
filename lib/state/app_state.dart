@@ -20,6 +20,7 @@ import 'package:luci_mobile/services/interfaces/auth_service_interface.dart';
 import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
 import 'package:luci_mobile/services/interfaces/glinet_api_service_interface.dart';
 import 'package:luci_mobile/services/api_service.dart';
+import 'package:luci_mobile/services/client_presence.dart';
 import 'package:luci_mobile/services/service_factory.dart';
 import 'package:luci_mobile/config/app_config.dart';
 import 'package:luci_mobile/utils/http_client_manager.dart';
@@ -3185,9 +3186,14 @@ class AppState extends ChangeNotifier {
         final client = Client.fromLease(lease);
         final macNorm = StationInfo.normalizeMac(client.macAddress);
         final isWireless = normalizedWireless.contains(macNorm);
-        // If confirmed wireless by assoclist, mark wireless; otherwise keep heuristic
+        // If confirmed wireless by assoclist, mark wireless - and connected,
+        // whatever its own router's neighbour table said; otherwise keep
+        // heuristic
         final enriched = isWireless
-            ? client.copyWith(connectionType: ConnectionType.wireless)
+            ? client.copyWith(
+                connectionType: ConnectionType.wireless,
+                isOnline: true,
+              )
             : client;
         // Prefer entries that have more info (hostname length as heuristic)
         if (!clients.containsKey(macNorm) ||
@@ -3201,7 +3207,9 @@ class AppState extends ChangeNotifier {
       // Add wireless stations not in DHCP leases (AP-mode fallback)
       for (final mac in normalizedWireless) {
         if (!clients.containsKey(mac)) {
-          clients[mac] = Client.fromWirelessStation(mac);
+          clients[mac] = Client.fromWirelessStation(
+            mac,
+          ).copyWith(isOnline: true);
         }
       }
 
@@ -3368,6 +3376,15 @@ class AppState extends ChangeNotifier {
         }
       }
 
+      // Names and presence beyond the leases; GL.iNet's own data, where
+      // there is any, is applied after and wins.
+      final presence = await _fetchClientPresence(
+        activeIp,
+        _authService!.sysauth!,
+        activeHttps,
+      );
+      _applyPresence(clientMap, presence, normalizedWireless);
+
       // Enrich with GL.iNet data
       _enrichClientsWithGlInet(clientMap);
 
@@ -3381,6 +3398,66 @@ class AppState extends ChangeNotifier {
   }
 
   /// Returns a union set of associated wireless MAC addresses across all routers
+  /// Host hints and the neighbour table of the router at [ip], each read on
+  /// its own and each optional: a router without either still lists its
+  /// clients, just without the names or presence they would add.
+  ///
+  /// One after the other, not together: some routers hang requests that
+  /// run in parallel.
+  Future<ClientPresence> _fetchClientPresence(
+    String ip,
+    String sysauth,
+    bool useHttps,
+  ) async {
+    var hints = const <String, dynamic>{};
+    try {
+      hints = await _apiService!.fetchHostHints(ip, sysauth, useHttps);
+    } catch (e) {
+      Logger.debug('Host hints unavailable: $e');
+    }
+    List<Neighbour>? neighbours;
+    try {
+      final (command, params) = ClientPresence.neighbourCommand;
+      final result = await _apiService!.call(
+        ip,
+        sysauth,
+        useHttps,
+        object: 'file',
+        method: 'exec',
+        params: {'command': command, 'params': params},
+      );
+      final body = result is List && result.length > 1 ? result[1] : null;
+      if (body is Map && body['code'] == 0 && body['stdout'] is String) {
+        neighbours = ClientPresence.parseNeighbours(body['stdout'] as String);
+      }
+    } catch (e) {
+      Logger.debug('Neighbour table unavailable: $e');
+    }
+    return ClientPresence(hostHints: hints, neighbours: neighbours);
+  }
+
+  /// Puts [presence] into [clients] (keyed by normalised MAC): the router's
+  /// name for a client that sent none (#75), and whether it is connected,
+  /// so a phone that left is shown offline rather than as wired (#5).
+  static void _applyPresence(
+    Map<String, Client> clients,
+    ClientPresence presence,
+    Set<String> associated,
+  ) {
+    for (final entry in clients.entries.toList()) {
+      final client = entry.value;
+      final name = ClientPresence.isUnnamed(client.hostname)
+          ? presence.nameFor(client.macAddress)
+          : null;
+      final online = presence.isOnline(
+        mac: client.macAddress,
+        ip: client.ipAddress == 'N/A' ? null : client.ipAddress,
+        associated: associated.contains(entry.key),
+      );
+      clients[entry.key] = client.copyWith(hostname: name, isOnline: online);
+    }
+  }
+
   /// Known GL.iNet model → CPU core count mapping.
   static int? _getGlInetCoreCount(String model) {
     // IPQ5332 (BE9300, BE6500): Quad-core Cortex-A53
@@ -3578,6 +3655,13 @@ class AppState extends ChangeNotifier {
               final leases = (data['dhcp_leases'] as List<dynamic>? ?? [])
                   .cast<Map<String, dynamic>>();
               successfulRouters++;
+              // This router's names and presence for its own leases; after
+              // the merge below they could no longer be told apart.
+              final presence = await _fetchClientPresence(
+                r.activeAddress,
+                res.token!,
+                res.actualUseHttps,
+              );
               // Record which router answered. Dedup below keeps one entry per
               // MAC+IP, so without this the detail page cannot tell which
               // router to write a reservation or block rule to.
@@ -3587,6 +3671,7 @@ class AppState extends ChangeNotifier {
                       ...lease,
                       '_routerId': r.id,
                       '_routerLabel': r.lastKnownHostname ?? r.activeAddress,
+                      ...presence.annotate(lease),
                     },
                   )
                   .toList();

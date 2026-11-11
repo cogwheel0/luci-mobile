@@ -135,6 +135,13 @@ class Client {
       return value?.toString();
     }
 
+    // A name, or null for none: dnsmasq writes `*` for a client that sent
+    // no hostname.
+    String? named(dynamic value) {
+      final s = value?.toString().trim();
+      return (s == null || s.isEmpty || s == '*') ? null : s;
+    }
+
     // Helper function to safely convert dynamic to int
     int? toIntValue(dynamic value) {
       if (value == null) return null;
@@ -183,9 +190,12 @@ class Client {
     return Client(
       ipAddress: toStringValue(lease['ipaddr']) ?? 'N/A',
       macAddress: toStringValue(lease['macaddr']) ?? 'N/A',
+      // The lease's own name, else the router's (`_hintName`: /etc/ethers,
+      // a static host, reverse DNS; see ClientPresence.annotate).
       hostname:
-          toStringValue(lease['hostname']) ??
-          toStringValue(lease['name']) ??
+          named(lease['hostname']) ??
+          named(lease['name']) ??
+          named(lease['_hintName']) ??
           'Unknown',
       hostId: toStringValue(lease['hostid']),
       leaseTime: remainingLeaseTime, // Use the 'expires' value directly
@@ -198,6 +208,7 @@ class Client {
       ipv6Addresses: ipv6Addresses,
       routerId: toStringValue(lease['_routerId']),
       routerLabel: toStringValue(lease['_routerLabel']),
+      isOnline: lease['_online'] is bool ? lease['_online'] as bool : null,
     );
   }
 
