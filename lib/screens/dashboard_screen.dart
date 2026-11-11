@@ -331,6 +331,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       txHistory = appState.getTxHistoryForInterface(interface);
       currentRxRate = appState.getCurrentRxRateForInterface(interface);
       currentTxRate = appState.getCurrentTxRateForInterface(interface);
+      // The arrows mean download and upload. On a LAN or AP interface the
+      // router *sends* what its clients download, so tx is the down line.
+      if (appState.isClientFacingInterface(interface)) {
+        (rxHistory, txHistory) = (txHistory, rxHistory);
+        (currentRxRate, currentTxRate) = (currentTxRate, currentRxRate);
+      }
       throughputLabel = ' - $interface';
     } else {
       // Use combined throughput

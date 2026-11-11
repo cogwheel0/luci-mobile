@@ -495,6 +495,17 @@ class AppState extends ChangeNotifier {
         0.0;
   }
 
+  /// Whether [interface] (as the dashboard preferences name it) faces the
+  /// router's clients, so its rx is their upload; see
+  /// [ThroughputService.isClientFacing].
+  bool isClientFacingInterface(String interface) {
+    final dump = _dashboardData?['interfaceDump'];
+    return ThroughputService.isClientFacing(
+      dump is Map ? dump : null,
+      _getDeviceNameForInterface(interface) ?? interface,
+    );
+  }
+
   Future<void> loadRouters() async {
     await _routerService?.loadRouters();
     notifyListeners();
@@ -1141,26 +1152,10 @@ class AppState extends ChangeNotifier {
         }
       }
 
-      // Throughput calculation - collect ALL interface devices
-      final wanDeviceNames = <String>{};
-      if (interfaceDump != null && interfaceDump['interface'] is List) {
-        for (final interface in interfaceDump['interface']) {
-          if (interface is Map<String, dynamic>) {
-            final ifname = interface['interface'] as String?;
-            // Skip only loopback interface
-            if (ifname != null && ifname != 'loopback' && ifname != 'lo') {
-              final device = interface['device'] as String?;
-              final l3Device = interface['l3_device'] as String?;
-              if (device != null) {
-                wanDeviceNames.add(device);
-              }
-              if (l3Device != null && l3Device != device) {
-                wanDeviceNames.add(l3Device);
-              }
-            }
-          }
-        }
-      }
+      // The combined graph counts the internet-facing devices only.
+      final wanDeviceNames = ThroughputService.combinedThroughputDevices(
+        interfaceDump,
+      );
 
       // Update throughput data using the service
       // Check if we should track specific interface
@@ -1520,26 +1515,11 @@ class AppState extends ChangeNotifier {
       if (result is List && result.length > 1 && result[0] == 0) {
         final networkData = result[1] as Map<String, dynamic>?;
 
-        // Get ALL device names from cached dashboard data (except loopback)
-        final wanDeviceNames = <String>{};
-        final interfaceDump =
-            _dashboardData?['interfaceDump'] as Map<String, dynamic>?;
-        if (interfaceDump != null && interfaceDump['interface'] is List) {
-          for (final interface in interfaceDump['interface']) {
-            if (interface is Map<String, dynamic>) {
-              final ifname = interface['interface'] as String?;
-              final device = interface['device'] as String?;
-              final l3Device = interface['l3_device'] as String?;
-              // Include all interfaces except loopback
-              if (ifname != null && ifname != 'loopback' && ifname != 'lo') {
-                if (device != null) wanDeviceNames.add(device);
-                if (l3Device != null && l3Device != device) {
-                  wanDeviceNames.add(l3Device);
-                }
-              }
-            }
-          }
-        }
+        // The internet-facing devices, from the cached interface dump.
+        final interfaceDump = _dashboardData?['interfaceDump'];
+        final wanDeviceNames = ThroughputService.combinedThroughputDevices(
+          interfaceDump is Map ? interfaceDump : null,
+        );
 
         // Check if we should track specific interface
         final prefs = _dashboardPreferences;

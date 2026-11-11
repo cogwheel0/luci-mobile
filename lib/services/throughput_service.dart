@@ -22,6 +22,85 @@ class ThroughputService {
   static const double _maxRate = 1000.0 * 1024.0 * 1024.0; // 1 GB/s
   static const double _minElapsedSeconds = 0.1;
 
+  /// The interfaces in a `network.interface dump` that face the internet:
+  /// those holding a default route, IPv4 or IPv6. Falls back to interfaces
+  /// named `wan…` (a WAN that is down has no route), and is empty when
+  /// neither says - a dumb AP, or a dump that could not be read.
+  static List<Map> upstreamInterfaces(Map? interfaceDump) {
+    final interfaces = interfaceDump?['interface'];
+    if (interfaces is! List) return const [];
+    final usable = [
+      for (final i in interfaces)
+        if (i is Map && i['interface'] != 'loopback' && i['interface'] != 'lo')
+          i,
+    ];
+    final routed = usable.where((i) => _hasDefaultRoute(i['route'])).toList();
+    if (routed.isNotEmpty) return routed;
+    return usable
+        .where((i) => i['interface']?.toString().startsWith('wan') ?? false)
+        .toList();
+  }
+
+  static bool _hasDefaultRoute(Object? routes) {
+    if (routes is! List) return false;
+    return routes.any(
+      (r) =>
+          r is Map &&
+          (r['target'] == '0.0.0.0' || r['target'] == '::') &&
+          (r['mask'] == 0 || r['mask'] == '0'),
+    );
+  }
+
+  /// One device per interface: the layer-3 one, which carries the IP
+  /// traffic. Counting `device` as well counted PPPoE twice (the PPPoE
+  /// frames on `eth0.2`, then the same traffic again on `pppoe-wan`).
+  static String? _countedDevice(Map iface) {
+    for (final key in const ['l3_device', 'device']) {
+      final value = iface[key]?.toString();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
+  /// The devices the combined "all interfaces" graph adds up.
+  ///
+  /// Only internet-facing ones. Adding LAN devices too made both lines
+  /// roughly download + upload: a download is received on the WAN and sent
+  /// again on the LAN, so neither line said which way traffic went (#81).
+  /// With no internet-facing interface to go by, every interface is counted,
+  /// as before.
+  static Set<String> combinedThroughputDevices(Map? interfaceDump) {
+    final upstream = upstreamInterfaces(interfaceDump);
+    if (upstream.isNotEmpty) {
+      return {for (final i in upstream) ?_countedDevice(i)};
+    }
+    final interfaces = interfaceDump?['interface'];
+    if (interfaces is! List) return const {};
+    return {
+      for (final i in interfaces)
+        if (i is Map && i['interface'] != 'loopback' && i['interface'] != 'lo')
+          ?_countedDevice(i),
+    };
+  }
+
+  /// True when [device] faces the router's clients rather than the
+  /// internet: a LAN bridge, an AP, a guest network.
+  ///
+  /// There, what the router *receives* is what its clients upload, so the
+  /// graph swaps the two to keep "down" meaning traffic towards the user's
+  /// devices. False when the internet-facing side is unknown: nothing is
+  /// swapped on a guess.
+  static bool isClientFacing(Map? interfaceDump, String device) {
+    final upstream = upstreamInterfaces(interfaceDump);
+    if (upstream.isEmpty) return false;
+    final upstreamDevices = {
+      for (final i in upstream)
+        for (final key in const ['l3_device', 'device'])
+          if (i[key] != null) i[key].toString(),
+    };
+    return !upstreamDevices.contains(device);
+  }
+
   List<double> get rxHistory => _rxHistory.toList();
   List<double> get txHistory => _txHistory.toList();
   double get currentRxRate => _currentRxRate;

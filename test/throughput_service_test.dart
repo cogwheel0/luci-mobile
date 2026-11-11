@@ -135,4 +135,89 @@ void main() {
       expect(service.currentTxRate.isFinite, isTrue);
     });
   });
+
+  // #81: the combined graph added up LAN and WAN together, so both lines
+  // were roughly download + upload and neither said which way traffic went.
+  group('which way traffic goes', () {
+    final dump = {
+      'interface': [
+        {'interface': 'loopback', 'l3_device': 'lo', 'device': 'lo'},
+        {'interface': 'lan', 'l3_device': 'br-lan', 'device': 'br-lan'},
+        {
+          'interface': 'wan',
+          'device': 'eth0.2',
+          'l3_device': 'pppoe-wan',
+          'route': [
+            {'target': '0.0.0.0', 'mask': 0},
+          ],
+        },
+        {
+          'interface': 'wan6',
+          'device': '@wan',
+          'l3_device': 'pppoe-wan',
+          'route': [
+            {'target': '::', 'mask': 0},
+          ],
+        },
+        {'interface': 'guest', 'l3_device': 'br-guest'},
+      ],
+    };
+
+    test('the combined graph counts the internet-facing device once', () {
+      // Not br-lan, and not eth0.2 as well: the PPPoE session on it is the
+      // same traffic again.
+      expect(ThroughputService.combinedThroughputDevices(dump), {'pppoe-wan'});
+    });
+
+    test('a WAN that is down is still found by name', () {
+      final down = {
+        'interface': [
+          {'interface': 'lan', 'l3_device': 'br-lan'},
+          {'interface': 'wan', 'device': 'eth1'},
+        ],
+      };
+      expect(ThroughputService.combinedThroughputDevices(down), {'eth1'});
+    });
+
+    test('with no internet side to go by, every interface counts', () {
+      final ap = {
+        'interface': [
+          {'interface': 'loopback', 'l3_device': 'lo'},
+          {'interface': 'lan', 'l3_device': 'br-lan'},
+          {'interface': 'iot', 'l3_device': 'br-iot'},
+        ],
+      };
+      expect(ThroughputService.combinedThroughputDevices(ap), {
+        'br-lan',
+        'br-iot',
+      });
+      expect(ThroughputService.isClientFacing(ap, 'br-lan'), isFalse);
+    });
+
+    test('LAN, AP and guest devices face the clients; WAN ones do not', () {
+      expect(ThroughputService.isClientFacing(dump, 'br-lan'), isTrue);
+      expect(ThroughputService.isClientFacing(dump, 'phy0-ap0'), isTrue);
+      expect(ThroughputService.isClientFacing(dump, 'br-guest'), isTrue);
+      // Either name of the WAN: preferences may hold the physical device.
+      expect(ThroughputService.isClientFacing(dump, 'pppoe-wan'), isFalse);
+      expect(ThroughputService.isClientFacing(dump, 'eth0.2'), isFalse);
+    });
+
+    test('only the chosen devices are added up', () async {
+      final service = ThroughputService();
+      final devices = ThroughputService.combinedThroughputDevices(dump);
+      service.updateThroughput({
+        'pppoe-wan': {'rx_bytes': 0, 'tx_bytes': 0},
+        'br-lan': {'rx_bytes': 0, 'tx_bytes': 0},
+      }, devices);
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      // 1 MB downloaded: received on the WAN, sent on to the LAN.
+      service.updateThroughput({
+        'pppoe-wan': {'rx_bytes': 1000000, 'tx_bytes': 0},
+        'br-lan': {'rx_bytes': 0, 'tx_bytes': 1000000},
+      }, devices);
+      expect(service.currentRxRate, greaterThan(0));
+      expect(service.currentTxRate, 0);
+    });
+  });
 }
