@@ -232,6 +232,16 @@ class ApiErrorInfo {
   final String? detail;
 }
 
+/// The request option that carries the `object.method` a ubus request
+/// was for, so a failure at the HTTP level can still name it.
+const rpcCallExtra = 'luciRpcCall';
+
+/// The `object.method` [error]'s request was for, if it was a ubus call.
+String? rpcCallOf(DioException error) {
+  final call = error.requestOptions.extra[rpcCallExtra];
+  return call is String && call.isNotEmpty ? call : null;
+}
+
 /// Classifies [error] without putting it into words.
 ApiErrorInfo describeApiError(Object error) {
   if (error is RpcException) {
@@ -263,7 +273,11 @@ ApiErrorInfo describeApiError(Object error) {
       return const ApiErrorInfo(ApiErrorKind.sessionRejected);
     }
     if (status != null) {
-      return ApiErrorInfo(ApiErrorKind.httpStatus, status: status);
+      return ApiErrorInfo(
+        ApiErrorKind.httpStatus,
+        status: status,
+        call: rpcCallOf(error),
+      );
     }
     return const ApiErrorInfo(ApiErrorKind.unreachable);
   }
@@ -286,7 +300,12 @@ String userFacingApiError(Object error) {
       return 'The router rejected this session. Reconnect and check the '
           'account\'s RPC permissions.';
     }
-    if (status != null) return 'The router returned HTTP $status.';
+    if (status != null) {
+      final call = rpcCallOf(error);
+      return call == null
+          ? 'The router returned HTTP $status.'
+          : 'The router returned HTTP $status for $call.';
+    }
     return 'Could not connect to the router. Check its address and your '
         'network connection, then try again.';
   }
@@ -627,6 +646,10 @@ class RealApiService implements IApiService {
         options: Options(
           headers: {'Content-Type': 'application/json'},
           receiveTimeout: receiveTimeout,
+          // Carried on the request so an HTTP failure can say which call
+          // it was: "the router returned HTTP 500" alone gives a bug
+          // report nothing to go on (#89).
+          extra: {rpcCallExtra: '$object.$method'},
         ),
       );
 
@@ -655,10 +678,12 @@ class RealApiService implements IApiService {
           method: method,
         );
       } else {
-        throw Exception('Failed to call RPC: HTTP ${response.statusCode}');
+        throw Exception(
+          'Failed to call $object.$method: HTTP ${response.statusCode}',
+        );
       }
     } on DioException catch (e, stack) {
-      Logger.exception('API call failed', e, stack);
+      Logger.exception('API call to $object.$method failed', e, stack);
       rethrow;
     }
   }

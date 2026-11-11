@@ -44,6 +44,35 @@ void main() {
     expect(other.package, isNull);
   });
 
+  // #89: "the router returned HTTP 500" said nothing about which call.
+  test('an HTTP error names the ubus call it answered', () {
+    final request = RequestOptions(
+      path: '/cgi-bin/luci/admin/ubus',
+      extra: {rpcCallExtra: 'luci-rpc.getNetworkDevices'},
+    );
+    final error = DioException(
+      requestOptions: request,
+      response: Response<void>(requestOptions: request, statusCode: 500),
+    );
+
+    final info = describeApiError(error);
+    expect(info.kind, ApiErrorKind.httpStatus);
+    expect(info.status, 500);
+    expect(info.call, 'luci-rpc.getNetworkDevices');
+    expect(
+      userFacingApiError(error),
+      'The router returned HTTP 500 for luci-rpc.getNetworkDevices.',
+    );
+
+    // A request that was not a ubus call has no call to name.
+    final plain = DioException(
+      requestOptions: options,
+      response: Response<void>(requestOptions: options, statusCode: 502),
+    );
+    expect(describeApiError(plain).call, isNull);
+    expect(userFacingApiError(plain), 'The router returned HTTP 502.');
+  });
+
   test('a rejected session is told apart from an unreachable router', () {
     expect(
       describeApiError(
