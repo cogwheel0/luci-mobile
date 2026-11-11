@@ -864,6 +864,29 @@ void main() {
           ),
           IpCheckResult.ok,
         );
+
+        // The wider subnet's dynamic pool still warns, though the address
+        // lands in the narrower one, which has no pool. `lan`'s pool is
+        // offsets 1380-1479 from 10.0.0.0: 10.0.5.100-10.0.5.199.
+        const pools = {'lan': DhcpPool(start: 1380, limit: 100)};
+        expect(
+          ClientConfigPlanner.checkReservationIp(
+            '10.0.5.120',
+            subnets: overlapping,
+            alreadyReserved: const {},
+            pools: pools,
+          ),
+          IpCheckResult.insidePool,
+        );
+        expect(
+          ClientConfigPlanner.checkReservationIp(
+            '10.0.5.20',
+            subnets: overlapping,
+            alreadyReserved: const {},
+            pools: pools,
+          ),
+          IpCheckResult.ok,
+        );
       });
 
       // Either subnet on the bridge can be handed to the client; only a

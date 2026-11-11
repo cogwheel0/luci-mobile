@@ -406,11 +406,17 @@ class ClientConfigPlanner {
     final subnet = subnetContaining(ip, subnets);
     if (subnet == null) return IpCheckResult.outsideSubnet;
     if (_isNotAssignable(octets, subnet)) return IpCheckResult.notAssignable;
-    // dnsmasq counts `start` from the network address, not from zero.
-    final pool = pools[subnet.name];
-    final offset = _toInt(octets) - _networkAddress(subnet);
-    if (pool != null && pool.coversOffset(offset)) {
-      return IpCheckResult.insidePool;
+    // Every subnet holding the address, not only the most specific: with
+    // overlapping subnets on one bridge, the wider one's dynamic pool can
+    // cover it while the narrower one has none. dnsmasq counts `start`
+    // from the network address, not from zero.
+    for (final s in subnets) {
+      if (!s.contains(octets)) continue;
+      final pool = pools[s.name];
+      final offset = _toInt(octets) - _networkAddress(s);
+      if (pool != null && pool.coversOffset(offset)) {
+        return IpCheckResult.insidePool;
+      }
     }
     return IpCheckResult.ok;
   }
