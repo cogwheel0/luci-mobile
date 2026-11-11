@@ -80,19 +80,34 @@ class RpcException implements Exception {
           'an administrator account or grant the required RPC access.';
     }
 
-    final reason = switch (status) {
-      1 => 'invalid command',
-      2 => 'invalid argument',
-      3 => 'method not found',
-      4 => 'object not found',
-      5 => 'no data',
-      7 => 'timed out',
-      8 => 'not supported',
-      9 => 'unknown error',
-      10 => 'connection failed',
-      _ => detail ?? 'unknown error',
+    return 'Router RPC call $call failed: '
+        '${detail ?? ubusStatusText(status) ?? 'unknown error'}.';
+  }
+
+  /// What `ubus` itself says for [status] (libubus `ubus_strerror`), with
+  /// the number, so a screenshot of the error says which failure it was.
+  ///
+  /// Not translated on purpose: these are the router's words, the same ones
+  /// `ubus call` prints on the router's console.
+  static String? ubusStatusText(int? status) {
+    final text = switch (status) {
+      1 => 'Invalid command',
+      2 => 'Invalid argument',
+      3 => 'Method not found',
+      4 => 'Not found',
+      5 => 'No response',
+      6 => 'Permission denied',
+      7 => 'Request timed out',
+      8 => 'Operation not supported',
+      9 => 'Unknown error',
+      10 => 'Connection failed',
+      11 => 'Out of memory',
+      12 => 'Parsing message data failed',
+      13 => 'System error',
+      _ => null,
     };
-    return 'Router RPC call $call failed: ${detail ?? reason}.';
+    if (text == null) return status == null ? null : 'ubus status $status';
+    return '$text (ubus status $status)';
   }
 }
 
@@ -234,7 +249,12 @@ ApiErrorInfo describeApiError(Object error) {
     return ApiErrorInfo(
       ApiErrorKind.rpcFailed,
       call: error.call,
-      detail: error.detail,
+      // A bare status is all LuCI's proxy passes on for most failures;
+      // without it "the router refused file.exec" cannot be told apart
+      // between a missing binary and a timeout.
+      detail: (error.detail?.isNotEmpty ?? false)
+          ? error.detail
+          : RpcException.ubusStatusText(error.status),
     );
   }
   if (error is DioException) {

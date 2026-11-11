@@ -66,12 +66,56 @@ class DiagnosticsService {
     return _exec(session, tool.path, argsFor(tool, target));
   }
 
+  /// The command lines LuCI itself uses to read the logs.
+  ///
+  /// rpcd checks `file.exec` against the ACL by the *exact* command line, and
+  /// LuCI's ACL (`luci-mod-status-logs`) grants only these. Anything else -
+  /// `logread -l 200`, a bare `dmesg` - is refused even for root, so the app
+  /// must ask in exactly the same words LuCI does.
+  ///
+  /// The system log is newest-LuCI first: 24.10 and later ship a wrapper
+  /// (which also honours `log_file`) and no longer grant `logread` directly;
+  /// 21.02 to 23.05 have no wrapper and grant `logread -e ^` at either path.
+  static const systemLogCommands = <(String, List<String>)>[
+    ('/usr/libexec/syslog-wrapper', []),
+    ('/sbin/logread', ['-e', '^']),
+    ('/usr/sbin/logread', ['-e', '^']),
+  ];
+
+  /// `-r` keeps the `<priority>` prefixes, which is also the only form the
+  /// ACL grants.
+  static const kernelLogCommand = ('/bin/dmesg', ['-r']);
+
   /// Reads the kernel ring buffer.
   Future<DiagnosticResult> kernelLog(RouterSession session) async {
-    return _exec(session, '/bin/dmesg', const []);
+    final (command, params) = kernelLogCommand;
+    return _requireLog(await _exec(session, command, params));
   }
 
-  /// Reads the system log.
+  /// [result], unless it is a failed run that printed nothing.
+  ///
+  /// Unlike ping, a log reader that exits non-zero with no output has not
+  /// reported an empty log; it has failed to read one. Handing back the
+  /// empty output would show "no log entries". Output that did arrive is
+  /// kept whatever the exit code: a partial log beats none.
+  static DiagnosticResult _requireLog(DiagnosticResult result) {
+    if (result.succeeded || result.output.trim().isNotEmpty) return result;
+    final stderr = result.stderr?.trim() ?? '';
+    throw RpcException(
+      object: 'file',
+      method: 'exec',
+      detail: stderr.isNotEmpty
+          ? stderr
+          : result.exitCode < 0
+          ? 'no exit status'
+          : 'exit code ${result.exitCode}',
+    );
+  }
+
+  /// Reads the last [lines] lines of the system log.
+  ///
+  /// The ACL grants no form of `logread` that takes a line count, so the
+  /// whole buffer is read and trimmed here.
   ///
   /// `logread` talks to ubus itself, and on some builds doing that from inside
   /// an `file.exec` — which is already a ubus call — deadlocks until rpcd
@@ -81,7 +125,52 @@ class DiagnosticsService {
     RouterSession session, {
     int lines = 200,
   }) async {
-    return _exec(session, '/sbin/logread', ['-l', '$lines']);
+    RpcException? tooLarge;
+    RpcException? denied;
+    RpcException? last;
+    for (final (command, params) in [
+      ...systemLogCommands,
+      // Last, and not granted by stock ACLs: the only bounded form, for a
+      // log too large for rpcd to return whole on a router whose ACL allows
+      // it. Stock routers refuse it, which changes nothing.
+      ('/sbin/logread', ['-l', '$lines']),
+    ]) {
+      try {
+        // A reader that ran and failed is not retried: the others are older
+        // releases' forms, which this router's ACL would refuse anyway.
+        final result = _requireLog(await _exec(session, command, params));
+        return DiagnosticResult(
+          output: lastLines(result.output, lines),
+          exitCode: result.exitCode,
+          stderr: result.stderr,
+        );
+      } on RpcException catch (e) {
+        // Not installed on this release (4), not the form this release's
+        // ACL grants (6), or more output than rpcd returns in one reply (8,
+        // 256 KiB - a large `log_file`): try the next one. Anything else is
+        // a real failure.
+        final isTooLarge = e.status == _ubusNotSupported;
+        if (!e.isNotFound && !e.isAccessDenied && !isTooLarge) rethrow;
+        last = e;
+        if (isTooLarge) tooLarge ??= e;
+        if (e.isAccessDenied) denied ??= e;
+      }
+    }
+    // Most telling first. "Too large" means the log was readable; a refusal
+    // means a reader exists and this account may not run it; "not found"
+    // says least.
+    throw tooLarge ?? denied ?? last!;
+  }
+
+  /// What rpcd answers when a command prints more than it will return.
+  static const _ubusNotSupported = 8;
+
+  /// The last [count] non-empty lines of [output].
+  @visibleForTesting
+  static String lastLines(String output, int count) {
+    final all = output.split('\n').where((l) => l.trim().isNotEmpty).toList();
+    if (all.length <= count) return all.join('\n');
+    return all.sublist(all.length - count).join('\n');
   }
 
   /// Runs [command] and returns whatever it printed, whatever it exited with.
@@ -163,7 +252,23 @@ class LogEntry {
   /// Anything that does not match is kept verbatim rather than dropped: a log
   /// viewer that silently hides lines it cannot parse is worse than useless
   /// when you are chasing a problem.
+  ///
+  /// Kernel lines from `dmesg -r` (`<4>[  12.3] ...`) carry their syslog
+  /// priority as a number; it is decoded so warnings and errors are marked
+  /// the same way as in the system log.
   static LogEntry parse(String line) {
+    final kernel = RegExp(r'^<(\d+)>(.*)$').firstMatch(line);
+    if (kernel != null) {
+      final priority = int.parse(kernel.group(1)!);
+      final message = kernel.group(2)!;
+      // `raw` keeps the prefix: it is what Copy and the filter use, and a
+      // pasted kernel line should be the line the router printed.
+      return LogEntry(
+        raw: line,
+        level: _severities[priority & 7],
+        message: message,
+      );
+    }
     final match = RegExp(
       r'^(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(\w+)\.(\w+)\s+(.*)$',
     ).firstMatch(line);
@@ -176,6 +281,18 @@ class LogEntry {
       message: match.group(4),
     );
   }
+
+  /// Syslog severity names in the spelling `logread` uses, indexed by level.
+  static const _severities = [
+    'emerg',
+    'alert',
+    'crit',
+    'err',
+    'warn',
+    'notice',
+    'info',
+    'debug',
+  ];
 
   static List<LogEntry> parseAll(String output) => [
     for (final line in output.split('\n'))
