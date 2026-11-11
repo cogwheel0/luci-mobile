@@ -15,6 +15,7 @@ import 'package:luci_mobile/widgets/luci_refresh_components.dart';
 import 'package:luci_mobile/screens/wifi_scan_screen.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/utils/format_bytes.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 class InterfacesScreen extends ConsumerStatefulWidget {
   final String? scrollToInterface;
@@ -1806,7 +1807,7 @@ class _WifiToggleRowState extends ConsumerState<_WifiToggleRow> {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           else
-            Switch(value: widget.isEnabled, onChanged: _toggle),
+            AdaptiveSwitch(value: widget.isEnabled, onChanged: _toggle),
         ],
       ),
     );

@@ -8,6 +8,7 @@ import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/widgets/luci_animation_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 class RouterDashboardSettingsScreen extends ConsumerStatefulWidget {
   final String routerId;
@@ -181,7 +182,7 @@ class _RouterDashboardSettingsScreenState
           ),
           child: Column(
             children: [
-              SwitchListTile.adaptive(
+              AdaptiveSwitchListTile(
                 title: Text(
                   context.l10n.showAllInterfaces,
                   style: LuciTextStyles.detailValue(context)
@@ -206,8 +207,6 @@ class _RouterDashboardSettingsScreenState
                   });
                   _onPreferenceChanged();
                 },
-                activeTrackColor: Theme.of(context).colorScheme.primary,
-                activeThumbColor: Theme.of(context).colorScheme.onPrimary,
               ),
             ],
           ),
@@ -269,7 +268,7 @@ class _RouterDashboardSettingsScreenState
           ),
           child: Column(
             children: [
-              SwitchListTile.adaptive(
+              AdaptiveSwitchListTile(
                 title: Text(
                   context.l10n.showAllNetworks,
                   style: LuciTextStyles.detailValue(context)
@@ -292,8 +291,6 @@ class _RouterDashboardSettingsScreenState
                   });
                   _onPreferenceChanged();
                 },
-                activeTrackColor: Theme.of(context).colorScheme.primary,
-                activeThumbColor: Theme.of(context).colorScheme.onPrimary,
               ),
             ],
           ),
@@ -306,7 +303,7 @@ class _RouterDashboardSettingsScreenState
             );
             return Padding(
               padding: EdgeInsets.symmetric(vertical: LuciSpacing.xs),
-              child: CheckboxListTile(
+              child: AdaptiveCheckboxListTile(
                 title: Text(
                   interface,
                   style: LuciTextStyles.detailValue(context),
@@ -325,7 +322,7 @@ class _RouterDashboardSettingsScreenState
                     final newSet = Set<String>.from(
                       _preferences.enabledWirelessInterfaces,
                     );
-                    if (value ?? false) {
+                    if (value) {
                       newSet.add(interface);
                     } else {
                       newSet.remove(interface);
@@ -363,7 +360,7 @@ class _RouterDashboardSettingsScreenState
           ),
           child: Column(
             children: [
-              SwitchListTile.adaptive(
+              AdaptiveSwitchListTile(
                 title: Text(
                   context.l10n.showAllInterfaces,
                   style: LuciTextStyles.detailValue(context)
@@ -386,8 +383,6 @@ class _RouterDashboardSettingsScreenState
                   });
                   _onPreferenceChanged();
                 },
-                activeTrackColor: Theme.of(context).colorScheme.primary,
-                activeThumbColor: Theme.of(context).colorScheme.onPrimary,
               ),
             ],
           ),
@@ -401,7 +396,7 @@ class _RouterDashboardSettingsScreenState
             final description = _getInterfaceDescription(interface);
             return Padding(
               padding: EdgeInsets.symmetric(vertical: LuciSpacing.xs),
-              child: CheckboxListTile(
+              child: AdaptiveCheckboxListTile(
                 title: Text(
                   interface.toUpperCase(),
                   style: LuciTextStyles.detailValue(context),
@@ -421,7 +416,7 @@ class _RouterDashboardSettingsScreenState
                     final newSet = Set<String>.from(
                       _preferences.enabledWiredInterfaces,
                     );
-                    if (value ?? false) {
+                    if (value) {
                       newSet.add(interface);
                     } else {
                       newSet.remove(interface);

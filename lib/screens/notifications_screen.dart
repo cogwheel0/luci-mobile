@@ -8,6 +8,7 @@ import 'package:luci_mobile/models/router_event.dart';
 import 'package:luci_mobile/services/background_monitor.dart';
 import 'package:luci_mobile/state/notifications_notifier.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 /// Whether — and what — the app may notify about while it is closed.
 class NotificationsScreen extends ConsumerWidget {
@@ -30,7 +31,7 @@ class NotificationsScreen extends ConsumerWidget {
             LuciCardStyles.standardCardWrapper(
               context: context,
               padding: EdgeInsets.zero,
-              child: SwitchListTile(
+              child: AdaptiveSwitchListTile(
                 title: Text(l10n.notifyInBackground),
                 subtitle: Text(l10n.notifyInBackgroundHelp),
                 value: settings.enabled,
@@ -76,7 +77,7 @@ class NotificationsScreen extends ConsumerWidget {
               child: Column(
                 children: [
                   for (final kind in notifiableKinds)
-                    SwitchListTile(
+                    AdaptiveSwitchListTile(
                       dense: true,
                       title: Text(_label(l10n, kind)),
                       value: settings.kinds.contains(kind),

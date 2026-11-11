@@ -15,6 +15,7 @@ import 'package:luci_mobile/widgets/luci_refresh_components.dart';
 import 'package:luci_mobile/widgets/luci_animation_system.dart';
 import 'package:luci_mobile/navigation/tab_bar_inset.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 class ClientsScreen extends ConsumerStatefulWidget {
   const ClientsScreen({super.key});
@@ -280,30 +281,20 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                               horizontal: 16.0,
                               vertical: 4.0,
                             ),
-                            child: SegmentedButton<bool>(
-                              segments: [
-                                ButtonSegment<bool>(
-                                  value: true,
-                                  label: Text(context.l10n.all),
-                                  icon: const Icon(Icons.apartment),
-                                ),
-                                ButtonSegment<bool>(
-                                  value: false,
-                                  label: Text(context.l10n.selected),
-                                  icon: const Icon(Icons.router),
-                                ),
+                            child: AdaptiveSegmentedControl(
+                              labels: [context.l10n.all, context.l10n.selected],
+                              materialIcons: const [
+                                Icons.apartment,
+                                Icons.router,
                               ],
-                              selected: {_aggregateAllRouters},
-                              showSelectedIcon: false,
-                              style: SegmentedButton.styleFrom(
-                                visualDensity: VisualDensity.compact,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
+                              materialVisualDensity: VisualDensity.compact,
+                              materialPadding: const EdgeInsets.symmetric(
+                                horizontal: 8,
                               ),
-                              onSelectionChanged: (s) {
+                              selectedIndex: _aggregateAllRouters ? 0 : 1,
+                              onValueChanged: (index) {
                                 setState(() {
-                                  _aggregateAllRouters = s.first;
+                                  _aggregateAllRouters = index == 0;
                                   _computeClientsFuture();
                                 });
                                 // Persist selection

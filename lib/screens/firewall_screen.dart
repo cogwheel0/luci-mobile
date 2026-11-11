@@ -11,6 +11,7 @@ import 'package:luci_mobile/services/firewall_planner.dart';
 import 'package:luci_mobile/state/firewall_notifier.dart';
 import 'package:luci_mobile/widgets/luci_apply_progress.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 /// Port forwards, traffic rules, zones and static routes.
 ///
@@ -174,6 +175,7 @@ class _ForwardsTab extends StatelessWidget {
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, i) {
                 final f = state.forwards[i];
+                final name = f.name ?? '${f.sourceZone}:${f.sourcePort ?? "?"}';
                 return ListTile(
                   onTap: busy ? null : () => onEdit(f),
                   leading: Icon(
@@ -182,7 +184,7 @@ class _ForwardsTab extends StatelessWidget {
                         ? Theme.of(context).colorScheme.primary
                         : Theme.of(context).colorScheme.outline,
                   ),
-                  title: Text(f.name ?? '${f.sourceZone}:${f.sourcePort}'),
+                  title: Text(name),
                   // The whole point of a forward is the mapping, so show it
                   // rather than making the user open the row to find out.
                   subtitle: Text(
@@ -192,8 +194,9 @@ class _ForwardsTab extends StatelessWidget {
                     // A restricted forward reads as open without this.
                     '${f.sourceIp == null ? '' : '\n${l10n.sourceAddress}: ${f.sourceIp}'}',
                   ),
-                  trailing: Switch.adaptive(
+                  trailing: AdaptiveSwitch(
                     value: f.enabled,
+                    semanticLabel: name,
                     onChanged: busy ? null : (v) => onToggle(f, v),
                   ),
                 );
@@ -255,8 +258,9 @@ class _RulesTab extends StatelessWidget {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Switch.adaptive(
+              AdaptiveSwitch(
                 value: r.enabled,
+                semanticLabel: r.name ?? r.section,
                 onChanged: busy ? null : (v) => onToggle(r, v),
               ),
               IconButton(
