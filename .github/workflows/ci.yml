@@ -22,6 +22,9 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+          # The platform UI lint compares the allow-list with the base
+          # commit's, so it needs the history.
+          fetch-depth: 0
 
       - name: Set Up Java
         uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
@@ -44,6 +47,12 @@ jobs:
 
       - name: Analyze Project Source
         run: flutter analyze --fatal-infos
+
+      # Material and Cupertino imports and controls belong in
+      # lib/widgets/platform_ui. The allow-list records the uses not yet
+      # migrated there, and may only shrink.
+      - name: Enforce platform UI seam
+        run: dart tool/platform_ui_lint.dart --base-ref "${{ github.event.pull_request.base.sha || github.event.before }}"
 
       - name: Run Tests
         run: flutter test
