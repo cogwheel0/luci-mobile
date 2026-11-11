@@ -47,13 +47,19 @@ class AdaptiveSnackBar {
         AdaptiveSnackBarType.warning => CNToastStyle.warning,
         AdaptiveSnackBarType.error => CNToastStyle.error,
       };
-      void showToast(BuildContext toastContext) => CNToast.show(
-        context: toastContext,
-        message: message,
-        position: CNToastPosition.top,
-        duration: nativeDuration,
-        style: style,
-      );
+      void showToast(BuildContext toastContext) {
+        // Older toasts still waiting are dropped, so this one follows only
+        // the one on screen; CNToast has no way to dismiss that one early.
+        CNToast.clear();
+        CNToast.show(
+          context: toastContext,
+          message: message,
+          position: CNToastPosition.top,
+          duration: nativeDuration,
+          style: style,
+        );
+      }
+
       if (contextOverlay != null) {
         showToast(context);
       } else {
@@ -94,9 +100,13 @@ class AdaptiveSnackBar {
         duration: duration,
         action: action,
         onActionPressed: onActionPressed,
+        // Only while it's still the banner showing: one replaced by a newer
+        // message (say, one its own action showed) was removed then, and
+        // `mounted` can read true until the overlay rebuilds.
         onDismiss: () {
-          if (entry.mounted) entry.remove();
-          if (identical(_activeIOSEntry, entry)) _activeIOSEntry = null;
+          if (!identical(_activeIOSEntry, entry)) return;
+          _activeIOSEntry = null;
+          entry.remove();
         },
       ),
     );

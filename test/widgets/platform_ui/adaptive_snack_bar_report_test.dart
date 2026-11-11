@@ -270,6 +270,38 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('toasts that queue behind the one showing are dropped', (
+      tester,
+    ) async {
+      final context = await _page(tester);
+      AdaptiveSnackBar.show(
+        context,
+        message: 'A',
+        duration: const Duration(seconds: 3),
+      );
+      await tester.pump();
+      expect(find.text('A'), findsWidgets);
+      AdaptiveSnackBar.show(
+        context,
+        message: 'B',
+        duration: const Duration(seconds: 3),
+      );
+      AdaptiveSnackBar.show(
+        context,
+        message: 'C',
+        duration: const Duration(seconds: 3),
+      );
+
+      var sawC = false;
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(find.text('B'), findsNothing);
+        sawC |= find.text('C').evaluate().isNotEmpty;
+      }
+      expect(sawC, isTrue);
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('a message longer than the toast keeps the banner', (
       tester,
     ) async {
@@ -346,6 +378,30 @@ void main() {
       await tester.fling(find.text('Rebooting…'), const Offset(0, -60), 800);
       await tester.pump();
       expect(_banner, findsNothing);
+    });
+
+    testWidgets('its action can show another message', (tester) async {
+      final context = await _page(tester);
+      AdaptiveSnackBar.show(
+        context,
+        message: 'Router removed',
+        duration: const Duration(minutes: 2),
+        action: 'Undo',
+        onActionPressed: () => AdaptiveSnackBar.show(
+          context,
+          message: 'Router restored',
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('Undo'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Router removed'), findsNothing);
+      expect(find.text('Router restored'), findsWidgets);
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
     });
 
     testWidgets('VoiceOver can dismiss it', (tester) async {
