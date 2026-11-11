@@ -430,7 +430,12 @@ class AdaptiveSegmentedControl extends StatelessWidget {
       children[index] = Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: mappedIcon != null
-            ? Icon(mappedIcon, size: iconSize ?? 20, color: iconColor)
+            ? Icon(
+                mappedIcon,
+                size: iconSize ?? 20,
+                color: iconColor,
+                semanticLabel: labels[index],
+              )
             : Text(
                 labels[index],
                 style: TextStyle(
@@ -445,6 +450,9 @@ class AdaptiveSegmentedControl extends StatelessWidget {
         constraints: BoxConstraints(minHeight: height),
         child: CupertinoSlidingSegmentedControl<int>(
           groupValue: selectedIndex,
+          disabledChildren: enabled
+              ? const {}
+              : {for (var index = 0; index < count; index++) index},
           thumbColor: color ?? CupertinoColors.systemGrey5,
           onValueChanged: (value) {
             if (value != null) handleSelection(value);
@@ -474,7 +482,10 @@ class AdaptiveSegmentedControl extends StatelessWidget {
                   : null,
               icon: fallbackIcon(iconAt(index)) == null
                   ? null
-                  : Icon(fallbackIcon(iconAt(index))!),
+                  : Icon(
+                      fallbackIcon(iconAt(index))!,
+                      semanticLabel: labels[index],
+                    ),
             ),
         ],
         selected: {selectedIndex},

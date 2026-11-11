@@ -307,9 +307,12 @@ class AdaptiveApp extends StatelessWidget {
           ),
         ),
       );
-      final appChild = scaffoldMessengerKey == null
-          ? themedChild
-          : ScaffoldMessenger(key: scaffoldMessengerKey, child: themedChild);
+      // MaterialApp always provides a messenger, and screens call
+      // ScaffoldMessenger.of on both platforms, so the iOS root does too.
+      final appChild = ScaffoldMessenger(
+        key: scaffoldMessengerKey,
+        child: themedChild,
+      );
       return builder?.call(context, appChild) ?? appChild;
     }
 

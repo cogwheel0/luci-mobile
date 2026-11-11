@@ -259,7 +259,15 @@ class AdaptiveScaffold extends StatelessWidget {
             )
           : Column(
               children: [
-                Expanded(child: content),
+                // The tab bar pads itself for the home indicator, so the
+                // page above it must not pad for it again.
+                Expanded(
+                  child: MediaQuery.removePadding(
+                    context: context,
+                    removeBottom: true,
+                    child: content,
+                  ),
+                ),
                 bottomBar,
               ],
             );
@@ -361,6 +369,7 @@ class AdaptiveScaffold extends StatelessWidget {
         action.title == null) {
       return AdaptiveButton.sfSymbol(
         onPressed: action.onPressed,
+        semanticLabel: action.semanticLabel,
         sfSymbol: SFSymbol(
           action.iosSymbol!,
           color: action.tintColor ?? fallbackTint,

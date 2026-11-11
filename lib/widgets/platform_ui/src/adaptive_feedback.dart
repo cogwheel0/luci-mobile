@@ -460,26 +460,38 @@ class AdaptiveAlertDialog {
         context: context,
         builder: (dialogContext) {
           dialogRoute = ModalRoute.of(dialogContext);
+          final field = TextField(
+            magnifierConfiguration: nativeIosTextMagnifierConfiguration,
+            controller: controller,
+            keyboardType: input.keyboardType,
+            obscureText: input.obscureText,
+            autocorrect: input.autocorrect,
+            enableSuggestions: input.autocorrect,
+            smartDashesType: input.autocorrect
+                ? null
+                : SmartDashesType.disabled,
+            smartQuotesType: input.autocorrect
+                ? null
+                : SmartQuotesType.disabled,
+            maxLength: input.maxLength,
+            maxLines: input.maxLines,
+            autofocus: true,
+            decoration: InputDecoration(hintText: input.placeholder),
+          );
           return AlertDialog(
             title: Text(title),
-            content: TextField(
-              magnifierConfiguration: nativeIosTextMagnifierConfiguration,
-              controller: controller,
-              keyboardType: input.keyboardType,
-              obscureText: input.obscureText,
-              autocorrect: input.autocorrect,
-              enableSuggestions: input.autocorrect,
-              smartDashesType: input.autocorrect
-                  ? null
-                  : SmartDashesType.disabled,
-              smartQuotesType: input.autocorrect
-                  ? null
-                  : SmartQuotesType.disabled,
-              maxLength: input.maxLength,
-              maxLines: input.maxLines,
-              autofocus: true,
-              decoration: InputDecoration(hintText: input.placeholder),
-            ),
+            // Cupertino shows the message above the field; so does Material.
+            content: message == null
+                ? field
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(message),
+                      const SizedBox(height: 12),
+                      field,
+                    ],
+                  ),
             actions: [
               for (final action in actions)
                 TextButton(

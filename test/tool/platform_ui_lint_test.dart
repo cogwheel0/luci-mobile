@@ -38,18 +38,20 @@ void main() {
     );
     write(
       'material/lib/material_ui.dart',
-      'class ElevatedButton {}\nclass Theme {}\n',
+      'class ElevatedButton {}\nclass Theme {}\nclass TextField {}\n',
     );
     write(
       'lib/widgets/platform_ui/vocabulary.dart',
-      "export 'package:material_ui/material_ui.dart' show Theme, ElevatedButton;\n",
+      "export 'package:material_ui/material_ui.dart'"
+          ' show Theme, ElevatedButton, TextField;\n',
     );
     write(
       'lib/use_seam.dart',
       "import 'widgets/platform_ui/vocabulary.dart' as ui;\n"
           'ui.Theme? theme;\nui.ElevatedButton? button;\n'
           'typedef ButtonAlias = ui.ElevatedButton;\n'
-          'ButtonAlias? alias;\nfinal constructed = ui.ElevatedButton();\n',
+          'ButtonAlias? alias;\nfinal constructed = ui.ElevatedButton();\n'
+          'final field = ui.TextField();\n',
     );
     write(
       'lib/direct.dart',
@@ -86,6 +88,7 @@ void main() {
       'lib/direct.dart|package|package:material_ui/material_ui.dart': 1,
       'lib/indirect.dart|package|barrel:barrel.dart': 1,
       'lib/use_seam.dart|symbol|ElevatedButton': 4,
+      'lib/use_seam.dart|symbol|TextField': 1,
     });
   }, timeout: const Timeout(Duration(minutes: 3)));
 

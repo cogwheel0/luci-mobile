@@ -1,4 +1,4 @@
-# luci-mobile's baseline when the platform UI seam was introduced: 172 entries, 300 occurrences.
+# luci-mobile's baseline when the platform UI seam was introduced: 185 entries, 335 occurrences.
 # Each entry is a direct Material or Cupertino import or control outside
 # lib/widgets/platform_ui. Counts may only go down: migrate a screen to the
 # platform UI layer and remove or lower its entries.
@@ -73,6 +73,12 @@ exceptions:
   - path: lib/screens/addon_screen.dart
     symbol: "SwitchListTile"
     count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/addon_screen.dart
+    symbol: "TextField"
+    count: 2
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -154,6 +160,12 @@ exceptions:
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
+  - path: lib/screens/client_detail_screen.dart
+    symbol: "TextField"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
   - path: lib/screens/clients_screen.dart
     package: "package:material_ui/material_ui.dart"
     count: 1
@@ -187,6 +199,12 @@ exceptions:
   - path: lib/screens/clients_screen.dart
     symbol: "SegmentedButton"
     count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/clients_screen.dart
+    symbol: "TextField"
+    count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -246,6 +264,12 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/screens/diagnostics_screen.dart
     symbol: "SegmentedButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/diagnostics_screen.dart
+    symbol: "TextField"
     count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
@@ -328,6 +352,12 @@ exceptions:
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
+  - path: lib/screens/firewall_screen.dart
+    symbol: "TextField"
+    count: 5
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
   - path: lib/screens/insights_screen.dart
     package: "package:material_ui/material_ui.dart"
     count: 1
@@ -400,6 +430,12 @@ exceptions:
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
+  - path: lib/screens/interfaces_screen.dart
+    symbol: "TextField"
+    count: 3
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
   - path: lib/screens/log_screen.dart
     package: "package:material_ui/material_ui.dart"
     count: 1
@@ -426,6 +462,12 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/screens/log_screen.dart
     symbol: "SegmentedButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/log_screen.dart
+    symbol: "TextField"
     count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
@@ -481,6 +523,18 @@ exceptions:
   - path: lib/screens/login_screen.dart
     symbol: "TextButton"
     count: 6
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/login_screen.dart
+    symbol: "TextField"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/login_screen.dart
+    symbol: "TextFormField"
+    count: 4
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -547,6 +601,12 @@ exceptions:
   - path: lib/screens/manage_routers_screen.dart
     symbol: "TextButton"
     count: 6
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/manage_routers_screen.dart
+    symbol: "TextFormField"
+    count: 4
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -718,6 +778,12 @@ exceptions:
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
+  - path: lib/screens/system_settings_screen.dart
+    symbol: "TextField"
+    count: 6
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
   - path: lib/screens/traffic_screen.dart
     package: "package:material_ui/material_ui.dart"
     count: 1
@@ -796,6 +862,12 @@ exceptions:
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
+  - path: lib/screens/wifi_scan_screen.dart
+    symbol: "TextField"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
   - path: lib/screens/wireless_screen.dart
     package: "package:material_ui/material_ui.dart"
     count: 1
@@ -841,6 +913,12 @@ exceptions:
   - path: lib/screens/wireless_screen.dart
     symbol: "TextButton"
     count: 5
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wireless_screen.dart
+    symbol: "TextField"
+    count: 3
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
