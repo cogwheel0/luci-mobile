@@ -89,6 +89,11 @@ class AppState extends ChangeNotifier {
   // already switched to router B).
   int _sessionToken = 0;
 
+  /// The user pressed Log out in this run of the app and has not signed in
+  /// since. The stored flag says the same across restarts; this copy holds
+  /// even if storage would not take the write.
+  bool _signedOutThisRun = false;
+
   // Guards against overlapping throughput polls on slow links.
   bool _throughputUpdateInFlight = false;
 
@@ -757,6 +762,19 @@ class AppState extends ChangeNotifier {
         // router that was not answering.
         await fetchDashboardData();
         if (token != _sessionToken) return false;
+        // Signing in - by hand, or by picking a saved router - ends a
+        // sign-out. Cleared last, after the final session check and with
+        // no await before the write is queued, so a logout that overtakes
+        // this login queues its write after this delete.
+        _signedOutThisRun = false;
+        try {
+          await _routerService?.setSignedOut(false);
+        } catch (e, stack) {
+          Logger.exception('Could not clear the sign-out', e, stack);
+        }
+        // A logout during that write owns the state now; this login must not
+        // clear its loading state or send the login screen to the dashboard.
+        if (token != _sessionToken) return false;
         _isLoading = false;
         notifyListeners();
         return true;
@@ -778,14 +796,37 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> logout() async {
+  /// Ends the session.
+  ///
+  /// [userInitiated] is the user pressing Log out, as opposed to the app
+  /// tidying up (last router removed, leaving reviewer mode). Only then is
+  /// it remembered: the saved routers and their passwords stay, so without
+  /// that the login screen - and the next launch - would sign straight back
+  /// in to the selected router, and Log out would appear to do nothing.
+  Future<void> logout({bool userInitiated = false}) async {
     final token = ++_sessionToken;
     _cancelRebootPolling();
     _isRebooting = false;
+    Future<void>? flagWrite;
+    if (userInitiated) {
+      // Held in memory as well: if storage refuses the write, the login
+      // screen this logout opens must still not sign straight back in.
+      _signedOutThisRun = true;
+      // Started, not awaited, before the cleanup below takes its place in
+      // the auth queue: awaiting first would let a login started meanwhile
+      // queue ahead of this logout, whose cleanup would then end it.
+      flagWrite = _routerService
+          ?.setSignedOut(true)
+          .catchError(
+            (Object e, StackTrace stack) =>
+                Logger.exception('Could not remember the sign-out', e, stack),
+          );
+    }
+    final cleanup = _serializeAuthOp<void>(
+      () => _authService?.logout() ?? Future<void>.value(),
+    );
     try {
-      await _serializeAuthOp<void>(
-        () => _authService?.logout() ?? Future<void>.value(),
-      );
+      await cleanup;
     } catch (e) {
       // Storage cleanup may have been incomplete; still clear in-memory
       // session state and proceed with logout.
@@ -795,6 +836,8 @@ class AppState extends ChangeNotifier {
         StackTrace.current,
       );
     }
+    // Its failure is already logged; this only waits for it to land.
+    await flagWrite;
     // A newer session started while cleanup ran - it owns the state now.
     if (token != _sessionToken) return;
     // A login, router switch or dashboard fetch this logout overtook returns
@@ -2912,6 +2955,12 @@ class AppState extends ChangeNotifier {
     // Also clear any stale credentials from secure storage.
     if (_routerService == null || _routerService!.routers.isEmpty) {
       await _authService?.logout();
+      return false;
+    }
+
+    // The user signed out: show them the login screen, not the router they
+    // just left. It ends when they sign in again.
+    if (_signedOutThisRun || await _routerService!.isSignedOut()) {
       return false;
     }
 
