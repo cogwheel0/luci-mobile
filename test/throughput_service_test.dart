@@ -194,13 +194,71 @@ void main() {
       expect(ThroughputService.isClientFacing(ap, 'br-lan'), isFalse);
     });
 
-    test('LAN, AP and guest devices face the clients; WAN ones do not', () {
+    test('LAN and guest devices face the clients; WAN ones do not', () {
       expect(ThroughputService.isClientFacing(dump, 'br-lan'), isTrue);
-      expect(ThroughputService.isClientFacing(dump, 'phy0-ap0'), isTrue);
       expect(ThroughputService.isClientFacing(dump, 'br-guest'), isTrue);
       // Either name of the WAN: preferences may hold the physical device.
       expect(ThroughputService.isClientFacing(dump, 'pppoe-wan'), isFalse);
       expect(ThroughputService.isClientFacing(dump, 'eth0.2'), isFalse);
+    });
+
+    // A wrong swap is as bad as the bug: without positive evidence that a
+    // device faces clients, its lines are left as the router sees them.
+    group('nothing is swapped on a guess', () {
+      final multi = {
+        'interface': [
+          {
+            'interface': 'wan',
+            'l3_device': 'eth1',
+            'route': [
+              {'target': '0.0.0.0', 'mask': 0},
+            ],
+          },
+          // A secondary uplink routing one subnet, under a name that says
+          // nothing.
+          {
+            'interface': 'lte',
+            'l3_device': 'wwan0',
+            'route': [
+              {'target': '10.20.0.0', 'mask': 16},
+            ],
+          },
+          {
+            'interface': 'vpn',
+            'l3_device': 'wg0',
+            'route': [
+              {'target': '172.16.0.0', 'mask': 12},
+            ],
+          },
+          {'interface': 'wanb', 'l3_device': 'eth2'},
+          {'interface': 'lan', 'l3_device': 'br-lan'},
+        ],
+      };
+
+      test('an uplink or VPN without the default route', () {
+        expect(ThroughputService.isClientFacing(multi, 'wwan0'), isFalse);
+        expect(ThroughputService.isClientFacing(multi, 'wg0'), isFalse);
+        expect(ThroughputService.isClientFacing(multi, 'eth2'), isFalse);
+        expect(ThroughputService.isClientFacing(multi, 'br-lan'), isTrue);
+      });
+
+      test('a device the dump does not list', () {
+        expect(ThroughputService.isClientFacing(dump, 'phy0-ap0'), isFalse);
+        expect(ThroughputService.isClientFacing(dump, 'radio0'), isFalse);
+      });
+
+      // The poll between full fetches reuses the dump, so a standby WAN
+      // with no route yet must already be counted for failover to show.
+      test('a standby WAN is counted before it takes over', () {
+        expect(
+          ThroughputService.combinedThroughputDevices(multi),
+          containsAll(['eth1', 'eth2']),
+        );
+        expect(
+          ThroughputService.combinedThroughputDevices(multi),
+          isNot(contains('br-lan')),
+        );
+      });
     });
 
     test('only the chosen devices are added up', () async {

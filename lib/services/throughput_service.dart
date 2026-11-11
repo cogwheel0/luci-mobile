@@ -23,23 +23,26 @@ class ThroughputService {
   static const double _minElapsedSeconds = 0.1;
 
   /// The interfaces in a `network.interface dump` that face the internet:
-  /// those holding a default route, IPv4 or IPv6. Falls back to interfaces
-  /// named `wan…` (a WAN that is down has no route), and is empty when
+  /// those holding a default route, IPv4 or IPv6, and those named `wan…`.
+  /// The name counts even without a route: a WAN that is down, or a
+  /// standby `wanb` that takes over after the dump was read, still carries
+  /// internet traffic, and the two-second poll reuses the dump. Empty when
   /// neither says - a dumb AP, or a dump that could not be read.
   static List<Map> upstreamInterfaces(Map? interfaceDump) {
     final interfaces = interfaceDump?['interface'];
     if (interfaces is! List) return const [];
-    final usable = [
+    return [
       for (final i in interfaces)
-        if (i is Map && i['interface'] != 'loopback' && i['interface'] != 'lo')
+        if (i is Map &&
+            i['interface'] != 'loopback' &&
+            i['interface'] != 'lo' &&
+            (_hasDefaultRoute(i['route']) || _isNamedWan(i)))
           i,
     ];
-    final routed = usable.where((i) => _hasDefaultRoute(i['route'])).toList();
-    if (routed.isNotEmpty) return routed;
-    return usable
-        .where((i) => i['interface']?.toString().startsWith('wan') ?? false)
-        .toList();
   }
+
+  static bool _isNamedWan(Map iface) =>
+      iface['interface']?.toString().startsWith('wan') ?? false;
 
   static bool _hasDefaultRoute(Object? routes) {
     if (routes is! List) return false;
@@ -84,21 +87,35 @@ class ThroughputService {
   }
 
   /// True when [device] faces the router's clients rather than the
-  /// internet: a LAN bridge, an AP, a guest network.
+  /// internet: a LAN bridge, a guest network.
   ///
   /// There, what the router *receives* is what its clients upload, so the
   /// graph swaps the two to keep "down" meaning traffic towards the user's
-  /// devices. False when the internet-facing side is unknown: nothing is
-  /// swapped on a guess.
+  /// devices. Swapping the wrong way is as bad as the bug, so it takes
+  /// positive evidence: the device belongs to an interface the dump lists,
+  /// and every interface on it is neither internet-facing nor named `wan…`
+  /// and has no routes of its own - a secondary WAN or a VPN routing a
+  /// remote subnet has some. Anything else - a device the dump does not
+  /// list, or a router whose internet side cannot be told - is left alone.
   static bool isClientFacing(Map? interfaceDump, String device) {
     final upstream = upstreamInterfaces(interfaceDump);
     if (upstream.isEmpty) return false;
-    final upstreamDevices = {
-      for (final i in upstream)
-        for (final key in const ['l3_device', 'device'])
-          if (i[key] != null) i[key].toString(),
-    };
-    return !upstreamDevices.contains(device);
+    final interfaces = interfaceDump?['interface'];
+    if (interfaces is! List) return false;
+    final owners = [
+      for (final i in interfaces)
+        if (i is Map &&
+            (i['l3_device']?.toString() == device ||
+                i['device']?.toString() == device))
+          i,
+    ];
+    if (owners.isEmpty) return false;
+    return owners.every(
+      (i) =>
+          !upstream.contains(i) &&
+          !_isNamedWan(i) &&
+          !(i['route'] is List && (i['route'] as List).isNotEmpty),
+    );
   }
 
   List<double> get rxHistory => _rxHistory.toList();
