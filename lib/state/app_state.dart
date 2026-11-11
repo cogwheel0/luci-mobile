@@ -1240,11 +1240,15 @@ class AppState extends ChangeNotifier {
       // stale results instead of clobbering the current router's data.
       if (token != _sessionToken) return;
 
-      _throughputService?.updateThroughput(
-        networkData,
-        wanDeviceNames,
-        specificInterface: specificInterface,
-      );
+      // No counters, no sample: a zero would be drawn as real throughput.
+      // The two-second poll asks for them again.
+      if (networkData != null) {
+        _throughputService?.updateThroughput(
+          networkData,
+          wanDeviceNames,
+          specificInterface: specificInterface,
+        );
+      }
 
       GlInetData? glInetData;
       final routerModel = boardInfoData?['model']?.toString() ?? '';

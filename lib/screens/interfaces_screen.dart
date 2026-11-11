@@ -1083,12 +1083,20 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
             },
           ),
         ],
-        const Divider(height: 1, indent: 16, endIndent: 16),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: _buildStatsRow(context, interface.stats),
-        ),
+        // Counters the router did not report - the device read failed, and
+        // the dump carries none - are left out, not shown as zero traffic.
+        if (interface.stats.containsKey('rx_bytes') ||
+            interface.stats.containsKey('tx_bytes')) ...[
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
+            child: _buildStatsRow(context, interface.stats),
+          ),
+        ],
       ],
     );
   }

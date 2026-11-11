@@ -244,6 +244,9 @@ void main() {
       expect(state.dashboardData!['interfaceDump'], isNotNull);
       expect(state.dashboardData!['networkDevices'], isNull);
       expect(state.dashboardData!['dhcpLeases'], isNull);
+      // No counters, no sample: a zero would be drawn as real throughput.
+      expect(state.rxHistory, isEmpty);
+      expect(state.txHistory, isEmpty);
     });
 
     test('reports an ordinary timeout without asking again', () async {

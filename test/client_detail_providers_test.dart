@@ -164,6 +164,31 @@ void main() {
     expect(states.length, greaterThan(settled));
   });
 
+  // #89 made the dashboard's lease read optional. With no lease table, an
+  // old host hint is no evidence of where a client is now: placing it from
+  // one could put its block rule in a zone it has left.
+  test('host hints place a client only beside a lease table', () {
+    final withLeases = ClientDetailLoader.locationEvidence(
+      leasesKnown: true,
+      leaseAddresses: const ['192.168.1.50'],
+      reservedAddress: '192.168.1.60',
+      hintAddresses: const ['192.168.2.70'],
+    );
+    expect(withLeases.toList(), [
+      '192.168.1.50',
+      '192.168.1.60',
+      '192.168.2.70',
+    ]);
+
+    final withoutLeases = ClientDetailLoader.locationEvidence(
+      leasesKnown: false,
+      leaseAddresses: const [],
+      reservedAddress: '192.168.1.60',
+      hintAddresses: const ['192.168.2.70'],
+    );
+    expect(withoutLeases.toList(), ['192.168.1.60']);
+  });
+
   // The apply flow only confirms once the router answers again. Against the
   // reviewer-mode mock there is no router to answer, so with the real network
   // probe an apply would burn the whole 90-second rollback window and report
