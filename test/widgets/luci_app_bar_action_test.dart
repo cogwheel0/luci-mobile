@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
-import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoNavigationBar;
+import 'package:cupertino_ui/cupertino_ui.dart'
+    show CupertinoButton, CupertinoNavigationBar;
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -79,6 +80,17 @@ void main() {
 
     _expectLaidOutIn(tester, find.byType(CupertinoNavigationBar));
     expect(_button(tester, 'Refresh').style, AdaptiveButtonStyle.plain);
+    // A plain symbol shows no bounds, so each takes a full 44 pt target.
+    final targets = find.descendant(
+      of: find.byType(LuciAppBarAction),
+      matching: find.byType(CupertinoButton),
+    );
+    expect(targets, findsNWidgets(2));
+    for (var i = 0; i < 2; i++) {
+      final size = tester.getSize(targets.at(i));
+      expect(size.width, greaterThanOrEqualTo(44));
+      expect(size.height, greaterThanOrEqualTo(44));
+    }
     await tester.tap(find.byType(LuciAppBarAction).at(1));
     expect(refreshes, 1);
   });

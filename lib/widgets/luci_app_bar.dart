@@ -129,19 +129,20 @@ class LuciAppBarAction extends StatelessWidget {
         style: AdaptiveButtonStyle.plain,
       );
     }
-    // Sized as Conduit's navigation bar actions are.
+    final glass = PlatformUiCapabilities.usesNativeIOS26;
+    // The glass circle is 36 pt, as Conduit's navigation bar actions are,
+    // spaced so neighbouring circles stay apart. A plain symbol has no
+    // visible bounds, so it takes the full 44 pt tap target instead.
     return Padding(
-      padding: const EdgeInsets.only(left: 6),
+      padding: EdgeInsets.only(left: glass ? 8 : 0),
       child: AdaptiveButton.sfSymbol(
         onPressed: onPressed,
         sfSymbol: SFSymbol(sfSymbol),
         semanticLabel: tooltip,
-        style: PlatformUiCapabilities.usesNativeIOS26
-            ? AdaptiveButtonStyle.glass
-            : AdaptiveButtonStyle.plain,
-        minSize: const Size.square(36),
+        style: glass ? AdaptiveButtonStyle.glass : AdaptiveButtonStyle.plain,
+        minSize: glass ? const Size.square(36) : null,
         padding: EdgeInsets.zero,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: glass ? BorderRadius.circular(18) : null,
         useSmoothRectangleBorder: false,
       ),
     );
