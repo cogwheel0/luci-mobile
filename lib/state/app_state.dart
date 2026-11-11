@@ -97,6 +97,17 @@ class AppState extends ChangeNotifier {
   // Guards against overlapping throughput polls on slow links.
   bool _throughputUpdateInFlight = false;
 
+  /// The throughput poll's own copy of `network.interface dump`, which says
+  /// which devices face the internet. The dashboard's copy is only re-read
+  /// when the dashboard is, so a WAN that failed over or reconnected since
+  /// would be counted from stale routes and link state for as long as the
+  /// dashboard stays open. Seeded by each dashboard fetch, re-read by the
+  /// poll once it is [throughputDumpMaxAge] old.
+  Map? _throughputDump;
+  DateTime? _throughputDumpAt;
+  @visibleForTesting
+  Duration throughputDumpMaxAge = const Duration(seconds: 30);
+
   // Set while a UCI apply is awaiting confirmation. rpcd binds a pending
   // rollback to the session id that called uci.apply, so any re-login during
   // the confirm window makes uci.confirm fail and the router revert. While
@@ -1257,6 +1268,11 @@ class AppState extends ChangeNotifier {
         '_lastUpdated':
             DateTime.now().millisecondsSinceEpoch, // Force UI updates
       };
+      // A fresh dump: the throughput poll starts its interval from here.
+      if (interfaceDump != null) {
+        _throughputDump = interfaceDump;
+        _throughputDumpAt = DateTime.now();
+      }
 
       // Hybrid approach: update lastKnownHostname for the selected router
       final boardInfo = _dashboardData?['boardInfo'] as Map<String, dynamic>?;
@@ -1558,10 +1574,15 @@ class AppState extends ChangeNotifier {
       if (result is List && result.length > 1 && result[0] == 0) {
         final networkData = result[1] as Map<String, dynamic>?;
 
-        // The internet-facing devices, from the cached interface dump.
-        final interfaceDump = _dashboardData?['interfaceDump'];
+        // The internet-facing devices, from an interface dump at most
+        // throughputDumpMaxAge old.
+        final interfaceDump = await _interfaceDumpForThroughput(
+          ip,
+          useHttps,
+          token,
+        );
         final wanDeviceNames = ThroughputService.combinedThroughputDevices(
-          interfaceDump is Map ? interfaceDump : null,
+          interfaceDump,
         );
 
         // Check if we should track specific interface
@@ -1600,6 +1621,50 @@ class AppState extends ChangeNotifier {
   void _cancelThroughputTimer() {
     _throughputTimer?.cancel();
     _throughputService?.clear();
+    // Another router's, or another session's: the next fetch seeds it.
+    _throughputDump = null;
+    _throughputDumpAt = null;
+  }
+
+  /// [_throughputDump], re-read once it is [throughputDumpMaxAge] old.
+  ///
+  /// Asked after the poll's own request has answered, never alongside it:
+  /// some routers hang requests that run in parallel. A failed read keeps
+  /// the last copy (or the dashboard's) and waits out the same interval
+  /// before trying again, so a router that refuses it is not asked every
+  /// tick.
+  Future<Map?> _interfaceDumpForThroughput(
+    String ip,
+    bool useHttps,
+    int token,
+  ) async {
+    final at = _throughputDumpAt;
+    final stale =
+        at == null || DateTime.now().difference(at) >= throughputDumpMaxAge;
+    if (stale) {
+      _throughputDumpAt = DateTime.now();
+      try {
+        final result = await _apiService!.call(
+          ip,
+          _authService!.sysauth!,
+          useHttps,
+          object: 'network.interface',
+          method: 'dump',
+          params: {},
+        );
+        if (token == _sessionToken &&
+            result is List &&
+            result.length > 1 &&
+            result[0] == 0 &&
+            result[1] is Map) {
+          _throughputDump = result[1] as Map;
+        }
+      } catch (e) {
+        Logger.debug('Throughput interface dump failed: $e');
+      }
+    }
+    final dump = _throughputDump ?? _dashboardData?['interfaceDump'];
+    return dump is Map ? dump : null;
   }
 
   /// Whether a session-bound operation (a UCI apply awaiting confirmation) is

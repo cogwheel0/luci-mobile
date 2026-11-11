@@ -266,6 +266,41 @@ void main() {
     expect(state.dashboardFetchIsFresh, isFalse);
   });
 
+  // Which devices face the internet changes with failover and reconnects,
+  // and the dashboard is not re-fetched on its own; the poll re-reads the
+  // interface dump itself, but only once its copy is old enough.
+  group('the throughput poll re-reads the interface dump', () {
+    Future<_Router> pollFor({required Duration maxAge}) async {
+      final api = _Router();
+      final state = stateFor(api)..throughputDumpMaxAge = maxAge;
+      expect(
+        await state.login(
+          '192.168.1.1',
+          'root',
+          'password',
+          false,
+          fromRouter: true,
+        ),
+        isTrue,
+      );
+      api.calls.clear();
+      // The poll ticks every two seconds.
+      await Future<void>.delayed(const Duration(milliseconds: 2500));
+      expect(api.calls, contains('luci-rpc.getNetworkDevices'));
+      return api;
+    }
+
+    test('once its copy is stale', () async {
+      final api = await pollFor(maxAge: Duration.zero);
+      expect(api.callsTo('network.interface.dump'), greaterThan(0));
+    });
+
+    test('not while the dashboard fetch\'s copy is fresh', () async {
+      final api = await pollFor(maxAge: const Duration(minutes: 5));
+      expect(api.callsTo('network.interface.dump'), 0);
+    });
+  });
+
   test('a login whose fetch failed starts no throughput poll', () async {
     final api = _Router(timesOut: {'system.board'});
     final state = stateFor(api);
