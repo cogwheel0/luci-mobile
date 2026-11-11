@@ -746,6 +746,14 @@ class AppState extends ChangeNotifier {
         // router that was not answering.
         await fetchDashboardData();
         if (token != _sessionToken) return false;
+        // Signing in - by hand, or by picking a saved router - ends a
+        // sign-out. Cleared last, so a logout that overtakes this login
+        // writes its flag after this delete, not before it.
+        try {
+          await _routerService?.setSignedOut(false);
+        } catch (e, stack) {
+          Logger.exception('Could not clear the sign-out', e, stack);
+        }
         _isLoading = false;
         notifyListeners();
         return true;
@@ -767,10 +775,24 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> logout() async {
+  /// Ends the session.
+  ///
+  /// [userInitiated] is the user pressing Log out, as opposed to the app
+  /// tidying up (last router removed, leaving reviewer mode). Only then is
+  /// it remembered: the saved routers and their passwords stay, so without
+  /// that the login screen - and the next launch - would sign straight back
+  /// in to the selected router, and Log out would appear to do nothing.
+  Future<void> logout({bool userInitiated = false}) async {
     final token = ++_sessionToken;
     _cancelRebootPolling();
     _isRebooting = false;
+    if (userInitiated) {
+      try {
+        await _routerService?.setSignedOut(true);
+      } catch (e, stack) {
+        Logger.exception('Could not remember the sign-out', e, stack);
+      }
+    }
     try {
       await _serializeAuthOp<void>(
         () => _authService?.logout() ?? Future<void>.value(),
@@ -2934,6 +2956,10 @@ class AppState extends ChangeNotifier {
       await _authService?.logout();
       return false;
     }
+
+    // The user signed out: show them the login screen, not the router they
+    // just left. It ends when they sign in again.
+    if (await _routerService!.isSignedOut()) return false;
 
     // If we have a selected router, use loginWithFallback
     final router = _routerService?.selectedRouter;

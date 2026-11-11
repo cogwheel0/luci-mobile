@@ -168,10 +168,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     } else {
       if (mounted) {
         setState(() {
+          _prefillFromSelectedRouter(appState);
           _isCheckingAutoLogin = false;
         });
       }
     }
+  }
+
+  /// Fills in where and as whom to sign in, from the router last used.
+  ///
+  /// Not the password: after Log out the user expects to be asked for it,
+  /// and a password manager can still fill it in.
+  void _prefillFromSelectedRouter(AppState appState) {
+    final router = appState.selectedRouter;
+    if (router == null || _ipController.text.isNotEmpty) return;
+    _ipController.text = _addressForField(router.ipAddress, router.useHttps);
+    _usernameController.text = router.username;
+    final alternate = router.alternateAddress;
+    if (alternate != null && alternate.isNotEmpty) {
+      _alternateController.text = _addressForField(
+        alternate,
+        router.alternateUseHttps ?? router.useHttps,
+      );
+      _showAlternateAddress = true;
+    }
+  }
+
+  /// [address] as typed into the field: bare when that already reads as the
+  /// right protocol, with the scheme spelt out when it would not.
+  static String _addressForField(String address, bool useHttps) {
+    if (UrlParser.parse(address).useHttps == useHttps) return address;
+    return '${useHttps ? 'https' : 'http'}://$address';
   }
 
   Future<void> _connect() async {

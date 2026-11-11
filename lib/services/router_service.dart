@@ -61,6 +61,13 @@ class RouterService {
     return false; // No router switch needed
   }
 
+  /// True after the user signed out, until they next sign in. While set,
+  /// start-up must not sign in to [selectedRouter] on its own.
+  Future<bool> isSignedOut() => _secureStorageService.isSignedOut();
+
+  Future<void> setSignedOut(bool signedOut) =>
+      _secureStorageService.setSignedOut(signedOut);
+
   model.Router? selectRouter(String id) {
     if (_routers.isEmpty) return null;
 

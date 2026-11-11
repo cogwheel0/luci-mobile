@@ -288,6 +288,56 @@ void main() {
     expect(api.calls.skip(sent), isNot(contains('luci-rpc.getNetworkDevices')));
   });
 
+  // Log out used to keep the selected router, so the login screen it opened
+  // signed straight back in - as did the next launch (#88).
+  group('after Log out', () {
+    test('neither the login screen nor a restart signs back in', () async {
+      final state = stateFor(_Router());
+      expect(await state.tryAutoLogin(), isTrue);
+
+      await state.logout(userInitiated: true);
+      expect(await state.tryAutoLogin(), isFalse);
+
+      // A restart: everything reloaded from storage.
+      final restarted = RouterService();
+      await restarted.loadRouters();
+      final relaunched = AppState.forTesting(
+        apiService: _Router(),
+        authService: MockAuthService(),
+        routerService: restarted,
+      );
+      addTearDown(relaunched.dispose);
+      expect(await relaunched.tryAutoLogin(), isFalse);
+      // The router itself is kept, for the login form and Manage routers.
+      expect(restarted.selectedRouter?.id, 'router');
+    });
+
+    test('signing in again ends it', () async {
+      final state = stateFor(_Router());
+      await state.logout(userInitiated: true);
+
+      expect(
+        await state.login(
+          '192.168.1.1',
+          'root',
+          'password',
+          false,
+          fromRouter: true,
+        ),
+        isTrue,
+      );
+      expect(await state.tryAutoLogin(), isTrue);
+    });
+
+    // Removing the last router or leaving reviewer mode also log out; they
+    // are not the user asking to be signed out.
+    test('a logout the app does itself is not remembered', () async {
+      final state = stateFor(_Router());
+      await state.logout();
+      expect(await state.tryAutoLogin(), isTrue);
+    });
+  });
+
   test('logging out during a login leaves the login button idle', () async {
     final auth = _SlowAuth();
     final state = AppState.forTesting(

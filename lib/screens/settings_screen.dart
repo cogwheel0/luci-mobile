@@ -105,7 +105,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             TextButton(
               child: Text(context.l10n.logout),
               onPressed: () async {
-                await appState.logout();
+                await appState.logout(userInitiated: true);
                 // Clear all accepted certificates on logout
                 await HttpClientManager().clearAcceptedCertificates();
                 if (context.mounted) {

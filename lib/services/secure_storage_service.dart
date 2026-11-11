@@ -8,6 +8,7 @@ class SecureStorageService {
 
   static const String _routersKey = 'routers';
   static const String _selectedRouterKey = 'selectedRouterId';
+  static const String _signedOutKey = 'signedOut';
 
   // Single source of truth for session credential keys: read, write and
   // clear paths all reference these constants so a new key cannot be added
@@ -160,6 +161,32 @@ class SecureStorageService {
       await saveRouters(updated);
     } catch (e, stack) {
       Logger.exception('Failed to update router: ${router.id}', e, stack);
+      rethrow;
+    }
+  }
+
+  /// Whether the user signed out and has not signed in since.
+  ///
+  /// Kept apart from the saved routers on purpose: signing out must not
+  /// forget them, but must stop start-up from signing straight back in.
+  Future<bool> isSignedOut() async {
+    try {
+      return await _storage.read(key: _signedOutKey) == 'true';
+    } catch (e, stack) {
+      Logger.exception('Failed to read signed-out flag', e, stack);
+      return false;
+    }
+  }
+
+  Future<void> setSignedOut(bool signedOut) async {
+    try {
+      if (signedOut) {
+        await _storage.write(key: _signedOutKey, value: 'true');
+      } else {
+        await _storage.delete(key: _signedOutKey);
+      }
+    } catch (e, stack) {
+      Logger.exception('Failed to save signed-out flag', e, stack);
       rethrow;
     }
   }
