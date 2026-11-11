@@ -70,6 +70,80 @@ void main() {
     );
   }
 
+  testWidgets(
+    'prominent glass takes the app primary, with a readable label in the '
+    'dark theme',
+    (tester) async {
+      final scheme = _scheme(Brightness.dark);
+      await tester.pumpWidget(
+        _host(
+          brightness: Brightness.dark,
+          AdaptiveButton(
+            onPressed: () {},
+            label: 'Save',
+            style: AdaptiveButtonStyle.prominentGlass,
+          ),
+        ),
+      );
+
+      final button = tester.widget<CNButton>(find.byType(CNButton));
+      expect(button.tint, scheme.primary);
+      expect(button.config.labelColor, scheme.onPrimary);
+      await unmount(tester);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    skip: !Platform.isMacOS,
+  );
+
+  testWidgets(
+    'a gray native button stays neutral, as its Cupertino fallback is',
+    (tester) async {
+      await tester.pumpWidget(
+        _host(
+          AdaptiveButton(
+            onPressed: () {},
+            label: 'Later',
+            style: AdaptiveButtonStyle.gray,
+          ),
+        ),
+      );
+
+      final context = tester.element(find.byType(CNButton));
+      expect(
+        tester.widget<CNButton>(find.byType(CNButton)).tint,
+        CupertinoColors.label.resolveFrom(context),
+      );
+      await unmount(tester);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    skip: !Platform.isMacOS,
+  );
+
+  for (final (state, busy) in [('disabled', false), ('busy', true)]) {
+    testWidgets(
+      'a $state filled native button keeps the system\'s disabled label',
+      (tester) async {
+        await tester.pumpWidget(
+          _host(
+            AdaptiveButton(
+              onPressed: busy ? () {} : null,
+              busy: busy,
+              label: 'Connecting',
+              sfSymbol: const SFSymbol('wifi'),
+            ),
+          ),
+        );
+
+        final button = tester.widget<CNButton>(find.byType(CNButton));
+        expect(button.enabled, isFalse);
+        expect(button.config.labelColor, isNull);
+        await unmount(tester);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+      skip: !Platform.isMacOS,
+    );
+  }
+
   testWidgets('a plain native button takes the app primary', (tester) async {
     await tester.pumpWidget(
       _host(

@@ -277,22 +277,30 @@ class AdaptiveButton extends StatelessWidget {
 
   Widget _buildButton(BuildContext context) {
     if (_canUseNative(context)) {
+      final active = enabled && onPressed != null && !busy;
       // The package's own default tint reads Flutter's CupertinoTheme, which
       // this app (on cupertino_ui) does not provide, so it fell back to the
-      // system blue. Pass the app's primary instead. Glass styles take no
-      // tint, so the system picks their foreground over the material.
-      final glass =
-          style == AdaptiveButtonStyle.glass ||
-          style == AdaptiveButtonStyle.clearGlass;
+      // system blue. Pass the app's primary instead. Regular and clear glass
+      // take no tint, so the system picks their foreground over the
+      // material; gray stays neutral, as its Cupertino fallback is.
       final tint =
-          color ?? (glass ? null : CupertinoTheme.of(context).primaryColor);
-      // A filled button's label sits on the tint; the system draws it
-      // white, which fades on a dark theme's light primary.
+          color ??
+          switch (style) {
+            AdaptiveButtonStyle.glass || AdaptiveButtonStyle.clearGlass => null,
+            AdaptiveButtonStyle.gray => CupertinoColors.label.resolveFrom(
+              context,
+            ),
+            _ => CupertinoTheme.of(context).primaryColor,
+          };
+      // Filled and prominent glass draw their label on the tint, in white,
+      // which fades on a dark theme's light primary. Only while active:
+      // an inactive button keeps the system's disabled colours.
+      final onTint =
+          style == AdaptiveButtonStyle.filled ||
+          style == AdaptiveButtonStyle.prominentGlass;
       final nativeLabelColor =
           textColor ??
-          (style == AdaptiveButtonStyle.filled && tint != null
-              ? _onFill(context, tint)
-              : null);
+          (onTint && active && tint != null ? _onFill(context, tint) : null);
       final resolvedPadding = padding?.resolve(Directionality.of(context));
       final resolvedRadius = borderRadius?.resolve(Directionality.of(context));
       final config = CNButtonConfig(
@@ -318,7 +326,6 @@ class AdaptiveButton extends StatelessWidget {
         imagePadding: label != null && sfSymbol != null ? 8 : null,
         customIconSize: iconSize,
       );
-      final active = enabled && onPressed != null && !busy;
       Widget button;
       final symbol = busy ? null : sfSymbol;
       if (label != null) {
@@ -329,12 +336,8 @@ class AdaptiveButton extends StatelessWidget {
               : CNSymbol(
                   symbol.name,
                   size: symbol.size,
-                  // On a filled button the symbol sits beside the label.
-                  color:
-                      symbol.color ??
-                      (style == AdaptiveButtonStyle.filled
-                          ? nativeLabelColor
-                          : null),
+                  // On the tint, the symbol sits beside the label.
+                  color: symbol.color ?? (onTint ? nativeLabelColor : null),
                 ),
           onPressed: onPressed,
           enabled: active,
