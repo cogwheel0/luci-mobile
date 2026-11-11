@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/main.dart';
+import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/navigation/luci_tab.dart';
 import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
@@ -223,576 +224,13 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                     .onPrimary,
                                 elevation: 2,
                               ),
-                              onPressed: () async {
-                                final ipController = TextEditingController();
-                                final alternateController =
-                                    TextEditingController();
-                                final userController = TextEditingController(
-                                  text: 'root',
-                                );
-                                final passController = TextEditingController();
-                                final formKey = GlobalKey<FormState>();
-                                bool obscureText = true;
-                                bool isConnecting = false;
-                                bool showAlternate = false;
-                                String? errorMessage;
-                                try {
-                                  await showDialog<void>(
-                                    context: context,
-                                    builder: (context) {
-                                      return StatefulBuilder(
-                                        builder: (context, setState) {
-                                          return AlertDialog(
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(20),
-                                            ),
-                                            backgroundColor: Theme.of(context)
-                                                .colorScheme
-                                                .surface
-                                                .withValues(alpha: 0.95),
-                                            shadowColor: Theme.of(context)
-                                                .colorScheme
-                                                .primary
-                                                .withValues(alpha: 0.10),
-                                            insetPadding:
-                                                const EdgeInsets.symmetric(
-                                                  horizontal: 16,
-                                                  vertical: 60,
-                                                ), // Make dialog larger
-                                            content: ConstrainedBox(
-                                              constraints: const BoxConstraints(
-                                                maxWidth: 400,
-                                                minWidth: 320,
-                                                minHeight: 380,
-                                              ),
-                                              child: AutofillForm(
-                                                formKey: formKey,
-                                                child: SingleChildScrollView(
-                                                  child: Padding(
-                                                    padding:
-                                                        const EdgeInsets.only(
-                                                          top: 32,
-                                                        ),
-                                                    child: Column(
-                                                      mainAxisSize:
-                                                          MainAxisSize.min,
-                                                      children: [
-                                                        TextFormField(
-                                                          controller:
-                                                              ipController,
-                                                          decoration: InputDecoration(
-                                                            labelText: context
-                                                                .l10n
-                                                                .routerAddress,
-                                                            border:
-                                                                const OutlineInputBorder(),
-                                                            prefixIcon: const Icon(
-                                                              Icons
-                                                                  .router_outlined,
-                                                            ),
-                                                            helperText: context
-                                                                .l10n
-                                                                .routerAddressExample,
-                                                          ),
-                                                          validator: (value) {
-                                                            if (value == null ||
-                                                                value.isEmpty) {
-                                                              return context
-                                                                  .l10n
-                                                                  .routerAddressRequired;
-                                                            }
-                                                            final parsed =
-                                                                UrlParser.parse(
-                                                                  value,
-                                                                );
-                                                            if (!parsed
-                                                                .isValid) {
-                                                              return context
-                                                                  .l10n
-                                                                  .invalidAddressFormat;
-                                                            }
-                                                            return null;
-                                                          },
-                                                          autofillHints: const [
-                                                            AutofillHints.url,
-                                                          ],
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 6,
-                                                        ),
-                                                        if (!showAlternate)
-                                                          Align(
-                                                            alignment: Alignment
-                                                                .centerLeft,
-                                                            child: TextButton.icon(
-                                                              onPressed: () =>
-                                                                  setState(
-                                                                    () =>
-                                                                        showAlternate =
-                                                                            true,
-                                                                  ),
-                                                              icon: const Icon(
-                                                                Icons.add,
-                                                                size: 18,
-                                                              ),
-                                                              label: Text(
-                                                                context
-                                                                    .l10n
-                                                                    .addFallbackAddress,
-                                                              ),
-                                                            ),
-                                                          )
-                                                        else
-                                                          TextFormField(
-                                                            controller:
-                                                                alternateController,
-                                                            decoration: InputDecoration(
-                                                              labelText: context
-                                                                  .l10n
-                                                                  .fallbackAddress,
-                                                              border:
-                                                                  const OutlineInputBorder(),
-                                                              prefixIcon:
-                                                                  const Icon(
-                                                                    Icons
-                                                                        .swap_horiz,
-                                                                  ),
-                                                              helperText: context
-                                                                  .l10n
-                                                                  .fallbackCredentialsHelp,
-                                                              helperMaxLines: 2,
-                                                            ),
-                                                            validator: (value) {
-                                                              if (value ==
-                                                                      null ||
-                                                                  value.isEmpty) {
-                                                                return null;
-                                                              }
-                                                              final parsed =
-                                                                  UrlParser.parse(
-                                                                    value,
-                                                                  );
-                                                              if (!parsed
-                                                                  .isValid) {
-                                                                return context
-                                                                    .l10n
-                                                                    .invalidAddressFormat;
-                                                              }
-                                                              final primary =
-                                                                  UrlParser.parse(
-                                                                    ipController
-                                                                        .text,
-                                                                  );
-                                                              if (primary
-                                                                      .isValid &&
-                                                                  parsed.hostWithPort ==
-                                                                      primary
-                                                                          .hostWithPort) {
-                                                                return context
-                                                                    .l10n
-                                                                    .mustDifferFromPrimaryAddress;
-                                                              }
-                                                              return null;
-                                                            },
-                                                          ),
-                                                        const SizedBox(
-                                                          height: 10,
-                                                        ),
-                                                        TextFormField(
-                                                          controller:
-                                                              userController,
-                                                          decoration: InputDecoration(
-                                                            labelText: context
-                                                                .l10n
-                                                                .username,
-                                                            border:
-                                                                const OutlineInputBorder(),
-                                                            prefixIcon: const Icon(
-                                                              Icons
-                                                                  .person_outline,
-                                                            ),
-                                                            helperText: context
-                                                                .l10n
-                                                                .usernameDefaultHelp,
-                                                          ),
-                                                          validator: (v) =>
-                                                              v == null ||
-                                                                  v.isEmpty
-                                                              ? context
-                                                                    .l10n
-                                                                    .required
-                                                              : null,
-                                                          autofillHints: const [
-                                                            AutofillHints
-                                                                .username,
-                                                          ],
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 20,
-                                                        ),
-                                                        TextFormField(
-                                                          controller:
-                                                              passController,
-                                                          decoration: InputDecoration(
-                                                            labelText: context
-                                                                .l10n
-                                                                .password,
-                                                            border:
-                                                                const OutlineInputBorder(),
-                                                            prefixIcon: const Icon(
-                                                              Icons
-                                                                  .lock_outline,
-                                                            ),
-                                                            helperText: context
-                                                                .l10n
-                                                                .routerPasswordHelp,
-                                                            suffixIcon: IconButton(
-                                                              icon: Icon(
-                                                                obscureText
-                                                                    ? Icons
-                                                                          .visibility_outlined
-                                                                    : Icons
-                                                                          .visibility_off_outlined,
-                                                              ),
-                                                              onPressed: () => setState(
-                                                                () => obscureText =
-                                                                    !obscureText,
-                                                              ),
-                                                              tooltip:
-                                                                  obscureText
-                                                                  ? context
-                                                                        .l10n
-                                                                        .hidePassword
-                                                                  : context
-                                                                        .l10n
-                                                                        .showPassword,
-                                                            ),
-                                                          ),
-                                                          obscureText:
-                                                              obscureText,
-                                                          autofillHints: const [
-                                                            AutofillHints
-                                                                .password,
-                                                          ],
-                                                        ),
-                                                        if (errorMessage !=
-                                                            null) ...[
-                                                          const SizedBox(
-                                                            height: 16,
-                                                          ),
-                                                          Container(
-                                                            padding:
-                                                                const EdgeInsets.all(
-                                                                  10,
-                                                                ),
-                                                            decoration: BoxDecoration(
-                                                              color:
-                                                                  Theme.of(
-                                                                        context,
-                                                                      )
-                                                                      .colorScheme
-                                                                      .errorContainer
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            1,
-                                                                      ),
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    8,
-                                                                  ),
-                                                            ),
-                                                            child: Row(
-                                                              children: [
-                                                                Icon(
-                                                                  Icons
-                                                                      .error_outline,
-                                                                  color: Theme.of(
-                                                                    context,
-                                                                  ).colorScheme.onErrorContainer,
-                                                                ),
-                                                                const SizedBox(
-                                                                  width: 12,
-                                                                ),
-                                                                Expanded(
-                                                                  child: Text(
-                                                                    errorMessage!,
-                                                                    style:
-                                                                        Theme.of(
-                                                                          context,
-                                                                        ).textTheme.bodyMedium?.copyWith(
-                                                                          color: Theme.of(
-                                                                            context,
-                                                                          ).colorScheme.onErrorContainer,
-                                                                        ),
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        ],
-                                                        const SizedBox(
-                                                          height: 28,
-                                                        ),
-                                                        SizedBox(
-                                                          width:
-                                                              double.infinity,
-                                                          child: ElevatedButton(
-                                                            onPressed:
-                                                                isConnecting
-                                                                ? null
-                                                                : () async {
-                                                                    if (formKey
-                                                                        .currentState!
-                                                                        .validate()) {
-                                                                      final input = ipController
-                                                                          .text
-                                                                          .trim();
-                                                                      final user = userController
-                                                                          .text
-                                                                          .trim();
-                                                                      final pass =
-                                                                          passController
-                                                                              .text;
-
-                                                                      // Parse the input to extract host, port, and protocol
-                                                                      final parsedUrl =
-                                                                          UrlParser.parse(
-                                                                            input,
-                                                                          );
-
-                                                                      if (!parsedUrl
-                                                                          .isValid) {
-                                                                        setState(() {
-                                                                          errorMessage = context
-                                                                              .l10n
-                                                                              .invalidAddressFormat;
-                                                                        });
-                                                                        return;
-                                                                      }
-
-                                                                      final hostWithPort =
-                                                                          parsedUrl
-                                                                              .hostWithPort;
-                                                                      final useHttps =
-                                                                          parsedUrl
-                                                                              .useHttps;
-                                                                      final altText = alternateController
-                                                                          .text
-                                                                          .trim();
-                                                                      final parsedAlt =
-                                                                          altText
-                                                                              .isEmpty
-                                                                          ? null
-                                                                          : UrlParser.parse(
-                                                                              altText,
-                                                                            );
-                                                                      final id =
-                                                                          '$hostWithPort-$user';
-
-                                                                      if (routers.any(
-                                                                        (r) =>
-                                                                            r.id ==
-                                                                            id,
-                                                                      )) {
-                                                                        setState(() {
-                                                                          errorMessage = context
-                                                                              .l10n
-                                                                              .routerAlreadyExists;
-                                                                        });
-                                                                        return;
-                                                                      }
-
-                                                                      // Show connecting state
-                                                                      setState(() {
-                                                                        errorMessage =
-                                                                            null;
-                                                                        isConnecting =
-                                                                            true;
-                                                                      });
-
-                                                                      // Always fetch hostname from router after login
-                                                                      try {
-                                                                        // Attempt login with the new router's credentials
-                                                                        final loginSuccess = await appState.login(
-                                                                          hostWithPort,
-                                                                          user,
-                                                                          pass,
-                                                                          useHttps,
-                                                                          fromRouter:
-                                                                              false,
-                                                                          alternateAddress:
-                                                                              parsedAlt?.hostWithPort,
-                                                                          alternateUseHttps:
-                                                                              parsedAlt?.useHttps,
-                                                                          context:
-                                                                              context,
-                                                                        );
-                                                                        // The dialog is barrier-dismissible; bail out
-                                                                        // instead of calling its setState after it
-                                                                        // has been dismissed.
-                                                                        if (!context
-                                                                            .mounted) {
-                                                                          return;
-                                                                        }
-                                                                        if (!loginSuccess) {
-                                                                          setState(() {
-                                                                            errorMessage =
-                                                                                appState.errorMessage ??
-                                                                                context.l10n.failedToConnectCredentials;
-                                                                            isConnecting =
-                                                                                false;
-                                                                          });
-                                                                          return;
-                                                                        }
-                                                                        // While the dialog is still shown: the OS saves from it.
-                                                                        // Only what was signed in with, not anything typed since.
-                                                                        AutofillForm.saveCredentials(
-                                                                          unchanged:
-                                                                              ipController.text.trim() == input &&
-                                                                              userController.text.trim() == user &&
-                                                                              passController.text == pass,
-                                                                        );
-                                                                        Navigator.pop(
-                                                                          context,
-                                                                        );
-                                                                      } catch (
-                                                                        e
-                                                                      ) {
-                                                                        if (!context
-                                                                            .mounted) {
-                                                                          return;
-                                                                        }
-                                                                        setState(() {
-                                                                          errorMessage = context
-                                                                              .l10n
-                                                                              .failedToConnect(
-                                                                                e,
-                                                                              );
-                                                                          isConnecting =
-                                                                              false;
-                                                                        });
-                                                                      }
-                                                                    }
-                                                                  },
-                                                            style: ElevatedButton.styleFrom(
-                                                              padding:
-                                                                  const EdgeInsets.symmetric(
-                                                                    vertical:
-                                                                        18,
-                                                                  ),
-                                                              textStyle:
-                                                                  const TextStyle(
-                                                                    fontSize:
-                                                                        18,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .bold,
-                                                                  ),
-                                                              shape: RoundedRectangleBorder(
-                                                                borderRadius:
-                                                                    BorderRadius.circular(
-                                                                      14,
-                                                                    ),
-                                                              ),
-                                                              elevation: 4,
-                                                              backgroundColor:
-                                                                  Theme.of(
-                                                                        context,
-                                                                      )
-                                                                      .colorScheme
-                                                                      .primary,
-                                                              foregroundColor:
-                                                                  Theme.of(
-                                                                        context,
-                                                                      )
-                                                                      .colorScheme
-                                                                      .onPrimary,
-                                                            ),
-                                                            child: isConnecting
-                                                                ? Row(
-                                                                    mainAxisAlignment:
-                                                                        MainAxisAlignment
-                                                                            .center,
-                                                                    mainAxisSize:
-                                                                        MainAxisSize
-                                                                            .min,
-                                                                    children: [
-                                                                      SizedBox(
-                                                                        width:
-                                                                            22,
-                                                                        height:
-                                                                            22,
-                                                                        child: CircularProgressIndicator(
-                                                                          strokeWidth:
-                                                                              3,
-                                                                          valueColor: AlwaysStoppedAnimation<Color>(
-                                                                            Theme.of(
-                                                                              context,
-                                                                            ).colorScheme.onPrimary,
-                                                                          ),
-                                                                        ),
-                                                                      ),
-                                                                      const SizedBox(
-                                                                        width:
-                                                                            12,
-                                                                      ),
-                                                                      Text(
-                                                                        context
-                                                                            .l10n
-                                                                            .connecting,
-                                                                      ),
-                                                                    ],
-                                                                  )
-                                                                : Row(
-                                                                    mainAxisAlignment:
-                                                                        MainAxisAlignment
-                                                                            .center,
-                                                                    mainAxisSize:
-                                                                        MainAxisSize
-                                                                            .min,
-                                                                    children: [
-                                                                      const Icon(
-                                                                        Icons
-                                                                            .add,
-                                                                      ),
-                                                                      const SizedBox(
-                                                                        width:
-                                                                            12,
-                                                                      ),
-                                                                      Text(
-                                                                        context
-                                                                            .l10n
-                                                                            .add,
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                          ),
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 8,
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      );
-                                    },
-                                  );
-                                  if (!context.mounted) return;
-                                } finally {
-                                  // The controllers are only used by the
-                                  // dialog above; dispose them once it closes.
-                                  ipController.dispose();
-                                  alternateController.dispose();
-                                  userController.dispose();
-                                  passController.dispose();
-                                }
-                              },
+                              onPressed: () => showAdaptiveFormSheet<void>(
+                                context: context,
+                                builder: (_) => _AddRouterForm(
+                                  appState: appState,
+                                  routers: routers,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -802,6 +240,263 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Signs in to a new router and saves it: a Material dialog on Android, an
+/// iOS sheet with Connect as its confirm action on iOS.
+class _AddRouterForm extends StatefulWidget {
+  const _AddRouterForm({required this.appState, required this.routers});
+
+  final AppState appState;
+  final List<model.Router> routers;
+
+  @override
+  State<_AddRouterForm> createState() => _AddRouterFormState();
+}
+
+class _AddRouterFormState extends State<_AddRouterForm> {
+  final _formKey = GlobalKey<FormState>();
+  final _address = TextEditingController();
+  final _alternate = TextEditingController();
+  final _user = TextEditingController(text: 'root');
+  final _password = TextEditingController();
+  bool _obscure = true;
+  bool _connecting = false;
+  bool _showAlternate = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _address.dispose();
+    _alternate.dispose();
+    _user.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _connect() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final input = _address.text.trim();
+    final user = _user.text.trim();
+    final pass = _password.text;
+
+    // Parse the input to extract host, port, and protocol
+    final parsedUrl = UrlParser.parse(input);
+
+    if (!parsedUrl.isValid) {
+      setState(() {
+        _error = context.l10n.invalidAddressFormat;
+      });
+      return;
+    }
+
+    final hostWithPort = parsedUrl.hostWithPort;
+    final useHttps = parsedUrl.useHttps;
+    final altText = _alternate.text.trim();
+    final parsedAlt = altText.isEmpty ? null : UrlParser.parse(altText);
+    final id = '$hostWithPort-$user';
+
+    if (widget.routers.any((r) => r.id == id)) {
+      setState(() {
+        _error = context.l10n.routerAlreadyExists;
+      });
+      return;
+    }
+
+    // Show connecting state
+    setState(() {
+      _error = null;
+      _connecting = true;
+    });
+
+    // Always fetch hostname from router after login
+    try {
+      // Attempt login with the new router's credentials
+      final loginSuccess = await widget.appState.login(
+        hostWithPort,
+        user,
+        pass,
+        useHttps,
+        fromRouter: false,
+        alternateAddress: parsedAlt?.hostWithPort,
+        alternateUseHttps: parsedAlt?.useHttps,
+        context: context,
+      );
+      // The form can't be dismissed while connecting, but bail out rather
+      // than call setState should it have closed anyway.
+      if (!mounted) {
+        return;
+      }
+      if (!loginSuccess) {
+        setState(() {
+          _error =
+              widget.appState.errorMessage ??
+              context.l10n.failedToConnectCredentials;
+          _connecting = false;
+        });
+        return;
+      }
+      // While the form is still shown: the OS saves from it.
+      // Only what was signed in with, not anything typed since.
+      AutofillForm.saveCredentials(
+        unchanged:
+            _address.text.trim() == input &&
+            _user.text.trim() == user &&
+            _password.text == pass,
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = context.l10n.failedToConnect(e);
+        _connecting = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AdaptiveFormSheet(
+      title: context.l10n.addRouter,
+      cancelLabel: context.l10n.cancel,
+      confirmLabel: context.l10n.add,
+      busy: _connecting,
+      onConfirm: _connect,
+      child: AutofillForm(
+        formKey: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _address,
+              decoration: InputDecoration(
+                labelText: context.l10n.routerAddress,
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.router_outlined),
+                helperText: context.l10n.routerAddressExample,
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return context.l10n.routerAddressRequired;
+                }
+                final parsed = UrlParser.parse(value);
+                if (!parsed.isValid) {
+                  return context.l10n.invalidAddressFormat;
+                }
+                return null;
+              },
+              autofillHints: const [AutofillHints.url],
+            ),
+            const SizedBox(height: 6),
+            if (!_showAlternate)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AdaptiveButton(
+                  onPressed: () => setState(() => _showAlternate = true),
+                  label: context.l10n.addFallbackAddress,
+                  sfSymbol: const SFSymbol('plus'),
+                  materialIcon: Icons.add,
+                  style: AdaptiveButtonStyle.plain,
+                ),
+              )
+            else
+              TextFormField(
+                controller: _alternate,
+                decoration: InputDecoration(
+                  labelText: context.l10n.fallbackAddress,
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.swap_horiz),
+                  helperText: context.l10n.fallbackCredentialsHelp,
+                  helperMaxLines: 2,
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return null;
+                  }
+                  final parsed = UrlParser.parse(value);
+                  if (!parsed.isValid) {
+                    return context.l10n.invalidAddressFormat;
+                  }
+                  final primary = UrlParser.parse(_address.text);
+                  if (primary.isValid &&
+                      parsed.hostWithPort == primary.hostWithPort) {
+                    return context.l10n.mustDifferFromPrimaryAddress;
+                  }
+                  return null;
+                },
+              ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _user,
+              decoration: InputDecoration(
+                labelText: context.l10n.username,
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.person_outline),
+                helperText: context.l10n.usernameDefaultHelp,
+              ),
+              validator: (v) =>
+                  v == null || v.isEmpty ? context.l10n.required : null,
+              autofillHints: const [AutofillHints.username],
+            ),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: _password,
+              decoration: InputDecoration(
+                labelText: context.l10n.password,
+                border: const OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.lock_outline),
+                helperText: context.l10n.routerPasswordHelp,
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscure
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                  tooltip: _obscure
+                      ? context.l10n.hidePassword
+                      : context.l10n.showPassword,
+                ),
+              ),
+              obscureText: _obscure,
+              autofillHints: const [AutofillHints.password],
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.errorContainer
+                      .withValues(alpha: 1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _error!,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
