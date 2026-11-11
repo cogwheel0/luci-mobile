@@ -41,6 +41,31 @@ class ThroughputService {
     ];
   }
 
+  /// netifd protocols whose traffic is carried inside another interface's.
+  static const _tunnelProtos = {
+    'wireguard',
+    'openvpn',
+    'openconnect',
+    'vpnc',
+    'l2tp',
+    'pptp',
+    'sstp',
+    'gre',
+    'gretap',
+    'grev6',
+    'grev6tap',
+    'ipip',
+    'ipip6',
+    '6in4',
+    '6to4',
+    '6rd',
+    'dslite',
+    'map',
+    'xfrm',
+    'vti',
+    'vtiv6',
+  };
+
   static bool _isNamedWan(Map iface) =>
       iface['interface']?.toString().startsWith('wan') ?? false;
 
@@ -72,10 +97,22 @@ class ThroughputService {
   /// again on the LAN, so neither line said which way traffic went (#81).
   /// With no internet-facing interface to go by, every interface is counted,
   /// as before.
+  ///
+  /// A tunnel (a WireGuard full tunnel, an L2TP or 6in4 uplink) is left out
+  /// when a direct uplink is also counted: everything in the tunnel crosses
+  /// that uplink as well, so adding both showed tunnelled traffic at about
+  /// twice its rate. Counting the outer layer catches all of it once.
   static Set<String> combinedThroughputDevices(Map? interfaceDump) {
     final upstream = upstreamInterfaces(interfaceDump);
     if (upstream.isNotEmpty) {
-      return {for (final i in upstream) ?_countedDevice(i)};
+      final direct = [
+        for (final i in upstream)
+          if (!_tunnelProtos.contains(i['proto'])) i,
+      ];
+      return {
+        for (final i in direct.isNotEmpty ? direct : upstream)
+          ?_countedDevice(i),
+      };
     }
     final interfaces = interfaceDump?['interface'];
     if (interfaces is! List) return const {};

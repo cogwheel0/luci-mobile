@@ -261,6 +261,62 @@ void main() {
       });
     });
 
+    // Everything in a tunnel also crosses the uplink that carries it;
+    // counting both showed tunnelled traffic at about twice its rate.
+    group('a tunnel is counted once', () {
+      Map<String, dynamic> dumpWith({required bool wanRoute}) => {
+        'interface': [
+          {
+            'interface': 'wan',
+            'proto': 'dhcp',
+            'l3_device': 'eth1',
+            'route': [
+              if (wanRoute) {'target': '0.0.0.0', 'mask': 0},
+            ],
+          },
+          {
+            'interface': 'wg0',
+            'proto': 'wireguard',
+            'l3_device': 'wg0',
+            'route': [
+              {'target': '0.0.0.0', 'mask': 0},
+            ],
+          },
+          {'interface': 'lan', 'proto': 'static', 'l3_device': 'br-lan'},
+        ],
+      };
+
+      test('a full-tunnel VPN beside the WAN that carries it', () {
+        for (final wanRoute in [true, false]) {
+          expect(
+            ThroughputService.combinedThroughputDevices(
+              dumpWith(wanRoute: wanRoute),
+            ),
+            {'eth1'},
+            reason: 'wan default route: $wanRoute',
+          );
+        }
+      });
+
+      test('a tunnel that is the only uplink is still counted', () {
+        final onlyTunnel = {
+          'interface': [
+            {
+              'interface': 'vpn',
+              'proto': 'wireguard',
+              'l3_device': 'wg0',
+              'route': [
+                {'target': '0.0.0.0', 'mask': 0},
+              ],
+            },
+          ],
+        };
+        expect(ThroughputService.combinedThroughputDevices(onlyTunnel), {
+          'wg0',
+        });
+      });
+    });
+
     test('only the chosen devices are added up', () async {
       final service = ThroughputService();
       final devices = ThroughputService.combinedThroughputDevices(dump);
