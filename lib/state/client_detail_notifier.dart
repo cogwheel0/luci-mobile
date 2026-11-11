@@ -194,11 +194,12 @@ class ClientDetailLoader {
     );
     final located = ClientConfigPlanner.networkForClient(
       subnets: allSubnets,
-      addresses: <String>{
-        ..._leaseAddresses(dashboard),
-        ?host?.ip,
-        ..._hintList(hint, 'ipaddrs'),
-      },
+      addresses: locationEvidence(
+        leasesKnown: dashboard?['dhcpLeases'] is Map,
+        leaseAddresses: _leaseAddresses(dashboard),
+        reservedAddress: host?.ip,
+        hintAddresses: _hintList(hint, 'ipaddrs'),
+      ),
       wirelessNetworks: stationNetworks,
     );
     // A reservation is checked against the client's own subnet when it is
@@ -339,6 +340,26 @@ class ClientDetailLoader {
     }
     return (station: null, networks: const <String>[], failed: anyFailed);
   }
+
+  /// The addresses that may place a client on a network, most trusted
+  /// first: its live leases, its reservation, then host hints.
+  ///
+  /// Host hints remember addresses a client has since left. They are a
+  /// fallback behind the live lease table - and with no lease table (its
+  /// read failed), not evidence at all: placing a client from an old hint
+  /// could put its block rule in a zone it is no longer in. Without them
+  /// the network stays unknown, and blocking unavailable, instead.
+  @visibleForTesting
+  static Set<String> locationEvidence({
+    required bool leasesKnown,
+    required Iterable<String> leaseAddresses,
+    required String? reservedAddress,
+    required Iterable<String> hintAddresses,
+  }) => {
+    ...leaseAddresses,
+    ?reservedAddress,
+    if (leasesKnown) ...hintAddresses,
+  };
 
   /// Addresses the dashboard's lease table holds for this client.
   List<String> _leaseAddresses(Map<String, dynamic>? dashboard) {
