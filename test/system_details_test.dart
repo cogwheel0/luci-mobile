@@ -1,7 +1,10 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/system_details.dart';
 import 'package:luci_mobile/services/api_service.dart';
+import 'package:luci_mobile/widgets/system_details_sheet.dart';
 
 void main() {
   // #14: what LuCI's Status > Overview shows, from the `system board` reply
@@ -56,6 +59,16 @@ void main() {
       expect(peer['transfer_tx'], 2048);
     });
 
+    // One counter present must not make the other read as zero traffic.
+    test('a counter the router did not send stays absent', () {
+      final peer = RealApiService.wireGuardPeer('key=', {
+        'transfer_rx': 4096,
+        'transfer_tx': 'n/a',
+      });
+      expect(peer['transfer_rx'], 4096);
+      expect(peer.containsKey('transfer_tx'), isFalse);
+    });
+
     // An older LuCI, or a peer with no description, sends less.
     test('what the router leaves out is left out', () {
       final peer = RealApiService.wireGuardPeer('key=', {
@@ -67,6 +80,63 @@ void main() {
       expect(peer.containsKey('transfer_rx'), isFalse);
       expect(peer['endpoint'], 'N/A');
       expect(peer['last_handshake'], 0);
+    });
+  });
+
+  // The device card opens the sheet on a tap and on the long press #14
+  // asked for; the sheet shows each field labelled, selectable for pasting.
+  group('system details sheet', () {
+    const details = [
+      (SystemDetail.model, 'TP-Link Archer C7 v5'),
+      (SystemDetail.kernel, '6.6.73'),
+    ];
+
+    Future<void> pumpCard(
+      WidgetTester tester,
+      List<(SystemDetail, String)> details,
+    ) => tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: luciLocalizationsDelegates,
+        home: Scaffold(
+          body: SystemDetailsTap(
+            details: details,
+            child: const SizedBox(width: 200, height: 80, child: Text('card')),
+          ),
+        ),
+      ),
+    );
+
+    void expectSheet() {
+      expect(find.text('System details'), findsOneWidget);
+      expect(find.text('Model'), findsOneWidget);
+      expect(find.text('Kernel version'), findsOneWidget);
+      expect(
+        find.widgetWithText(SelectableText, 'TP-Link Archer C7 v5'),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(SelectableText, '6.6.73'), findsOneWidget);
+    }
+
+    testWidgets('a tap opens it', (tester) async {
+      await pumpCard(tester, details);
+      await tester.tap(find.text('card'));
+      await tester.pumpAndSettle();
+      expectSheet();
+    });
+
+    testWidgets('a long press opens it', (tester) async {
+      await pumpCard(tester, details);
+      await tester.longPress(find.text('card'));
+      await tester.pumpAndSettle();
+      expectSheet();
+    });
+
+    testWidgets('with nothing to show, the card is inert', (tester) async {
+      await pumpCard(tester, const []);
+      await tester.tap(find.text('card'));
+      await tester.longPress(find.text('card'));
+      await tester.pumpAndSettle();
+      expect(find.text('System details'), findsNothing);
     });
   });
 }

@@ -1302,20 +1302,24 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // The router's view, as on the interface cards: received
-                // from the peer, sent to it.
-                Expanded(
-                  child: peerField(
-                    context.l10n.received,
-                    formatBytes(transferRx ?? 0, decimals: 2),
+                // from the peer, sent to it. A direction the router did
+                // not report is left out, not shown as no traffic.
+                if (transferRx != null)
+                  Expanded(
+                    child: peerField(
+                      context.l10n.received,
+                      formatBytes(transferRx, decimals: 2),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 24),
-                Expanded(
-                  child: peerField(
-                    context.l10n.transmitted,
-                    formatBytes(transferTx ?? 0, decimals: 2),
+                if (transferRx != null && transferTx != null)
+                  const SizedBox(width: 24),
+                if (transferTx != null)
+                  Expanded(
+                    child: peerField(
+                      context.l10n.transmitted,
+                      formatBytes(transferTx, decimals: 2),
+                    ),
                   ),
-                ),
               ],
             ),
           ],
