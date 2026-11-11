@@ -571,18 +571,19 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
                     ),
                     _buildConnectionTypeChip(context, widget.client),
                     const SizedBox(width: 8),
-                    IconButton(
+                    AdaptiveButton.sfSymbol(
                       onPressed: widget.onTap,
-                      icon: Icon(
-                        widget.isExpanded
-                            ? Icons.expand_less
-                            : Icons.expand_more,
+                      sfSymbol: SFSymbol(
+                        widget.isExpanded ? 'chevron.up' : 'chevron.down',
                         color: colorScheme.onSurfaceVariant,
-                        size: 26,
                       ),
-                      tooltip: widget.isExpanded
+                      materialIcon: widget.isExpanded
+                          ? Icons.expand_less
+                          : Icons.expand_more,
+                      semanticLabel: widget.isExpanded
                           ? context.l10n.collapseDetails
                           : context.l10n.expandDetails,
+                      style: AdaptiveButtonStyle.plain,
                     ),
                   ],
                 ),

@@ -101,6 +101,54 @@ class LuciAppBar extends StatelessWidget implements PreferredSizeWidget {
   );
 }
 
+/// An action in [LuciAppBar.actions]: a Liquid Glass circle in the iOS 26
+/// navigation bar, a plain tinted symbol in earlier iOS, and an IconButton
+/// on Android. [tooltip] names it for assistive technology everywhere.
+class LuciAppBarAction extends StatelessWidget {
+  const LuciAppBarAction({
+    super.key,
+    required this.sfSymbol,
+    required this.materialIcon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final String sfSymbol;
+  final IconData materialIcon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PlatformUiCapabilities.isIOS) {
+      return AdaptiveButton.sfSymbol(
+        onPressed: onPressed,
+        sfSymbol: SFSymbol(sfSymbol),
+        materialIcon: materialIcon,
+        semanticLabel: tooltip,
+        style: AdaptiveButtonStyle.plain,
+      );
+    }
+    final glass = PlatformUiCapabilities.usesNativeIOS26;
+    // The glass circle is 36 pt, as Conduit's navigation bar actions are,
+    // spaced so neighbouring circles stay apart. A plain symbol has no
+    // visible bounds, so it takes the full 44 pt tap target instead.
+    return Padding(
+      padding: EdgeInsets.only(left: glass ? 8 : 0),
+      child: AdaptiveButton.sfSymbol(
+        onPressed: onPressed,
+        sfSymbol: SFSymbol(sfSymbol),
+        semanticLabel: tooltip,
+        style: glass ? AdaptiveButtonStyle.glass : AdaptiveButtonStyle.plain,
+        minSize: glass ? const Size.square(36) : null,
+        padding: EdgeInsets.zero,
+        borderRadius: glass ? BorderRadius.circular(18) : null,
+        useSmoothRectangleBorder: false,
+      ),
+    );
+  }
+}
+
 class LuciSectionHeader extends StatelessWidget {
   final String title;
   const LuciSectionHeader(this.title, {super.key});

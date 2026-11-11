@@ -9,6 +9,7 @@ import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/utils/url_parser.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/widgets/autofill_form.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 class ManageRoutersScreen extends ConsumerStatefulWidget {
   const ManageRoutersScreen({super.key});
@@ -930,9 +931,11 @@ class _UnifiedRouterCard extends StatelessWidget {
                   ),
                 ),
               if (onRemoveFallback != null)
-                IconButton(
-                  icon: const Icon(Icons.link_off),
-                  tooltip: context.l10n.removeFallbackAddress,
+                AdaptiveButton.sfSymbol(
+                  sfSymbol: const SFSymbol('minus.circle'),
+                  materialIcon: Icons.link_off,
+                  semanticLabel: context.l10n.removeFallbackAddress,
+                  style: AdaptiveButtonStyle.plain,
                   onPressed: () async {
                     final confirm = await showDialog<bool>(
                       context: context,
@@ -959,10 +962,12 @@ class _UnifiedRouterCard extends StatelessWidget {
                   },
                 ),
               if (onDelete != null)
-                IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  tooltip: context.l10n.remove,
+                AdaptiveButton.sfSymbol(
                   onPressed: onDelete,
+                  sfSymbol: const SFSymbol('trash'),
+                  materialIcon: Icons.delete_outline,
+                  semanticLabel: context.l10n.remove,
+                  style: AdaptiveButtonStyle.plain,
                 ),
             ],
           ),

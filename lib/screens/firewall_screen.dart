@@ -263,12 +263,14 @@ class _RulesTab extends StatelessWidget {
                 semanticLabel: r.name ?? r.section,
                 onChanged: busy ? null : (v) => onToggle(r, v),
               ),
-              IconButton(
-                // A rule the user wrote is disabled rather than deleted, so
-                // the icon says which will happen.
-                icon: Icon(r.ownedByApp ? Icons.delete_outline : Icons.pause),
-                tooltip: r.ownedByApp ? l10n.remove : l10n.disableRule,
+              // A rule the user wrote is disabled rather than deleted, so
+              // the icon says which will happen.
+              AdaptiveButton.sfSymbol(
                 onPressed: busy ? null : () => onRemove(r),
+                sfSymbol: SFSymbol(r.ownedByApp ? 'trash' : 'pause'),
+                materialIcon: r.ownedByApp ? Icons.delete_outline : Icons.pause,
+                semanticLabel: r.ownedByApp ? l10n.remove : l10n.disableRule,
+                style: AdaptiveButtonStyle.plain,
               ),
             ],
           ),
@@ -395,10 +397,12 @@ class _RoutesTab extends StatelessWidget {
               if (r.metric != null) 'metric ${r.metric}',
             ].join('  '),
           ),
-          trailing: IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: l10n.remove,
+          trailing: AdaptiveButton.sfSymbol(
             onPressed: busy ? null : () => onRemove(r),
+            sfSymbol: const SFSymbol('trash'),
+            materialIcon: Icons.delete_outline,
+            semanticLabel: l10n.remove,
+            style: AdaptiveButtonStyle.plain,
           ),
         );
       },

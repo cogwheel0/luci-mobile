@@ -189,10 +189,12 @@ class _RadioCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.tune),
-                  tooltip: l10n.radioSettings,
+                AdaptiveButton.sfSymbol(
                   onPressed: busy ? null : onRadioSettings,
+                  sfSymbol: const SFSymbol('slider.horizontal.3'),
+                  materialIcon: Icons.tune,
+                  semanticLabel: l10n.radioSettings,
+                  style: AdaptiveButtonStyle.plain,
                 ),
                 AdaptiveSwitch(
                   value: !radio.disabled,
