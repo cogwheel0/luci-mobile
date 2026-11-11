@@ -1,4 +1,4 @@
-# luci-mobile's platform UI baseline: 138 entries, 193 occurrences.
+# luci-mobile's platform UI baseline: 136 entries, 187 occurrences.
 # Each entry is a direct Material or Cupertino import or control outside
 # lib/widgets/platform_ui. Counts may only go down: migrate a screen to the
 # platform UI layer and remove or lower its entries.
@@ -395,12 +395,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/manage_routers_screen.dart
-    symbol: "AlertDialog"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/manage_routers_screen.dart
     symbol: "Card"
     count: 1
     owner: screens
@@ -414,25 +408,19 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/screens/manage_routers_screen.dart
     symbol: "CircularProgressIndicator"
-    count: 2
+    count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/manage_routers_screen.dart
     symbol: "ElevatedButton"
-    count: 5
+    count: 3
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/manage_routers_screen.dart
     symbol: "IconButton"
     count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/manage_routers_screen.dart
-    symbol: "TextButton"
-    count: 2
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
