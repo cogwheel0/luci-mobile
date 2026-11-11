@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:luci_mobile/l10n/failure_text.dart';
 import 'package:luci_mobile/utils/uci_values.dart';
+import 'package:luci_mobile/models/system_details.dart';
 import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/navigation/luci_tab.dart';
@@ -226,76 +227,158 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       context,
     ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold);
 
+    final details = SystemDetail.of(boardInfo);
+    void openDetails() => _showSystemDetails(details);
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
-        child: Row(
+      clipBehavior: Clip.antiAlias,
+      // Tap, or the long press #14 asked for, opens what LuCI's Status >
+      // Overview shows beyond model and version.
+      child: InkWell(
+        onTap: details.isEmpty ? null : openDetails,
+        onLongPress: details.isEmpty ? null : openDetails,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: _deviceInfoColumns(
+                  model: '$model',
+                  version: '$version',
+                  channelLabel: channelLabel,
+                  channelColors: channelColors,
+                  labelStyle: labelStyle,
+                  valueStyle: valueStyle,
+                ),
+              ),
+              if (details.isNotEmpty)
+                Semantics(
+                  label: context.l10n.systemDetails,
+                  button: true,
+                  child: Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _systemDetailLabel(SystemDetail field) => switch (field) {
+    SystemDetail.hostname => context.l10n.hostname,
+    SystemDetail.model => context.l10n.model,
+    SystemDetail.architecture => context.l10n.architecture,
+    SystemDetail.target => context.l10n.targetPlatform,
+    SystemDetail.firmware => context.l10n.versionLabel,
+    SystemDetail.kernel => context.l10n.kernelVersion,
+  };
+
+  void _showSystemDetails(List<(SystemDetail, String)> details) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.only(bottom: 16),
           children: [
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(context.l10n.model, style: labelStyle),
-                  const SizedBox(height: 4),
-                  Text(
-                    model,
-                    style: valueStyle,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+              child: Text(
+                context.l10n.systemDetails,
+                style: Theme.of(sheetContext).textTheme.titleMedium,
               ),
             ),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(context.l10n.versionLabel, style: labelStyle),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          version,
-                          style: valueStyle,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: channelColors.background,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          channelLabel,
-                          style: TextStyle(
-                            color: channelColors.foreground,
-                            fontWeight: FontWeight.bold,
-                            fontSize: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.fontSize,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+            for (final (field, value) in details)
+              ListTile(
+                dense: true,
+                title: Text(_systemDetailLabel(field)),
+                // Selectable: these are what gets pasted into a bug report.
+                subtitle: SelectableText(value),
               ),
-            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _deviceInfoColumns({
+    required String model,
+    required String version,
+    required String channelLabel,
+    required ({Color background, Color foreground}) channelColors,
+    required TextStyle? labelStyle,
+    required TextStyle? valueStyle,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(context.l10n.model, style: labelStyle),
+              const SizedBox(height: 4),
+              Text(
+                model,
+                style: valueStyle,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(context.l10n.versionLabel, style: labelStyle),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      version,
+                      style: valueStyle,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: channelColors.background,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      channelLabel,
+                      style: TextStyle(
+                        color: channelColors.foreground,
+                        fontWeight: FontWeight.bold,
+                        fontSize: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.fontSize,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

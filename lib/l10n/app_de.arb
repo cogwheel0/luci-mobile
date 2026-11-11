@@ -532,5 +532,10 @@
   "notifyIntervalNote": "Android führt Hintergrundprüfungen höchstens alle 15 Minuten aus und kann sie zum Stromsparen weiter verzögern.",
   "notifyAwayNote": "Prüfungen funktionieren nur im Netzwerk des Routers. Unterwegs werden sie übersprungen statt als Ausfall gemeldet.",
   "changeBlockedByOthers": "Auf dem Router sind noch ungespeicherte Änderungen in {configs}. Ein Anwenden würde auch diese übernehmen – verwirf oder übernimm sie zuerst.",
-  "changeLeftStaged": "Die Änderung ist fehlgeschlagen; in {configs} liegen noch ungespeicherte Änderungen auf dem Router. Verwirf oder übernimm sie in LuCI."
+  "changeLeftStaged": "Die Änderung ist fehlgeschlagen; in {configs} liegen noch ungespeicherte Änderungen auf dem Router. Verwirf oder übernimm sie in LuCI.",
+  "architecture": "Architektur",
+  "targetPlatform": "Zielplattform",
+  "kernelVersion": "Kernel-Version",
+  "systemDetails": "Systemdetails",
+  "allowedIps": "Erlaubte IPs"
 }
