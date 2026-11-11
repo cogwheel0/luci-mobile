@@ -146,14 +146,16 @@ class _OutputBlock extends StatelessWidget {
           children: [
             Align(
               alignment: Alignment.centerRight,
-              child: IconButton(
-                icon: const Icon(Icons.copy, size: 18),
-                tooltip: context.l10n.copy,
+              child: AdaptiveButton.sfSymbol(
                 onPressed: () => copyToClipboard(
                   context,
                   text,
                   label: context.l10n.diagnostics,
                 ),
+                sfSymbol: const SFSymbol('doc.on.doc'),
+                materialIcon: Icons.copy,
+                semanticLabel: context.l10n.copy,
+                style: AdaptiveButtonStyle.plain,
               ),
             ),
             SelectableText(

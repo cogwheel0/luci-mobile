@@ -36,6 +36,62 @@ void main() {
       });
     }
 
+    for (final (style, variant) in [
+      (AdaptiveButtonStyle.plain, 'standard'),
+      (AdaptiveButtonStyle.glass, 'standard'),
+      (AdaptiveButtonStyle.filled, 'filled'),
+      (AdaptiveButtonStyle.tinted, 'filledTonal'),
+      (AdaptiveButtonStyle.bordered, 'outlined'),
+    ]) {
+      testWidgets('an icon-only ${style.name} button is a $variant IconButton '
+          'with its Material icon and tooltip', (tester) async {
+        var presses = 0;
+        await tester.pumpWidget(
+          _host(
+            AdaptiveButton.sfSymbol(
+              onPressed: () => presses++,
+              sfSymbol: const SFSymbol('trash'),
+              materialIcon: Icons.delete_outline,
+              semanticLabel: 'Remove',
+              style: style,
+            ),
+          ),
+        );
+
+        final button = tester.widget<IconButton>(find.byType(IconButton));
+        expect(button.tooltip, 'Remove');
+        // The variant shows in what the button draws.
+        final scheme = Theme.of(tester.element(find.byType(IconButton)))
+            .colorScheme;
+        final drawn = tester.widget<Material>(
+          find.descendant(
+            of: find.byType(IconButton),
+            matching: find.byType(Material),
+          ),
+        );
+        switch (variant) {
+          case 'filled':
+            expect(drawn.color, scheme.primary);
+          case 'filledTonal':
+            expect(drawn.color, scheme.secondaryContainer);
+          case 'outlined':
+            expect(drawn.color, Colors.transparent);
+            expect(
+              (drawn.shape! as OutlinedBorder).side.style,
+              BorderStyle.solid,
+            );
+          default:
+            expect(drawn.color, Colors.transparent);
+            expect((drawn.shape! as OutlinedBorder).side, BorderSide.none);
+        }
+        expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+        expect(find.byIcon(CupertinoIcons.delete), findsNothing);
+        expect(find.byTooltip('Remove'), findsOneWidget);
+        await tester.tap(find.byType(IconButton));
+        expect(presses, 1);
+      });
+    }
+
     testWidgets('a given radius still shapes the button', (tester) async {
       await tester.pumpWidget(
         _host(

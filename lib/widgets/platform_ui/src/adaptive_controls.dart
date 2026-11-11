@@ -33,6 +33,11 @@ IconData? cupertinoIconForSFSymbol(String symbol) => switch (symbol) {
   'stop.fill' => CupertinoIcons.stop_fill,
   'wifi' => CupertinoIcons.wifi,
   'arrow.right.to.line' => CupertinoIcons.arrow_right_to_line,
+  'doc.on.doc' => CupertinoIcons.doc_on_doc,
+  'pause' => CupertinoIcons.pause,
+  'minus.circle' => CupertinoIcons.minus_circle,
+  'slider.horizontal.3' => CupertinoIcons.slider_horizontal_3,
+  'chevron.up' => CupertinoIcons.chevron_up,
   'bubble.left' => CupertinoIcons.chat_bubble,
   'bubble.left.fill' => CupertinoIcons.chat_bubble_fill,
   'doc.text' => CupertinoIcons.doc_text,
@@ -179,6 +184,7 @@ class AdaptiveButton extends StatelessWidget {
     super.key,
     required this.onPressed,
     required this.sfSymbol,
+    this.materialIcon,
     this.color,
     this.style = AdaptiveButtonStyle.glass,
     this.size = AdaptiveButtonSize.medium,
@@ -196,7 +202,6 @@ class AdaptiveButton extends StatelessWidget {
        icon = null,
        iconColor = null,
        iconSize = null,
-       materialIcon = null,
        busy = false,
        materialVisualDensity = null;
 
@@ -206,8 +211,9 @@ class AdaptiveButton extends StatelessWidget {
   final IconData? icon;
   final SFSymbol? sfSymbol;
 
-  /// The icon Material shows before [label]. iOS shows [sfSymbol], so a
-  /// button with both keeps each platform's own icon.
+  /// The icon Material shows before [label], or alone in an icon button.
+  /// iOS shows [sfSymbol], so a button with both keeps each platform's own
+  /// icon.
   final IconData? materialIcon;
   final Color? color;
   final Color? textColor;
@@ -551,6 +557,7 @@ class AdaptiveButton extends StatelessWidget {
   /// and [labelStyle] still apply.
   Widget _buildMaterial(BuildContext context) {
     final callback = enabled && !busy ? onPressed : null;
+    if (label == null && child == null) return _buildMaterialIcon(callback);
     final radius = borderRadius;
     final OutlinedBorder? shape = radius == null
         ? null
@@ -638,21 +645,8 @@ class AdaptiveButton extends StatelessWidget {
       };
     }
 
-    final content = _semanticContent(switch (this) {
-      AdaptiveButton(label: final text?) => Text(text),
-      AdaptiveButton(child: final custom?) => custom,
-      AdaptiveButton(sfSymbol: final symbol?) => Icon(
-        cupertinoIconForSFSymbol(symbol.name) ?? CupertinoIcons.circle_fill,
-        size: symbol.size,
-        color: symbol.color,
-      ),
-      AdaptiveButton(icon: final data?) => Icon(
-        data,
-        size: iconSize,
-        color: iconColor,
-      ),
-      _ => const SizedBox.shrink(),
-    });
+    // Icon-only buttons returned above, so this has a label or a child.
+    final content = _semanticContent(label != null ? Text(label!) : child!);
     return switch (style) {
       AdaptiveButtonStyle.filled => FilledButton(
         onPressed: callback,
@@ -673,6 +667,53 @@ class AdaptiveButton extends StatelessWidget {
         onPressed: callback,
         style: buttonStyle,
         child: content,
+      ),
+    };
+  }
+
+  /// An icon-only button is Material's IconButton, in the variant matching
+  /// [style]; [semanticLabel] is its tooltip.
+  Widget _buildMaterialIcon(VoidCallback? callback) {
+    final symbol = sfSymbol;
+    final icon = Icon(
+      materialIcon ??
+          this.icon ??
+          (symbol == null ? null : cupertinoIconForSFSymbol(symbol.name)) ??
+          CupertinoIcons.circle_fill,
+      size: iconSize,
+      color: symbol?.color ?? iconColor,
+    );
+    final buttonStyle = IconButton.styleFrom(
+      foregroundColor: color,
+      padding: padding,
+      minimumSize: minSize,
+      visualDensity: materialVisualDensity,
+    );
+    return switch (style) {
+      AdaptiveButtonStyle.filled => IconButton.filled(
+        onPressed: callback,
+        tooltip: semanticLabel,
+        style: buttonStyle,
+        icon: icon,
+      ),
+      AdaptiveButtonStyle.tinted ||
+      AdaptiveButtonStyle.gray => IconButton.filledTonal(
+        onPressed: callback,
+        tooltip: semanticLabel,
+        style: buttonStyle,
+        icon: icon,
+      ),
+      AdaptiveButtonStyle.bordered => IconButton.outlined(
+        onPressed: callback,
+        tooltip: semanticLabel,
+        style: buttonStyle,
+        icon: icon,
+      ),
+      _ => IconButton(
+        onPressed: callback,
+        tooltip: semanticLabel,
+        style: buttonStyle,
+        icon: icon,
       ),
     };
   }

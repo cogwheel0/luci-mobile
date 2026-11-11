@@ -90,8 +90,9 @@ class _LogScreenState extends ConsumerState<LogScreen> {
         title: l10n.systemLog,
         showBack: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.copy),
+          LuciAppBarAction(
+            sfSymbol: 'doc.on.doc',
+            materialIcon: Icons.copy,
             tooltip: l10n.copy,
             onPressed: _entries.isEmpty
                 ? null
@@ -101,8 +102,9 @@ class _LogScreenState extends ConsumerState<LogScreen> {
                     label: l10n.systemLog,
                   ),
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
+          LuciAppBarAction(
+            sfSymbol: 'arrow.clockwise',
+            materialIcon: Icons.refresh,
             tooltip: l10n.retry,
             onPressed: _loading ? null : _load,
           ),

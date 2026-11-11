@@ -24,8 +24,9 @@ class EventFeedScreen extends ConsumerWidget {
         title: l10n.activity,
         showBack: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_sweep_outlined),
+          LuciAppBarAction(
+            sfSymbol: 'trash',
+            materialIcon: Icons.delete_sweep_outlined,
             tooltip: l10n.clearActivity,
             onPressed: (async.value?.isEmpty ?? true)
                 ? null

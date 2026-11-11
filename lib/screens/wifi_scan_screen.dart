@@ -6,6 +6,7 @@ import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
+import 'package:luci_mobile/widgets/luci_app_bar.dart';
 
 String _signalStrength(BuildContext context, int signal) {
   if (signal >= -50) return context.l10n.excellent;
@@ -226,9 +227,9 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n.wifiScanner),
-        centerTitle: true,
+      appBar: LuciAppBar(
+        title: context.l10n.wifiScanner,
+        showBack: true,
         elevation: 0,
       ),
       body: Column(

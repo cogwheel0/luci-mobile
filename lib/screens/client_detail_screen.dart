@@ -444,10 +444,12 @@ class _IdentityCard extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: context.l10n.displayName,
+          AdaptiveButton.sfSymbol(
             onPressed: onRename,
+            sfSymbol: const SFSymbol('pencil'),
+            materialIcon: Icons.edit_outlined,
+            semanticLabel: context.l10n.displayName,
+            style: AdaptiveButtonStyle.plain,
           ),
         ],
       ),
