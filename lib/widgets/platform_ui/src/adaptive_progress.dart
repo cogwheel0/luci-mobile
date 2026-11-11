@@ -71,7 +71,12 @@ class AdaptiveProgressIndicator extends StatelessWidget {
           label: semanticLabel,
           value: '${(progress.clamp(0, 1) * 100).round()}%',
           child: ExcludeSemantics(
-            child: CNProgressIndicator(value: progress, tint: color),
+            child: CNProgressIndicator(
+              value: progress,
+              // The package's default reads Flutter's CupertinoTheme, which
+              // this app (on cupertino_ui) lacks.
+              tint: color ?? CupertinoTheme.of(context).primaryColor,
+            ),
           ),
         );
       }

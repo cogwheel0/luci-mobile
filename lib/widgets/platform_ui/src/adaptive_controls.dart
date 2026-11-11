@@ -277,6 +277,30 @@ class AdaptiveButton extends StatelessWidget {
 
   Widget _buildButton(BuildContext context) {
     if (_canUseNative(context)) {
+      final active = enabled && onPressed != null && !busy;
+      // The package's own default tint reads Flutter's CupertinoTheme, which
+      // this app (on cupertino_ui) does not provide, so it fell back to the
+      // system blue. Pass the app's primary instead. Regular and clear glass
+      // take no tint, so the system picks their foreground over the
+      // material; gray stays neutral, as its Cupertino fallback is.
+      final tint =
+          color ??
+          switch (style) {
+            AdaptiveButtonStyle.glass || AdaptiveButtonStyle.clearGlass => null,
+            AdaptiveButtonStyle.gray => CupertinoColors.label.resolveFrom(
+              context,
+            ),
+            _ => CupertinoTheme.of(context).primaryColor,
+          };
+      // Filled and prominent glass draw their label on the tint, in white,
+      // which fades on a dark theme's light primary. Only while active:
+      // an inactive button keeps the system's disabled colours.
+      final onTint =
+          style == AdaptiveButtonStyle.filled ||
+          style == AdaptiveButtonStyle.prominentGlass;
+      final nativeLabelColor =
+          textColor ??
+          (onTint && active && tint != null ? _onFill(context, tint) : null);
       final resolvedPadding = padding?.resolve(Directionality.of(context));
       final resolvedRadius = borderRadius?.resolve(Directionality.of(context));
       final config = CNButtonConfig(
@@ -289,7 +313,7 @@ class AdaptiveButton extends StatelessWidget {
             : null,
         shrinkWrap: label != null,
         style: _nativeStyle,
-        labelColor: textColor,
+        labelColor: nativeLabelColor,
         labelFontFamily: labelStyle?.fontFamily,
         labelFontSize: label == null
             ? null
@@ -302,7 +326,6 @@ class AdaptiveButton extends StatelessWidget {
         imagePadding: label != null && sfSymbol != null ? 8 : null,
         customIconSize: iconSize,
       );
-      final active = enabled && onPressed != null && !busy;
       Widget button;
       final symbol = busy ? null : sfSymbol;
       if (label != null) {
@@ -310,20 +333,30 @@ class AdaptiveButton extends StatelessWidget {
           label: label!,
           icon: symbol == null
               ? null
-              : CNSymbol(symbol.name, size: symbol.size, color: symbol.color),
+              : CNSymbol(
+                  symbol.name,
+                  size: symbol.size,
+                  // On the tint, the symbol sits beside the label.
+                  color: symbol.color ?? (onTint ? nativeLabelColor : null),
+                ),
           onPressed: onPressed,
           enabled: active,
           semanticLabel: semanticLabel,
-          tint: color,
+          tint: tint,
           config: config,
         );
       } else if (symbol != null) {
         button = CNButton.icon(
-          icon: CNSymbol(symbol.name, size: symbol.size, color: symbol.color),
+          icon: CNSymbol(
+            symbol.name,
+            size: symbol.size,
+            // Alone on the tint, the symbol takes the paired colour too.
+            color: symbol.color ?? (onTint ? nativeLabelColor : null),
+          ),
           semanticLabel: semanticLabel,
           onPressed: onPressed,
           enabled: active,
-          tint: color,
+          tint: tint,
           config: config,
         );
       } else if (icon case final iconData?) {
@@ -331,12 +364,16 @@ class AdaptiveButton extends StatelessWidget {
         button = CNButton.icon(
           icon: symbolName == null
               ? null
-              : CNSymbol(symbolName, size: iconSize ?? 20, color: iconColor),
+              : CNSymbol(
+                  symbolName,
+                  size: iconSize ?? 20,
+                  color: iconColor ?? (onTint ? nativeLabelColor : null),
+                ),
           customIcon: symbolName == null ? iconData : null,
           semanticLabel: semanticLabel,
           onPressed: onPressed,
           enabled: active,
-          tint: symbolName == null ? iconColor ?? color : color,
+          tint: symbolName == null ? iconColor ?? tint : tint,
           config: config,
         );
       } else {
@@ -345,7 +382,7 @@ class AdaptiveButton extends StatelessWidget {
           semanticLabel: semanticLabel,
           onPressed: onPressed,
           enabled: active,
-          tint: color,
+          tint: tint,
           config: config,
         );
       }
