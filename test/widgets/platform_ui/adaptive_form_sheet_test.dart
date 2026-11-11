@@ -131,6 +131,18 @@ void main() {
         isNull,
       );
     });
+
+    testWidgets('a busy form ignores the backdrop and Back', (tester) async {
+      final results = await _open(tester, cupertino: false, busy: true);
+
+      await tester.tapAt(const Offset(4, 4));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.binding.handlePopRoute();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(results, isEmpty);
+    });
   });
 
   group('before iOS 26', () {
@@ -221,6 +233,9 @@ void main() {
     expect(barButton('Cancel').sfSymbol!.name, 'xmark');
     expect(barButton('Save').sfSymbol!.name, 'checkmark');
     expect(barButton('Save').style, AdaptiveButtonStyle.prominentGlass);
+    // iOS's minimum tap target, the navigation bar's height.
+    expect(barButton('Cancel').minSize, const Size.square(44));
+    expect(barButton('Save').minSize, const Size.square(44));
     expect(barButton('Save').onPressed, isNull);
 
     await tester.enterText(find.byKey(const Key('name')), 'Kitchen TV');

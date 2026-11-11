@@ -67,24 +67,28 @@ class AdaptiveFormSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final confirm = busy ? null : onConfirm;
     if (!PlatformUiCapabilities.isIOS) {
-      return AlertDialog(
-        title: Text(title),
-        content: SingleChildScrollView(child: child),
-        actions: [
-          TextButton(
-            onPressed: busy ? null : () => _cancel(context),
-            child: Text(cancelLabel),
-          ),
-          FilledButton(
-            onPressed: confirm,
-            child: busy
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(confirmLabel),
-          ),
-        ],
+      // While busy, neither the barrier nor Back may close it.
+      return PopScope(
+        canPop: !busy,
+        child: AlertDialog(
+          title: Text(title),
+          content: SingleChildScrollView(child: child),
+          actions: [
+            TextButton(
+              onPressed: busy ? null : () => _cancel(context),
+              child: Text(cancelLabel),
+            ),
+            FilledButton(
+              onPressed: confirm,
+              child: busy
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(confirmLabel),
+            ),
+          ],
+        ),
       );
     }
     final theme = Theme.of(context);
@@ -123,9 +127,9 @@ class AdaptiveFormSheet extends StatelessWidget {
         onPressed: onPressed,
         sfSymbol: const SFSymbol('xmark'),
         semanticLabel: cancelLabel,
-        minSize: const Size.square(36),
+        minSize: const Size.square(44),
         padding: EdgeInsets.zero,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(22),
         useSmoothRectangleBorder: false,
       );
     }
@@ -141,7 +145,7 @@ class AdaptiveFormSheet extends StatelessWidget {
       return Semantics(
         label: confirmLabel,
         child: const SizedBox.square(
-          dimension: 36,
+          dimension: 44,
           child: Center(child: CupertinoActivityIndicator()),
         ),
       );
@@ -152,9 +156,9 @@ class AdaptiveFormSheet extends StatelessWidget {
         sfSymbol: const SFSymbol('checkmark'),
         semanticLabel: confirmLabel,
         style: AdaptiveButtonStyle.prominentGlass,
-        minSize: const Size.square(36),
+        minSize: const Size.square(44),
         padding: EdgeInsets.zero,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(22),
         useSmoothRectangleBorder: false,
       );
     }
