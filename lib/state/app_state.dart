@@ -1559,12 +1559,28 @@ class AppState extends ChangeNotifier {
         _authService!.ipAddress ??
         _routerService!.selectedRouter!.activeAddress;
     final useHttps = _authService!.useHttps;
+    // Captured with the address it belongs to: after an await, the session
+    // may be another router's, and its token must not go to this one.
+    final sysauth = _authService!.sysauth!;
 
     try {
+      // The internet-facing devices, from an interface dump at most
+      // throughputDumpMaxAge old. Read before the counters, not after: the
+      // counters are timestamped when they are handed over, and a slow dump
+      // read in between would date them late, under-reporting this sample
+      // and spiking the next.
+      final interfaceDump = await _interfaceDumpForThroughput(
+        ip,
+        sysauth,
+        useHttps,
+        token,
+      );
+      if (token != _sessionToken) return;
+
       // Only fetch network devices for throughput calculation
       final result = await _apiService!.call(
         ip,
-        _authService!.sysauth!,
+        sysauth,
         useHttps,
         object: 'luci-rpc',
         method: 'getNetworkDevices',
@@ -1573,14 +1589,6 @@ class AppState extends ChangeNotifier {
 
       if (result is List && result.length > 1 && result[0] == 0) {
         final networkData = result[1] as Map<String, dynamic>?;
-
-        // The internet-facing devices, from an interface dump at most
-        // throughputDumpMaxAge old.
-        final interfaceDump = await _interfaceDumpForThroughput(
-          ip,
-          useHttps,
-          token,
-        );
         final wanDeviceNames = ThroughputService.combinedThroughputDevices(
           interfaceDump,
         );
@@ -1628,16 +1636,20 @@ class AppState extends ChangeNotifier {
 
   /// [_throughputDump], re-read once it is [throughputDumpMaxAge] old.
   ///
-  /// Asked after the poll's own request has answered, never alongside it:
-  /// some routers hang requests that run in parallel. A failed read keeps
-  /// the last copy (or the dashboard's) and waits out the same interval
-  /// before trying again, so a router that refuses it is not asked every
-  /// tick.
+  /// Asked before the poll's own request, never alongside it: some routers
+  /// hang requests that run in parallel. A failed read keeps the last copy
+  /// (or the dashboard's) and waits out the same interval before trying
+  /// again, so a router that refuses it is not asked every tick.
+  ///
+  /// [ip] and [sysauth] are the poll's, captured together; a poll from a
+  /// session that has since ended asks nothing.
   Future<Map?> _interfaceDumpForThroughput(
     String ip,
+    String sysauth,
     bool useHttps,
     int token,
   ) async {
+    if (token != _sessionToken) return null;
     final at = _throughputDumpAt;
     final stale =
         at == null || DateTime.now().difference(at) >= throughputDumpMaxAge;
@@ -1646,7 +1658,7 @@ class AppState extends ChangeNotifier {
       try {
         final result = await _apiService!.call(
           ip,
-          _authService!.sysauth!,
+          sysauth,
           useHttps,
           object: 'network.interface',
           method: 'dump',

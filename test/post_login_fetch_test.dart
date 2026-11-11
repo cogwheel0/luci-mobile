@@ -293,6 +293,11 @@ void main() {
     test('once its copy is stale', () async {
       final api = await pollFor(maxAge: Duration.zero);
       expect(api.callsTo('network.interface.dump'), greaterThan(0));
+      // Before the counters, so a slow dump read cannot date them late.
+      expect(
+        api.calls.indexOf('network.interface.dump'),
+        lessThan(api.calls.indexOf('luci-rpc.getNetworkDevices')),
+      );
     });
 
     test('not while the dashboard fetch\'s copy is fresh', () async {
