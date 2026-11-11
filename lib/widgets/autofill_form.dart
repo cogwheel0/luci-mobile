@@ -14,9 +14,13 @@ class AutofillForm extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final Widget child;
 
-  /// Offers to save what was typed into the form being shown, now that the
-  /// router accepted it. Call before navigating away from it.
-  static void saveCredentials() => TextInput.finishAutofillContext();
+  /// Ends the sign-in, offering to save what the form holds - now that the
+  /// router accepted it - only if [unchanged]: the fields stay editable
+  /// while signing in, and values typed meanwhile were never checked, so
+  /// saving them could store a wrong password over a working one. Call
+  /// before navigating away from the form.
+  static void saveCredentials({required bool unchanged}) =>
+      TextInput.finishAutofillContext(shouldSave: unchanged);
 
   @override
   Widget build(BuildContext context) => AutofillGroup(

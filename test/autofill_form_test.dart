@@ -46,9 +46,9 @@ void main() {
     expect(formKey.currentState!.validate(), isFalse);
   });
 
-  testWidgets('saving finishes the autofill context with a save', (
-    tester,
-  ) async {
+  // Fields stay editable while signing in; values typed meanwhile were
+  // never checked and must not be saved over a working entry.
+  testWidgets('only the values signed in with are saved', (tester) async {
     final calls = <MethodCall>[];
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       SystemChannels.textInput,
@@ -64,11 +64,15 @@ void main() {
       ),
     );
 
-    AutofillForm.saveCredentials();
+    AutofillForm.saveCredentials(unchanged: true);
+    AutofillForm.saveCredentials(unchanged: false);
     await tester.pump();
 
-    expect(calls.where((c) => c.method == 'TextInput.finishAutofillContext'), [
-      isA<MethodCall>().having((c) => c.arguments, 'shouldSave', true),
-    ]);
+    expect(
+      calls
+          .where((c) => c.method == 'TextInput.finishAutofillContext')
+          .map((c) => c.arguments),
+      [true, false],
+    );
   });
 }

@@ -659,7 +659,16 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                           return;
                                                                         }
                                                                         // While the dialog is still shown: the OS saves from it.
-                                                                        AutofillForm.saveCredentials();
+                                                                        // Only what was signed in with, not anything typed since.
+                                                                        AutofillForm.saveCredentials(
+                                                                          unchanged:
+                                                                              ipController.text.trim() ==
+                                                                                  input &&
+                                                                              userController.text.trim() ==
+                                                                                  user &&
+                                                                              passController.text ==
+                                                                                  pass,
+                                                                        );
                                                                         Navigator.pop(
                                                                           context,
                                                                         );

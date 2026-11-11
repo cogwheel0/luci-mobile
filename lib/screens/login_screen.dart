@@ -246,8 +246,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       );
 
       if (success && mounted) {
-        // While the form is still shown: the OS saves from it.
-        AutofillForm.saveCredentials();
+        // While the form is still shown: the OS saves from it. Only what
+        // was signed in with, not anything typed since.
+        AutofillForm.saveCredentials(
+          unchanged:
+              _ipController.text.trim() == input &&
+              _usernameController.text == user &&
+              _passwordController.text == pass,
+        );
         unawaited(Navigator.of(context).pushReplacementNamed('/'));
       }
     }
