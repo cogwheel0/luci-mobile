@@ -118,6 +118,78 @@ void main() {
     });
   });
 
+  group('Cupertino filled labels', () {
+    setUp(() {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    });
+
+    Future<Color?> labelColor(
+      WidgetTester tester, {
+      required Brightness brightness,
+      Color? fill,
+    }) async {
+      final scheme = ColorScheme.fromSeed(
+        seedColor: Colors.blue,
+        brightness: brightness,
+      );
+      // As AdaptiveApp sets them: the Cupertino primary is the Material one.
+      await tester.pumpWidget(
+        CupertinoApp(
+          theme: CupertinoThemeData(
+            brightness: brightness,
+            primaryColor: scheme.primary,
+          ),
+          home: Theme(
+            data: ThemeData(colorScheme: scheme),
+            child: Center(
+              child: AdaptiveButton(
+                onPressed: () {},
+                label: 'Connect',
+                color: fill,
+              ),
+            ),
+          ),
+        ),
+      );
+      return tester.widget<Text>(find.text('Connect')).style?.color;
+    }
+
+    for (final brightness in Brightness.values) {
+      testWidgets('pair with the ${brightness.name} theme primary', (
+        tester,
+      ) async {
+        final scheme = ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          brightness: brightness,
+        );
+        expect(
+          await labelColor(tester, brightness: brightness),
+          scheme.onPrimary,
+        );
+      });
+    }
+
+    testWidgets('read on a custom fill by its brightness', (tester) async {
+      expect(
+        await labelColor(
+          tester,
+          brightness: Brightness.dark,
+          fill: const Color(0xFFFFEB3B),
+        ),
+        CupertinoColors.black,
+      );
+      expect(
+        await labelColor(
+          tester,
+          brightness: Brightness.light,
+          fill: const Color(0xFF1B5E20),
+        ),
+        CupertinoColors.white,
+      );
+    });
+  });
+
   testWidgets('a busy Cupertino button shows an activity indicator', (
     tester,
   ) async {

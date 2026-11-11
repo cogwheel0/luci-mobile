@@ -32,6 +32,7 @@ IconData? cupertinoIconForSFSymbol(String symbol) => switch (symbol) {
   'square.and.arrow.down' => CupertinoIcons.square_arrow_down,
   'stop.fill' => CupertinoIcons.stop_fill,
   'wifi' => CupertinoIcons.wifi,
+  'arrow.right.to.line' => CupertinoIcons.arrow_right_to_line,
   'bubble.left' => CupertinoIcons.chat_bubble,
   'bubble.left.fill' => CupertinoIcons.chat_bubble_fill,
   'doc.text' => CupertinoIcons.doc_text,
@@ -422,7 +423,7 @@ class AdaptiveButton extends StatelessWidget {
     final primary = color ?? CupertinoTheme.of(context).primaryColor;
     final resolvedRadius = borderRadius ?? BorderRadius.circular(8);
     final foreground = switch (style) {
-      AdaptiveButtonStyle.filled => textColor ?? CupertinoColors.white,
+      AdaptiveButtonStyle.filled => textColor ?? _onFill(context, primary),
       AdaptiveButtonStyle.gray =>
         textColor ?? CupertinoColors.label.resolveFrom(context),
       _ => textColor ?? primary,
@@ -503,6 +504,19 @@ class AdaptiveButton extends StatelessWidget {
       ),
       child: result,
     );
+  }
+
+  /// A readable label colour for a [fill]: the Material scheme's pairing
+  /// when the fill is one of its colours (the Cupertino primary is the
+  /// Material primary, which is light in a dark theme), else black or
+  /// white by the fill's brightness.
+  static Color _onFill(BuildContext context, Color fill) {
+    final scheme = Theme.of(context).colorScheme;
+    if (fill == scheme.primary) return scheme.onPrimary;
+    if (fill == scheme.error) return scheme.onError;
+    return ThemeData.estimateBrightnessForColor(fill) == Brightness.dark
+        ? CupertinoColors.white
+        : CupertinoColors.black;
   }
 
   EdgeInsetsGeometry get _defaultPadding => switch (size) {

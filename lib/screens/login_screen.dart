@@ -760,6 +760,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                                 label: appState.isLoading
                                                     ? context.l10n.connecting
                                                     : context.l10n.connect,
+                                                sfSymbol: const SFSymbol(
+                                                  'arrow.right.to.line',
+                                                ),
                                                 materialIcon: Icons.login,
                                                 size: AdaptiveButtonSize.large,
                                                 padding:
