@@ -761,6 +761,9 @@ class AppState extends ChangeNotifier {
         } catch (e, stack) {
           Logger.exception('Could not clear the sign-out', e, stack);
         }
+        // A logout during that write owns the state now; this login must not
+        // clear its loading state or send the login screen to the dashboard.
+        if (token != _sessionToken) return false;
         _isLoading = false;
         notifyListeners();
         return true;
@@ -793,20 +796,26 @@ class AppState extends ChangeNotifier {
     final token = ++_sessionToken;
     _cancelRebootPolling();
     _isRebooting = false;
+    Future<void>? flagWrite;
     if (userInitiated) {
       // Held in memory as well: if storage refuses the write, the login
       // screen this logout opens must still not sign straight back in.
       _signedOutThisRun = true;
-      try {
-        await _routerService?.setSignedOut(true);
-      } catch (e, stack) {
-        Logger.exception('Could not remember the sign-out', e, stack);
-      }
+      // Started, not awaited, before the cleanup below takes its place in
+      // the auth queue: awaiting first would let a login started meanwhile
+      // queue ahead of this logout, whose cleanup would then end it.
+      flagWrite = _routerService
+          ?.setSignedOut(true)
+          .catchError(
+            (Object e, StackTrace stack) =>
+                Logger.exception('Could not remember the sign-out', e, stack),
+          );
     }
+    final cleanup = _serializeAuthOp<void>(
+      () => _authService?.logout() ?? Future<void>.value(),
+    );
     try {
-      await _serializeAuthOp<void>(
-        () => _authService?.logout() ?? Future<void>.value(),
-      );
+      await cleanup;
     } catch (e) {
       // Storage cleanup may have been incomplete; still clear in-memory
       // session state and proceed with logout.
@@ -816,6 +825,8 @@ class AppState extends ChangeNotifier {
         StackTrace.current,
       );
     }
+    // Its failure is already logged; this only waits for it to land.
+    await flagWrite;
     // A newer session started while cleanup ran - it owns the state now.
     if (token != _sessionToken) return;
     // A login, router switch or dashboard fetch this logout overtook returns

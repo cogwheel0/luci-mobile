@@ -364,6 +364,27 @@ void main() {
       expect(await routers.isSignedOut(), isTrue);
     });
 
+    // Logout's cleanup must take its place in the auth queue before it waits
+    // on storage; otherwise a sign-in started in that gap is queued first
+    // and the older logout's cleanup ends it.
+    test('a sign-in right after Log out is not ended by it', () async {
+      final auth = MockAuthService();
+      final state = AppState.forTesting(
+        apiService: _Router(),
+        authService: auth,
+        routerService: routers,
+      );
+      addTearDown(state.dispose);
+
+      final logout = state.logout(userInitiated: true);
+      final login = state.login('192.168.1.1', 'root', 'password', false);
+      await logout;
+
+      expect(await login, isTrue);
+      expect(auth.isAuthenticated, isTrue);
+      expect(await state.tryAutoLogin(), isTrue);
+    });
+
     test('flag writes land in the order they were made', () async {
       // Neither awaited before the next: a login's clear, then a logout.
       final cleared = routers.setSignedOut(false);
