@@ -141,27 +141,15 @@ jobs:
         with:
           xcode-version: 'latest-stable'
 
-        #5 Cache CocoaPods
-      - name: Cache CocoaPods
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: |
-            ios/Pods
-          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pods-
-
-      - name: Install CocoaPods
-        run: |
-          cd ios
-          pod install --verbose
-
-        #6 Build iOS App
+        #5 Build iOS App
+        # No CocoaPods step: the iOS project uses Swift Package Manager since
+        # af6c194 removed the Podfile, and `flutter build ios` resolves the
+        # packages itself. `pod install` failed with "No Podfile found".
       - name: Build iOS App
         run: |
           flutter build ios --release --no-codesign
 
-        #7 Create IPA from App Bundle
+        #6 Create IPA from App Bundle
       - name: Create IPA
         run: |
           mkdir -p build/ios/ipa
@@ -171,7 +159,7 @@ jobs:
           zip -r ../ipa/luci-mobile.ipa Payload
           cd ../ipa
 
-        #8 Upload Artifacts
+        #7 Upload Artifacts
       - name: Upload Artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -179,7 +167,7 @@ jobs:
           path: |
             build/ios/ipa/*.ipa
 
-        #9 Update Release
+        #8 Update Release
       - name: Update Release with IPA
         uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
         with:
