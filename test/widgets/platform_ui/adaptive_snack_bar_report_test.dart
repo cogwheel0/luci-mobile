@@ -227,6 +227,49 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('a newer message replaces a closed page\'s, not follows it', (
+      tester,
+    ) async {
+      final navigatorKey = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: navigatorKey,
+          home: const Scaffold(body: Text('Home')),
+        ),
+      );
+      navigatorKey.currentState!.push(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('Edit')),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final report = AdaptiveSnackBar.reporter(
+        tester.element(find.text('Edit')),
+      );
+      navigatorKey.currentState!.pop();
+      await tester.pumpAndSettle();
+
+      // The closed page's report shows a frame late; the newer one arrives
+      // before that frame.
+      report.show(message: 'Old', duration: const Duration(seconds: 3));
+      AdaptiveSnackBar.show(
+        tester.element(find.text('Home')),
+        message: 'New',
+        duration: const Duration(seconds: 3),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('New'), findsWidgets);
+      expect(find.text('Old'), findsNothing);
+
+      // Nor does it follow once the newer one has gone.
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.text('Old'), findsNothing);
+      }
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('a message longer than the toast keeps the banner', (
       tester,
     ) async {

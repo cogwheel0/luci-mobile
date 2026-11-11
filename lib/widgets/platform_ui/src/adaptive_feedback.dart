@@ -16,6 +16,10 @@ class AdaptiveSnackBar {
 
   static OverlayEntry? _activeIOSEntry;
 
+  /// Counts messages asked for, so one shown a frame late can tell that a
+  /// newer one has replaced it.
+  static int _latest = 0;
+
   static void show(
     BuildContext context, {
     required String message,
@@ -24,6 +28,7 @@ class AdaptiveSnackBar {
     String? action,
     VoidCallback? onActionPressed,
   }) {
+    final id = ++_latest;
     // A navigator's own context (kept by callers whose page may be gone by
     // the time they report) sits above that navigator's overlay.
     final contextOverlay = Overlay.maybeOf(context);
@@ -52,7 +57,7 @@ class AdaptiveSnackBar {
       if (contextOverlay != null) {
         showToast(context);
       } else {
-        _withContextIn(navigatorOverlay, showToast);
+        _withContextIn(navigatorOverlay, () => id == _latest, showToast);
       }
       return;
     }
@@ -110,8 +115,11 @@ class AdaptiveSnackBar {
   /// Calls [use] with a context inside [overlay], from a zero-size entry
   /// inserted for the purpose: CNToast finds its overlay from a context,
   /// and a navigator's own context sits above that navigator's overlay.
+  /// That is a frame later, so [stillWanted] is asked first: a newer message
+  /// asked for meanwhile replaces this one rather than following it.
   static void _withContextIn(
     OverlayState overlay,
+    bool Function() stillWanted,
     void Function(BuildContext context) use,
   ) {
     var used = false;
@@ -122,7 +130,7 @@ class AdaptiveSnackBar {
           used = true;
           // Not during build: showing inserts the toast's own entry.
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (probeContext.mounted) use(probeContext);
+            if (stillWanted() && probeContext.mounted) use(probeContext);
             if (probe.mounted) probe.remove();
           });
         }
