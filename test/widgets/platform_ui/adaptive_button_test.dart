@@ -170,6 +170,36 @@ void main() {
       });
     }
 
+    for (final (state, busy, expected) in [
+      ('busy', true, CupertinoColors.secondaryLabel),
+      ('disabled', false, CupertinoColors.tertiaryLabel),
+    ]) {
+      for (final style in [
+        AdaptiveButtonStyle.filled,
+        AdaptiveButtonStyle.plain,
+      ]) {
+        testWidgets('go grey on a $state ${style.name} button', (tester) async {
+          await tester.pumpWidget(
+            CupertinoApp(
+              home: Center(
+                child: AdaptiveButton(
+                  onPressed: busy ? () {} : null,
+                  busy: busy,
+                  label: 'Connecting',
+                  style: style,
+                ),
+              ),
+            ),
+          );
+          final context = tester.element(find.text('Connecting'));
+          expect(
+            tester.widget<Text>(find.text('Connecting')).style?.color,
+            expected.resolveFrom(context),
+          );
+        });
+      }
+    }
+
     testWidgets('read on a custom fill by its brightness', (tester) async {
       expect(
         await labelColor(

@@ -422,12 +422,21 @@ class AdaptiveButton extends StatelessWidget {
   Widget _buildCupertino(BuildContext context) {
     final primary = color ?? CupertinoTheme.of(context).primaryColor;
     final resolvedRadius = borderRadius ?? BorderRadius.circular(8);
-    final foreground = switch (style) {
-      AdaptiveButtonStyle.filled => textColor ?? _onFill(context, primary),
-      AdaptiveButtonStyle.gray =>
-        textColor ?? CupertinoColors.label.resolveFrom(context),
-      _ => textColor ?? primary,
-    };
+    final active = enabled && !busy && onPressed != null;
+    // An inactive CupertinoButton draws its pale disabled fill, so its label
+    // goes grey as CupertinoButton's own would. A busy label says what is
+    // happening, so it keeps the stronger grey.
+    final foreground =
+        textColor ??
+        switch (style) {
+          _ when busy => CupertinoColors.secondaryLabel.resolveFrom(context),
+          _ when !active => CupertinoColors.tertiaryLabel.resolveFrom(context),
+          AdaptiveButtonStyle.filled => _onFill(context, primary),
+          AdaptiveButtonStyle.gray => CupertinoColors.label.resolveFrom(
+            context,
+          ),
+          _ => primary,
+        };
     final customGlass =
         useNative &&
         PlatformUiCapabilities.usesNativeIOS26 &&
