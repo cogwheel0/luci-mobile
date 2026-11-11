@@ -12,6 +12,7 @@ class InterfaceSubnet {
     required this.base,
     required this.prefix,
     this.upstream = false,
+    this.device,
   });
 
   /// The logical interface (`lan`, `guest`, …).
@@ -19,6 +20,11 @@ class InterfaceSubnet {
   final String address;
   final List<int> base;
   final int prefix;
+
+  /// The Linux device it runs on (`br-lan`, `br-lan.20`, …), when the dump
+  /// says. Two logical interfaces on one device share the segment: a
+  /// client on either can be reached through the other's AP.
+  final String? device;
 
   /// True for an interface in an internet-facing firewall zone (or, with no
   /// firewall to ask, one named like one). Clients do not sit there, however
@@ -172,6 +178,26 @@ class ClientConfigPlanner {
       final hit = subnetContaining(address, apSubnets);
       if (hit != null) return ClientNetwork(hit.name, hit);
     }
+    // The AP's device can carry more than the network its `network` option
+    // names: a second interface on the same `br-lan` (another subnet, or an
+    // old-style alias) serves the same Wi-Fi clients. An address on one of
+    // those is where the client really is - falling back to the AP's
+    // network would check its own address against the wrong subnet (#90).
+    // A network on another device (a guest bridge) is not reachable from
+    // this AP, so an address there is a stale lease and the AP still wins.
+    final apDevices = {
+      for (final s in apSubnets)
+        if (s.device != null) s.device,
+    };
+    if (apDevices.isNotEmpty) {
+      final sameSegment = subnets
+          .where((s) => apDevices.contains(s.device))
+          .toList();
+      for (final address in addresses) {
+        final hit = subnetContaining(address, sameSegment);
+        if (hit != null) return ClientNetwork(hit.name, hit);
+      }
+    }
     if (apSubnets.isNotEmpty) {
       return ClientNetwork(apSubnets.first.name, apSubnets.first);
     }
@@ -242,6 +268,11 @@ class ClientConfigPlanner {
           ? name.startsWith('wan')
           : hints.named.contains(name) ||
                 (hints.masq.contains(name) && _hasDefaultRoute(iface['route']));
+      final l3 = iface['l3_device']?.toString();
+      final dev = iface['device']?.toString();
+      final device = (l3 != null && l3.isNotEmpty)
+          ? l3
+          : (dev != null && dev.isNotEmpty ? dev : null);
       for (final addr in addrs) {
         if (addr is! Map) continue;
         final base = parseIpv4(addr['address']?.toString() ?? '');
@@ -257,6 +288,7 @@ class ClientConfigPlanner {
             base: base,
             prefix: prefix,
             upstream: upstream,
+            device: device,
           ),
         );
       }

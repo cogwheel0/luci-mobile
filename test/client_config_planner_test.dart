@@ -678,6 +678,69 @@ void main() {
       expect(byFirewall.every((s) => !s.upstream), isTrue);
     });
 
+    // #90: two subnets on one bridge, the SSID's `network` naming only one.
+    // A Wi-Fi client on the other had its own address refused as "outside
+    // this network's subnet" when reserving it.
+    group('two networks on one bridge', () {
+      final shared = <String, dynamic>{
+        'interface': [
+          {
+            'interface': 'lan',
+            'l3_device': 'br-lan',
+            'ipv4-address': [
+              {'address': '192.168.52.1', 'mask': 24},
+            ],
+          },
+          {
+            'interface': 'lan50',
+            'device': '@lan',
+            'l3_device': 'br-lan',
+            'ipv4-address': [
+              {'address': '192.168.50.1', 'mask': 24},
+            ],
+          },
+          {
+            'interface': 'guest',
+            'l3_device': 'br-guest',
+            'ipv4-address': [
+              {'address': '192.168.2.1', 'mask': 24},
+            ],
+          },
+        ],
+      };
+      final subnets = ClientConfigPlanner.interfaceSubnets(shared);
+
+      test('a client on the other subnet is placed on it', () {
+        final located = ClientConfigPlanner.networkForClient(
+          subnets: subnets,
+          addresses: const ['192.168.50.238'],
+          wirelessNetworks: const ['lan'],
+        );
+        expect(located?.name, 'lan50');
+        expect(
+          ClientConfigPlanner.checkReservationIp(
+            '192.168.50.238',
+            subnets: [located!.subnet!],
+            alreadyReserved: const {},
+          ),
+          IpCheckResult.ok,
+        );
+      });
+
+      // A network on another bridge cannot be reached through this AP: an
+      // address there is a lease left over from before the client moved.
+      test('an address on another bridge does not outrank the AP', () {
+        expect(
+          ClientConfigPlanner.networkForClient(
+            subnets: subnets,
+            addresses: const ['192.168.2.50'],
+            wirelessNetworks: const ['lan'],
+          )?.name,
+          'lan',
+        );
+      });
+    });
+
     test('an AP on an interface the dump does not list still names it', () {
       expect(
         ClientConfigPlanner.networkForClient(
