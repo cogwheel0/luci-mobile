@@ -73,6 +73,37 @@ void main() {
     expect(userFacingApiError(plain), 'The router returned HTTP 502.');
   });
 
+  // The same, through the real transport: the request must carry the call
+  // name itself, or an HTTP failure is back to naming nothing.
+  test('a real ubus call answered with HTTP 500 names itself', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((request) async {
+      await request.drain<void>();
+      request.response.statusCode = HttpStatus.internalServerError;
+      await request.response.close();
+    });
+
+    Object? thrown;
+    try {
+      await RealApiService().call(
+        '127.0.0.1:${server.port}',
+        'token',
+        false,
+        object: 'luci-rpc',
+        method: 'getNetworkDevices',
+      );
+    } catch (e) {
+      thrown = e;
+    }
+
+    expect(thrown, isA<DioException>());
+    final info = describeApiError(thrown!);
+    expect(info.kind, ApiErrorKind.httpStatus);
+    expect(info.status, 500);
+    expect(info.call, 'luci-rpc.getNetworkDevices');
+  });
+
   test('a rejected session is told apart from an unreachable router', () {
     expect(
       describeApiError(
