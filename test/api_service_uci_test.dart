@@ -100,4 +100,35 @@ void main() {
     service.cancelScan();
     expect(await secondScan.timeout(const Duration(seconds: 1)), isEmpty);
   });
+
+  // The client list's optional reads give up after a budget. It must be
+  // the request that gives up - aborted by Dio - not just the wait for it,
+  // or the read runs on into the next one.
+  test('a receive timeout aborts a slow read at its deadline', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((request) async {
+      await request.drain<void>();
+      await Future<void>.delayed(const Duration(seconds: 3));
+      try {
+        request.response.headers.contentType = ContentType.json;
+        request.response.write('{"jsonrpc":"2.0","id":1,"result":[0,{}]}');
+        await request.response.close();
+      } catch (_) {
+        // The client hung up, as it should have.
+      }
+    });
+
+    final watch = Stopwatch()..start();
+    await expectLater(
+      RealApiService().fetchHostHints(
+        '127.0.0.1:${server.port}',
+        'token',
+        false,
+        receiveTimeout: const Duration(milliseconds: 300),
+      ),
+      throwsA(anything),
+    );
+    expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+  });
 }

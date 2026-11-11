@@ -262,4 +262,18 @@ void main() {
       }
     });
   });
+
+  // The all-routers list keeps one lease per client: a short real name
+  // must beat the placeholder, which is longer.
+  test('a real name outranks Unknown, whatever its length', () {
+    expect(
+      ClientPresence.nameScore('nas'),
+      greaterThan(ClientPresence.nameScore('Unknown')),
+    );
+    expect(
+      ClientPresence.nameScore('laserjet'),
+      greaterThan(ClientPresence.nameScore('nas')),
+    );
+    expect(ClientPresence.nameScore(''), ClientPresence.nameScore('N/A'));
+  });
 }

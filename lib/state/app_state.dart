@@ -3195,12 +3195,14 @@ class AppState extends ChangeNotifier {
                 isOnline: true,
               )
             : client;
-        // Prefer entries that have more info (hostname length as heuristic)
+        // Prefer entries that have more info: a real name over the
+        // `Unknown` placeholder, else the longer name. The placeholder must
+        // not win on length over a short real name such as `nas`.
         final previous = clients[macNorm];
         final kept =
             previous == null ||
-                (enriched.hostname.isNotEmpty &&
-                    enriched.hostname.length > previous.hostname.length)
+                ClientPresence.nameScore(enriched.hostname) >
+                    ClientPresence.nameScore(previous.hostname)
             ? enriched
             : previous;
         // Presence is the client's, not the lease's: one router still
@@ -3430,27 +3432,47 @@ class AppState extends ChangeNotifier {
     String sysauth,
     bool useHttps,
   ) async {
+    // The budget goes on the request itself, so Dio aborts it: a Future
+    // timeout would only stop waiting, and leave the read running into the
+    // next one - overlap that some routers hang on.
+    final api = _apiService!;
+    final real = api is RealApiService ? api : null;
+    const budget = ClientPresence.readBudget;
     var hints = const <String, dynamic>{};
     try {
-      hints = await _apiService!
-          .fetchHostHints(ip, sysauth, useHttps)
-          .timeout(ClientPresence.readBudget);
+      hints = real != null
+          ? await real.fetchHostHints(
+              ip,
+              sysauth,
+              useHttps,
+              receiveTimeout: budget,
+            )
+          : await api.fetchHostHints(ip, sysauth, useHttps);
     } catch (e) {
       Logger.debug('Host hints unavailable: $e');
     }
     List<Neighbour>? neighbours;
     try {
       final (command, params) = ClientPresence.neighbourCommand;
-      final result = await _apiService!
-          .call(
-            ip,
-            sysauth,
-            useHttps,
-            object: 'file',
-            method: 'exec',
-            params: {'command': command, 'params': params},
-          )
-          .timeout(ClientPresence.readBudget);
+      final execParams = {'command': command, 'params': params};
+      final result = real != null
+          ? await real.call(
+              ip,
+              sysauth,
+              useHttps,
+              object: 'file',
+              method: 'exec',
+              params: execParams,
+              receiveTimeout: budget,
+            )
+          : await api.call(
+              ip,
+              sysauth,
+              useHttps,
+              object: 'file',
+              method: 'exec',
+              params: execParams,
+            );
       final body = result is List && result.length > 1 ? result[1] : null;
       // rpcd leaves `stdout` out when the command printed nothing: an
       // empty table, which says no one is there, not that it is unknown.

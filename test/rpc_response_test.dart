@@ -190,6 +190,7 @@ class _StationApi extends RealApiService {
     required String method,
     Map<String, dynamic>? params,
     BuildContext? context,
+    Duration? receiveTimeout,
   }) async {
     if (method == 'assoclist' && stationResponse != null) {
       return stationResponse;

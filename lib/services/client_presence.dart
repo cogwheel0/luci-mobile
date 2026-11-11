@@ -173,6 +173,12 @@ class ClientPresence {
   /// seconds, not a full request timeout per read.
   static const readBudget = Duration(seconds: 5);
 
+  /// How much a hostname says, for picking between two leases of one
+  /// client: any real name beats the `Unknown` placeholder, else longer
+  /// wins.
+  static int nameScore(String hostname) =>
+      isUnnamed(hostname) ? -1 : hostname.length;
+
   /// Whether [hostname] is the placeholder for "no name".
   static bool isUnnamed(String hostname) =>
       hostname.isEmpty || hostname == 'Unknown' || hostname == 'N/A';
