@@ -6,30 +6,33 @@
     "peers": {
       "peer_public_key_laptop": {
         "public_key": "peer_public_key_laptop",
+        "name": "Laptop",
         "endpoint": "192.168.1.150:51821",
         "last_handshake": 1700000000,
         "allowed_ips": ["10.0.0.2/32"],
         "persistent_keepalive": 25,
-        "rx_bytes": 1234567,
-        "tx_bytes": 987654
+        "transfer_rx": 1234567,
+        "transfer_tx": 987654
       },
       "peer_public_key_phone": {
         "public_key": "peer_public_key_phone",
+        "name": "Phone",
         "endpoint": "192.168.1.151:51822",
         "last_handshake": 1699999900,
         "allowed_ips": ["10.0.0.3/32"],
         "persistent_keepalive": 25,
-        "rx_bytes": 2345678,
-        "tx_bytes": 1876543
+        "transfer_rx": 2345678,
+        "transfer_tx": 1876543
       },
       "peer_public_key_tablet": {
         "public_key": "peer_public_key_tablet",
+        "name": "Tablet",
         "endpoint": "[::]:0",
         "last_handshake": 1699999000,
         "allowed_ips": ["10.0.0.4/32"],
         "persistent_keepalive": 0,
-        "rx_bytes": 345678,
-        "tx_bytes": 234567
+        "transfer_rx": 345678,
+        "transfer_tx": 234567
       }
     }
   }

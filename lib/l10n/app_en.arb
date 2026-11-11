@@ -886,5 +886,10 @@
         "type": "String"
       }
     }
-  }
+  },
+  "architecture": "Architecture",
+  "targetPlatform": "Target platform",
+  "kernelVersion": "Kernel version",
+  "systemDetails": "System details",
+  "allowedIps": "Allowed IPs"
 }

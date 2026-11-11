@@ -925,6 +925,37 @@ class RealApiService implements IApiService {
     }
   }
 
+  /// One peer from `luci.wireguard getWgInstances`, as the Interfaces page
+  /// reads it.
+  ///
+  /// `name` is the peer section's `description` - the name LuCI shows -
+  /// and `allowed_ips`, `transfer_rx`/`transfer_tx` are what tell peers
+  /// apart and say whether one is in use (#10). Optional: an older LuCI
+  /// that omits them just shows less.
+  @visibleForTesting
+  static Map<String, dynamic> wireGuardPeer(
+    String publicKey,
+    Map<String, dynamic> raw,
+  ) {
+    int? count(Object? v) => v is num ? v.toInt() : int.tryParse('$v');
+    final name = raw['name']?.toString().trim();
+    final allowed = raw['allowed_ips'];
+    return {
+      'public_key': publicKey,
+      'endpoint': raw['endpoint'] ?? 'N/A',
+      'last_handshake': count(raw['latest_handshake']) ?? 0,
+      if (name != null && name.isNotEmpty) 'name': name,
+      'allowed_ips': <String>[
+        if (allowed is List)
+          for (final ip in allowed)
+            if ('$ip'.trim().isNotEmpty && '$ip'.trim() != '(none)')
+              '$ip'.trim(),
+      ],
+      'transfer_rx': ?count(raw['transfer_rx']),
+      'transfer_tx': ?count(raw['transfer_tx']),
+    };
+  }
+
   Map<String, dynamic>? _parseWireGuardFromInstances(
     Map<String, dynamic> data,
     String targetInterface,
@@ -943,15 +974,7 @@ class RealApiService implements IApiService {
             if (peer is Map<String, dynamic>) {
               final publicKey = peer['public_key'] as String?;
               if (publicKey != null) {
-                peers[publicKey] = {
-                  'public_key': publicKey,
-                  'endpoint': peer['endpoint'] ?? 'N/A',
-                  'last_handshake':
-                      int.tryParse(
-                        peer['latest_handshake']?.toString() ?? '0',
-                      ) ??
-                      0,
-                };
+                peers[publicKey] = wireGuardPeer(publicKey, peer);
               }
             }
           }
@@ -959,15 +982,7 @@ class RealApiService implements IApiService {
           final peersMap = value['peers'] as Map<String, dynamic>;
           peersMap.forEach((peerKey, peerData) {
             if (peerData is Map<String, dynamic>) {
-              peers[peerKey] = {
-                'public_key': peerKey,
-                'endpoint': peerData['endpoint'] ?? 'N/A',
-                'last_handshake':
-                    int.tryParse(
-                      peerData['latest_handshake']?.toString() ?? '0',
-                    ) ??
-                    0,
-              };
+              peers[peerKey] = wireGuardPeer(peerKey, peerData);
             }
           });
         }

@@ -532,5 +532,10 @@
   "notifyIntervalNote": "Android non esegue controlli in background più spesso di ogni 15 minuti e può ritardarli per risparmiare batteria.",
   "notifyAwayNote": "I controlli funzionano solo sulla rete del router. Fuori casa vengono saltati anziché segnalati come un’interruzione.",
   "changeBlockedByOthers": "Il router ha ancora modifiche non salvate in {configs}. Applicare ora comporterebbe anche quelle: scartale o applicale prima.",
-  "changeLeftStaged": "La modifica non è riuscita e sul router restano modifiche non salvate in {configs}. Scartale o applicale in LuCI."
+  "changeLeftStaged": "La modifica non è riuscita e sul router restano modifiche non salvate in {configs}. Scartale o applicale in LuCI.",
+  "architecture": "Architettura",
+  "targetPlatform": "Piattaforma di destinazione",
+  "kernelVersion": "Versione del kernel",
+  "systemDetails": "Dettagli di sistema",
+  "allowedIps": "IP consentiti"
 }
