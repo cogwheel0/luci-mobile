@@ -1149,6 +1149,36 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     final displayKey = publicKey.length > 16
         ? '${publicKey.substring(0, 8)}...${publicKey.substring(publicKey.length - 8)}'
         : publicKey;
+    final rawAllowed = peer['allowed_ips'];
+    final allowedIps = rawAllowed is List
+        ? [for (final ip in rawAllowed) '$ip']
+        : const <String>[];
+    final rawRx = peer['transfer_rx'];
+    final rawTx = peer['transfer_tx'];
+    final transferRx = rawRx is num ? rawRx.toInt() : null;
+    final transferTx = rawTx is num ? rawTx.toInt() : null;
+    Widget peerField(String label, String value) => Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w500,
+            fontSize: 14,
+            color: colorScheme.onSurface,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
     String formatHandshakeTime(int timestamp) {
       if (timestamp == 0) return context.l10n.never;
       final now = DateTime.now();
@@ -1262,6 +1292,37 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               ),
             ],
           ),
+          if (allowedIps.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            peerField(context.l10n.allowedIps, allowedIps.join(', ')),
+          ],
+          if (transferRx != null || transferTx != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // The router's view, as on the interface cards: received
+                // from the peer, sent to it. A direction the router did
+                // not report is left out, not shown as no traffic.
+                if (transferRx != null)
+                  Expanded(
+                    child: peerField(
+                      context.l10n.received,
+                      formatBytes(transferRx, decimals: 2),
+                    ),
+                  ),
+                if (transferRx != null && transferTx != null)
+                  const SizedBox(width: 24),
+                if (transferTx != null)
+                  Expanded(
+                    child: peerField(
+                      context.l10n.transmitted,
+                      formatBytes(transferTx, decimals: 2),
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );

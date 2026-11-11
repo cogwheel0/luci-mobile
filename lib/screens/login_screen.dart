@@ -11,6 +11,7 @@ import 'package:luci_mobile/config/app_config.dart';
 import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/utils/url_parser.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/widgets/autofill_form.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -245,6 +246,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       );
 
       if (success && mounted) {
+        // While the form is still shown: the OS saves from it. Only what
+        // was signed in with, not anything typed since.
+        AutofillForm.saveCredentials(
+          unchanged:
+              _ipController.text.trim() == input &&
+              _usernameController.text == user &&
+              _passwordController.text == pass,
+        );
         unawaited(Navigator.of(context).pushReplacementNamed('/'));
       }
     }
@@ -460,8 +469,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                   horizontal: 18.0,
                                   vertical: 16.0,
                                 ),
-                                child: Form(
-                                  key: _formKey,
+                                child: AutofillForm(
+                                  formKey: _formKey,
                                   child: Builder(
                                     builder: (context) {
                                       final appState = ref.watch(
@@ -480,7 +489,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                               autofocus: true,
                                               autofillHints: const [
                                                 AutofillHints.url,
-                                                AutofillHints.username,
                                               ],
                                               decoration: InputDecoration(
                                                 labelText:
