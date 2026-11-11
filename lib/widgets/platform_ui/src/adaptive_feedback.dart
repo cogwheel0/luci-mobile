@@ -293,6 +293,43 @@ class AdaptiveAlertDialogInput {
 class AdaptiveAlertDialog {
   AdaptiveAlertDialog._();
 
+  /// Asks a yes-or-no question: a native alert on iOS 26 and later, a
+  /// Cupertino alert before, a Material dialog on Android. True only when
+  /// the user picks [confirmLabel]; cancelling or dismissing is false.
+  ///
+  /// A [destructive] confirmation is red; otherwise it is the alert's
+  /// default action, and Material's filled button.
+  static Future<bool> confirm({
+    required BuildContext context,
+    required String title,
+    String? message,
+    required String confirmLabel,
+    required String cancelLabel,
+    bool destructive = false,
+  }) async {
+    var confirmed = false;
+    await show(
+      context: context,
+      title: title,
+      message: message,
+      actions: [
+        AlertAction(
+          title: cancelLabel,
+          style: AlertActionStyle.cancel,
+          onPressed: () {},
+        ),
+        AlertAction(
+          title: confirmLabel,
+          style: destructive
+              ? AlertActionStyle.destructive
+              : AlertActionStyle.primary,
+          onPressed: () => confirmed = true,
+        ),
+      ],
+    );
+    return confirmed;
+  }
+
   static Future<void> show({
     required BuildContext context,
     required String title,
@@ -364,26 +401,35 @@ class AdaptiveAlertDialog {
         title: Text(title),
         content: message == null ? null : Text(message),
         actions: [
-          for (final action in actions)
-            TextButton(
-              style: action.style == AlertActionStyle.destructive
-                  ? TextButton.styleFrom(
-                      foregroundColor: Theme.of(dialogContext)
-                          .colorScheme
-                          .error,
-                    )
-                  : null,
-              onPressed:
-                  !action.enabled || action.style == AlertActionStyle.disabled
-                  ? null
-                  : () {
-                      Navigator.of(dialogContext).pop();
-                      action.onPressed();
-                    },
-              child: Text(action.title),
-            ),
+          for (final action in actions) _materialAction(dialogContext, action),
         ],
       ),
+    );
+  }
+
+  /// A primary action is Material's filled button; the rest are text
+  /// buttons, a destructive one in the error colour.
+  static Widget _materialAction(
+    BuildContext dialogContext,
+    AlertAction action,
+  ) {
+    final onPressed = !_isEnabled(action)
+        ? null
+        : () {
+            Navigator.of(dialogContext).pop();
+            action.onPressed();
+          };
+    if (action.style == AlertActionStyle.primary) {
+      return FilledButton(onPressed: onPressed, child: Text(action.title));
+    }
+    return TextButton(
+      style: action.style == AlertActionStyle.destructive
+          ? TextButton.styleFrom(
+              foregroundColor: Theme.of(dialogContext).colorScheme.error,
+            )
+          : null,
+      onPressed: onPressed,
+      child: Text(action.title),
     );
   }
 

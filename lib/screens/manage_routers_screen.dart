@@ -160,29 +160,18 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                 } else {
                                   routerLabel = router.ipAddress;
                                 }
-                                final confirm = await showDialog<bool>(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: Text(context.l10n.removeRouter),
-                                    content: Text(
-                                      context.l10n.removeRouterConfirmation(
-                                        routerLabel,
-                                      ),
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, false),
-                                        child: Text(context.l10n.cancel),
-                                      ),
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(context, true),
-                                        child: Text(context.l10n.remove),
-                                      ),
-                                    ],
-                                  ),
-                                );
+                                final confirm =
+                                    await AdaptiveAlertDialog.confirm(
+                                      context: context,
+                                      title: context.l10n.removeRouter,
+                                      message: context.l10n
+                                          .removeRouterConfirmation(
+                                            routerLabel,
+                                          ),
+                                      cancelLabel: context.l10n.cancel,
+                                      confirmLabel: context.l10n.remove,
+                                      destructive: true,
+                                    );
                                 if (!context.mounted) return;
                                 if (confirm == true) {
                                   // Deleting the monitored router switches
@@ -937,24 +926,13 @@ class _UnifiedRouterCard extends StatelessWidget {
                   semanticLabel: context.l10n.removeFallbackAddress,
                   style: AdaptiveButtonStyle.plain,
                   onPressed: () async {
-                    final confirm = await showDialog<bool>(
+                    final confirm = await AdaptiveAlertDialog.confirm(
                       context: context,
-                      builder: (context) => AlertDialog(
-                        title: Text(context.l10n.removeFallbackAddressTitle),
-                        content: Text(
-                          context.l10n.removeFallbackAddressConfirmation,
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: Text(context.l10n.cancel),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            child: Text(context.l10n.remove),
-                          ),
-                        ],
-                      ),
+                      title: context.l10n.removeFallbackAddressTitle,
+                      message: context.l10n.removeFallbackAddressConfirmation,
+                      cancelLabel: context.l10n.cancel,
+                      confirmLabel: context.l10n.remove,
+                      destructive: true,
                     );
                     if (confirm == true && context.mounted) {
                       onRemoveFallback!();

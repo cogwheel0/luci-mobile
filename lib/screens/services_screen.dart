@@ -11,6 +11,7 @@ import 'package:luci_mobile/state/feature_providers.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_feature_gate.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 final servicesProvider = FutureProvider<List<ServiceStatus>>((ref) async {
   final session = ref.watch(sessionProvider);
@@ -78,24 +79,14 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
       return true;
     }
     final l10n = context.l10n;
-    return await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: Text(l10n.serviceCriticalTitle),
-            content: Text(l10n.serviceCriticalBody(service.name)),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: Text(l10n.cancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: Text(l10n.continueAnyway),
-              ),
-            ],
-          ),
-        ) ??
-        false;
+    return AdaptiveAlertDialog.confirm(
+      context: context,
+      title: l10n.serviceCriticalTitle,
+      message: l10n.serviceCriticalBody(service.name),
+      cancelLabel: l10n.cancel,
+      confirmLabel: l10n.continueAnyway,
+      destructive: true,
+    );
   }
 
   @override
