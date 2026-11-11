@@ -97,6 +97,17 @@ class AppState extends ChangeNotifier {
   // Guards against overlapping throughput polls on slow links.
   bool _throughputUpdateInFlight = false;
 
+  /// The throughput poll's own copy of `network.interface dump`, which says
+  /// which devices face the internet. The dashboard's copy is only re-read
+  /// when the dashboard is, so a WAN that failed over or reconnected since
+  /// would be counted from stale routes and link state for as long as the
+  /// dashboard stays open. Seeded by each dashboard fetch, re-read by the
+  /// poll once it is [throughputDumpMaxAge] old.
+  Map? _throughputDump;
+  DateTime? _throughputDumpAt;
+  @visibleForTesting
+  Duration throughputDumpMaxAge = const Duration(seconds: 30);
+
   // Set while a UCI apply is awaiting confirmation. rpcd binds a pending
   // rollback to the session id that called uci.apply, so any re-login during
   // the confirm window makes uci.confirm fail and the router revert. While
@@ -498,6 +509,17 @@ class AppState extends ChangeNotifier {
           deviceName ?? interface,
         ) ??
         0.0;
+  }
+
+  /// Whether [interface] (as the dashboard preferences name it) faces the
+  /// router's clients, so its rx is their upload; see
+  /// [ThroughputService.isClientFacing].
+  bool isClientFacingInterface(String interface) {
+    final dump = _dashboardData?['interfaceDump'];
+    return ThroughputService.isClientFacing(
+      dump is Map ? dump : null,
+      _getDeviceNameForInterface(interface) ?? interface,
+    );
   }
 
   Future<void> loadRouters() async {
@@ -1184,26 +1206,10 @@ class AppState extends ChangeNotifier {
         }
       }
 
-      // Throughput calculation - collect ALL interface devices
-      final wanDeviceNames = <String>{};
-      if (interfaceDump != null && interfaceDump['interface'] is List) {
-        for (final interface in interfaceDump['interface']) {
-          if (interface is Map<String, dynamic>) {
-            final ifname = interface['interface'] as String?;
-            // Skip only loopback interface
-            if (ifname != null && ifname != 'loopback' && ifname != 'lo') {
-              final device = interface['device'] as String?;
-              final l3Device = interface['l3_device'] as String?;
-              if (device != null) {
-                wanDeviceNames.add(device);
-              }
-              if (l3Device != null && l3Device != device) {
-                wanDeviceNames.add(l3Device);
-              }
-            }
-          }
-        }
-      }
+      // The combined graph counts the internet-facing devices only.
+      final wanDeviceNames = ThroughputService.combinedThroughputDevices(
+        interfaceDump,
+      );
 
       // Update throughput data using the service
       // Check if we should track specific interface
@@ -1262,6 +1268,11 @@ class AppState extends ChangeNotifier {
         '_lastUpdated':
             DateTime.now().millisecondsSinceEpoch, // Force UI updates
       };
+      // A fresh dump: the throughput poll starts its interval from here.
+      if (interfaceDump != null) {
+        _throughputDump = interfaceDump;
+        _throughputDumpAt = DateTime.now();
+      }
 
       // Hybrid approach: update lastKnownHostname for the selected router
       final boardInfo = _dashboardData?['boardInfo'] as Map<String, dynamic>?;
@@ -1548,12 +1559,28 @@ class AppState extends ChangeNotifier {
         _authService!.ipAddress ??
         _routerService!.selectedRouter!.activeAddress;
     final useHttps = _authService!.useHttps;
+    // Captured with the address it belongs to: after an await, the session
+    // may be another router's, and its token must not go to this one.
+    final sysauth = _authService!.sysauth!;
 
     try {
+      // The internet-facing devices, from an interface dump at most
+      // throughputDumpMaxAge old. Read before the counters, not after: the
+      // counters are timestamped when they are handed over, and a slow dump
+      // read in between would date them late, under-reporting this sample
+      // and spiking the next.
+      final interfaceDump = await _interfaceDumpForThroughput(
+        ip,
+        sysauth,
+        useHttps,
+        token,
+      );
+      if (token != _sessionToken) return;
+
       // Only fetch network devices for throughput calculation
       final result = await _apiService!.call(
         ip,
-        _authService!.sysauth!,
+        sysauth,
         useHttps,
         object: 'luci-rpc',
         method: 'getNetworkDevices',
@@ -1562,27 +1589,9 @@ class AppState extends ChangeNotifier {
 
       if (result is List && result.length > 1 && result[0] == 0) {
         final networkData = result[1] as Map<String, dynamic>?;
-
-        // Get ALL device names from cached dashboard data (except loopback)
-        final wanDeviceNames = <String>{};
-        final interfaceDump =
-            _dashboardData?['interfaceDump'] as Map<String, dynamic>?;
-        if (interfaceDump != null && interfaceDump['interface'] is List) {
-          for (final interface in interfaceDump['interface']) {
-            if (interface is Map<String, dynamic>) {
-              final ifname = interface['interface'] as String?;
-              final device = interface['device'] as String?;
-              final l3Device = interface['l3_device'] as String?;
-              // Include all interfaces except loopback
-              if (ifname != null && ifname != 'loopback' && ifname != 'lo') {
-                if (device != null) wanDeviceNames.add(device);
-                if (l3Device != null && l3Device != device) {
-                  wanDeviceNames.add(l3Device);
-                }
-              }
-            }
-          }
-        }
+        final wanDeviceNames = ThroughputService.combinedThroughputDevices(
+          interfaceDump,
+        );
 
         // Check if we should track specific interface
         final prefs = _dashboardPreferences;
@@ -1620,6 +1629,54 @@ class AppState extends ChangeNotifier {
   void _cancelThroughputTimer() {
     _throughputTimer?.cancel();
     _throughputService?.clear();
+    // Another router's, or another session's: the next fetch seeds it.
+    _throughputDump = null;
+    _throughputDumpAt = null;
+  }
+
+  /// [_throughputDump], re-read once it is [throughputDumpMaxAge] old.
+  ///
+  /// Asked before the poll's own request, never alongside it: some routers
+  /// hang requests that run in parallel. A failed read keeps the last copy
+  /// (or the dashboard's) and waits out the same interval before trying
+  /// again, so a router that refuses it is not asked every tick.
+  ///
+  /// [ip] and [sysauth] are the poll's, captured together; a poll from a
+  /// session that has since ended asks nothing.
+  Future<Map?> _interfaceDumpForThroughput(
+    String ip,
+    String sysauth,
+    bool useHttps,
+    int token,
+  ) async {
+    if (token != _sessionToken) return null;
+    final at = _throughputDumpAt;
+    final stale =
+        at == null || DateTime.now().difference(at) >= throughputDumpMaxAge;
+    if (stale) {
+      _throughputDumpAt = DateTime.now();
+      try {
+        final result = await _apiService!.call(
+          ip,
+          sysauth,
+          useHttps,
+          object: 'network.interface',
+          method: 'dump',
+          params: {},
+        );
+        if (token == _sessionToken &&
+            result is List &&
+            result.length > 1 &&
+            result[0] == 0 &&
+            result[1] is Map) {
+          _throughputDump = result[1] as Map;
+        }
+      } catch (e) {
+        Logger.debug('Throughput interface dump failed: $e');
+      }
+    }
+    final dump = _throughputDump ?? _dashboardData?['interfaceDump'];
+    return dump is Map ? dump : null;
   }
 
   /// Whether a session-bound operation (a UCI apply awaiting confirmation) is
