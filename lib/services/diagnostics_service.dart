@@ -125,9 +125,16 @@ class DiagnosticsService {
     RouterSession session, {
     int lines = 200,
   }) async {
+    RpcException? tooLarge;
     RpcException? denied;
     RpcException? last;
-    for (final (command, params) in systemLogCommands) {
+    for (final (command, params) in [
+      ...systemLogCommands,
+      // Last, and not granted by stock ACLs: the only bounded form, for a
+      // log too large for rpcd to return whole on a router whose ACL allows
+      // it. Stock routers refuse it, which changes nothing.
+      ('/sbin/logread', ['-l', '$lines']),
+    ]) {
       try {
         // A reader that ran and failed is not retried: the others are older
         // releases' forms, which this router's ACL would refuse anyway.
@@ -138,17 +145,25 @@ class DiagnosticsService {
           stderr: result.stderr,
         );
       } on RpcException catch (e) {
-        // Not installed on this release (4), or not the form this release's
-        // ACL grants (6): try the next one. Anything else is a real failure.
-        if (!e.isNotFound && !e.isAccessDenied) rethrow;
+        // Not installed on this release (4), not the form this release's
+        // ACL grants (6), or more output than rpcd returns in one reply (8,
+        // 256 KiB - a large `log_file`): try the next one. Anything else is
+        // a real failure.
+        final isTooLarge = e.status == _ubusNotSupported;
+        if (!e.isNotFound && !e.isAccessDenied && !isTooLarge) rethrow;
         last = e;
+        if (isTooLarge) tooLarge ??= e;
         if (e.isAccessDenied) denied ??= e;
       }
     }
-    // A refusal says more than "not found": it means a log reader exists
-    // and this account may not run it.
-    throw denied ?? last!;
+    // Most telling first. "Too large" means the log was readable; a refusal
+    // means a reader exists and this account may not run it; "not found"
+    // says least.
+    throw tooLarge ?? denied ?? last!;
   }
+
+  /// What rpcd answers when a command prints more than it will return.
+  static const _ubusNotSupported = 8;
 
   /// The last [count] non-empty lines of [output].
   @visibleForTesting

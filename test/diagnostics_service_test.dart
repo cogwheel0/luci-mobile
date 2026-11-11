@@ -131,6 +131,34 @@ void main() {
       );
     });
 
+    // rpcd returns at most 256 KiB from file.exec and answers 8 beyond
+    // that; a large `log_file` gets there.
+    group('a log too large for rpcd', () {
+      const tooLarge = RpcException(object: 'file', method: 'exec', status: 8);
+
+      test('falls back to the bounded form where it is allowed', () async {
+        final api = _AclApi({
+          '/usr/libexec/syslog-wrapper': tooLarge,
+          '/usr/sbin/logread -e ^': _notFound,
+          '/sbin/logread -l 200': _stdout('recent\n'),
+        });
+
+        final result = await DiagnosticsService(api).systemLog(_session);
+
+        expect(result.output, 'recent');
+        expect(api.asked.last, '/sbin/logread -l 200');
+      });
+
+      test('is reported as such, not as a refusal', () async {
+        final api = _AclApi({'/usr/libexec/syslog-wrapper': tooLarge});
+
+        await expectLater(
+          DiagnosticsService(api).systemLog(_session),
+          throwsA(isA<RpcException>().having((e) => e.status, 'status', 8)),
+        );
+      });
+    });
+
     test('a failure other than refusal or absence is not retried', () async {
       final api = _AclApi({
         '/usr/libexec/syslog-wrapper': const RpcException(
