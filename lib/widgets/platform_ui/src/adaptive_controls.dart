@@ -520,10 +520,13 @@ class AdaptiveButton extends StatelessWidget {
   /// Material primary, which is light in a dark theme), else black or
   /// white by the fill's brightness.
   static Color _onFill(BuildContext context, Color fill) {
+    // CupertinoButton draws a dynamic fill resolved for the current
+    // brightness, so measure that colour, not its light default.
+    final drawn = CupertinoDynamicColor.resolve(fill, context);
     final scheme = Theme.of(context).colorScheme;
-    if (fill == scheme.primary) return scheme.onPrimary;
-    if (fill == scheme.error) return scheme.onError;
-    return ThemeData.estimateBrightnessForColor(fill) == Brightness.dark
+    if (drawn == scheme.primary) return scheme.onPrimary;
+    if (drawn == scheme.error) return scheme.onError;
+    return ThemeData.estimateBrightnessForColor(drawn) == Brightness.dark
         ? CupertinoColors.white
         : CupertinoColors.black;
   }

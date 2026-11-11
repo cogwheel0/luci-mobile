@@ -217,6 +217,18 @@ void main() {
         ),
         CupertinoColors.white,
       );
+      // A dynamic fill is measured as drawn: black in the dark theme.
+      expect(
+        await labelColor(
+          tester,
+          brightness: Brightness.dark,
+          fill: const CupertinoDynamicColor.withBrightness(
+            color: Color(0xFFFFFFFF),
+            darkColor: Color(0xFF000000),
+          ),
+        ),
+        CupertinoColors.white,
+      );
     });
   });
 
