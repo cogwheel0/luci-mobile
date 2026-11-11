@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:luci_mobile/l10n/failure_text.dart';
@@ -13,6 +13,7 @@ import 'package:luci_mobile/widgets/luci_animation_system.dart';
 import 'package:luci_mobile/models/glinet_data.dart';
 import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/utils/wifi_utils.dart';
+import 'package:luci_mobile/navigation/tab_bar_inset.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -221,12 +222,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final channelLabel = _channelLabel(channel);
     final channelColors = _channelColors(channel);
 
-    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-      color: Theme.of(context).colorScheme.onSurface,
-    );
-    final valueStyle = Theme.of(
-      context,
-    ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold);
+    final labelStyle = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: Theme.of(context).colorScheme.onSurface);
+    final valueStyle = Theme.of(context).textTheme.titleSmall
+        ?.copyWith(fontWeight: FontWeight.bold);
 
     final details = SystemDetail.of(boardInfo);
 
@@ -326,9 +325,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       style: TextStyle(
                         color: channelColors.foreground,
                         fontWeight: FontWeight.bold,
-                        fontSize: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.fontSize,
+                        fontSize: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.fontSize,
                       ),
                     ),
                   ),
@@ -415,9 +415,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     prefs.primaryThroughputInterface!,
                   ),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.7),
+                    color: Theme.of(context).colorScheme.onSurface
+                        .withValues(alpha: 0.7),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -484,9 +483,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           lineTouchData: LineTouchData(
                             touchTooltipData: LineTouchTooltipData(
                               fitInsideVertically: true,
-                              getTooltipColor: (LineBarSpot spot) => Theme.of(
-                                context,
-                              ).colorScheme.surface.withValues(alpha: 0.9),
+                              getTooltipColor: (LineBarSpot spot) =>
+                                  Theme.of(context).colorScheme.surface
+                                      .withValues(alpha: 0.9),
                               tooltipBorderRadius: BorderRadius.circular(8),
                               tooltipPadding: const EdgeInsets.symmetric(
                                 horizontal: 12,
@@ -535,9 +534,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             Icon(
                               Icons.trending_up,
                               size: 48,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withValues(alpha: 0.7),
+                              color: Theme.of(context).colorScheme.onSurface
+                                  .withValues(alpha: 0.7),
                             ),
                             const SizedBox(height: 8),
                             Text(
@@ -593,9 +591,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Text(
         _formatSpeed(displaySpeed),
         key: ValueKey(displaySpeed),
-        style: Theme.of(
-          context,
-        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        style: Theme.of(context).textTheme.titleMedium
+            ?.copyWith(fontWeight: FontWeight.bold),
       ),
     );
 
@@ -715,12 +712,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     required String label,
     required String value,
   }) {
-    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-      color: Theme.of(context).colorScheme.onSurface,
-    );
-    final valueStyle = Theme.of(
-      context,
-    ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold);
+    final labelStyle = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: Theme.of(context).colorScheme.onSurface);
+    final valueStyle = Theme.of(context).textTheme.titleSmall
+        ?.copyWith(fontWeight: FontWeight.bold);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -856,9 +851,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               Icons.wifi,
               color: isEnabled
                   ? primaryColor
-                  : Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.5),
+                  : Theme.of(context).colorScheme.onSurface
+                        .withValues(alpha: 0.5),
               size: 20,
             ),
             const SizedBox(width: 8),
@@ -884,9 +878,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     Icon(
                       Icons.network_cell,
                       size: 16,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.6),
+                      color: Theme.of(context).colorScheme.onSurface
+                          .withValues(alpha: 0.6),
                     ),
                     const SizedBox(width: 4),
                     Flexible(
@@ -1120,9 +1113,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                       colors: [
-                        Theme.of(
-                          context,
-                        ).colorScheme.surface.withValues(alpha: 0),
+                        Theme.of(context).colorScheme.surface
+                            .withValues(alpha: 0),
                         Theme.of(context).colorScheme.surface,
                       ],
                     ),
@@ -1131,9 +1123,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   child: Icon(
                     Icons.arrow_forward_ios_rounded,
                     size: 18,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.45),
+                    color: Theme.of(context).colorScheme.onSurface
+                        .withValues(alpha: 0.45),
                   ),
                 ),
               ),
@@ -1151,9 +1142,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       begin: Alignment.centerRight,
                       end: Alignment.centerLeft,
                       colors: [
-                        Theme.of(
-                          context,
-                        ).colorScheme.surface.withValues(alpha: 0),
+                        Theme.of(context).colorScheme.surface
+                            .withValues(alpha: 0),
                         Theme.of(context).colorScheme.surface,
                       ],
                     ),
@@ -1162,9 +1152,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   child: Icon(
                     Icons.arrow_back_ios_new_rounded,
                     size: 18,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.45),
+                    color: Theme.of(context).colorScheme.onSurface
+                        .withValues(alpha: 0.45),
                   ),
                 ),
               ),
@@ -1297,9 +1286,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   const SizedBox(height: 2),
                   Text(
                     name.toUpperCase(),
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: Theme.of(context).textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold),
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
@@ -1403,9 +1391,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,
                           colors: [
-                            Theme.of(
-                              context,
-                            ).colorScheme.surface.withValues(alpha: 0),
+                            Theme.of(context).colorScheme.surface
+                                .withValues(alpha: 0),
                             Theme.of(context).colorScheme.surface,
                           ],
                         ),
@@ -1414,9 +1401,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       child: Icon(
                         Icons.arrow_forward_ios_rounded,
                         size: 18,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.45),
+                        color: Theme.of(context).colorScheme.onSurface
+                            .withValues(alpha: 0.45),
                       ),
                     ),
                   ),
@@ -1434,9 +1420,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           begin: Alignment.centerRight,
                           end: Alignment.centerLeft,
                           colors: [
-                            Theme.of(
-                              context,
-                            ).colorScheme.surface.withValues(alpha: 0),
+                            Theme.of(context).colorScheme.surface
+                                .withValues(alpha: 0),
                             Theme.of(context).colorScheme.surface,
                           ],
                         ),
@@ -1445,9 +1430,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       child: Icon(
                         Icons.arrow_back_ios_new_rounded,
                         size: 18,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.45),
+                        color: Theme.of(context).colorScheme.onSurface
+                            .withValues(alpha: 0.45),
                       ),
                     ),
                   ),
@@ -1500,9 +1484,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         final selectedId = await showModalBottomSheet<String>(
                           context: context,
                           isScrollControlled: false,
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.surface,
+                          backgroundColor: Theme.of(context)
+                              .colorScheme
+                              .surface,
                           shape: const RoundedRectangleBorder(
                             borderRadius: BorderRadius.vertical(
                               top: Radius.circular(18),
@@ -1529,9 +1513,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                           bottom: 12,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.outlineVariant,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .outlineVariant,
                                           borderRadius: BorderRadius.circular(
                                             2,
                                           ),
@@ -1581,12 +1565,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                         leading: Icon(
                                           Icons.router,
                                           color: isSelected
-                                              ? Theme.of(
-                                                  context,
-                                                ).colorScheme.primary
-                                              : Theme.of(
-                                                  context,
-                                                ).colorScheme.onSurfaceVariant,
+                                              ? Theme.of(context)
+                                                    .colorScheme
+                                                    .primary
+                                              : Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
                                         ),
                                         title: Tooltip(
                                           message: isStale
@@ -1608,25 +1592,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                                             .withValues(
                                                               alpha: 0.7,
                                                             )
-                                                      : Theme.of(
-                                                          context,
-                                                        ).colorScheme.onSurface,
+                                                      : Theme.of(context)
+                                                            .colorScheme
+                                                            .onSurface,
                                                 ),
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
                                         subtitle: Text(
                                           r.ipAddress,
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.bodySmall,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
                                         ),
                                         trailing: isSelected
                                             ? Icon(
                                                 Icons.check_circle,
-                                                color: Theme.of(
-                                                  context,
-                                                ).colorScheme.primary,
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary,
                                               )
                                             : null,
                                         selected: isSelected,
@@ -1673,17 +1657,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             Text(
                               headerText,
                               style:
-                                  Theme.of(
-                                    context,
-                                  ).appBarTheme.titleTextStyle ??
-                                  Theme.of(
-                                    context,
-                                  ).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(
-                                      context,
-                                    ).appBarTheme.titleTextStyle?.color,
-                                  ),
+                                  Theme.of(context)
+                                      .appBarTheme
+                                      .titleTextStyle ??
+                                  Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context)
+                                            .appBarTheme
+                                            .titleTextStyle
+                                            ?.color,
+                                      ),
                               overflow: TextOverflow.ellipsis,
                               textAlign: TextAlign.center,
                             ),
@@ -1691,9 +1675,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             Icon(
                               Icons.arrow_drop_down,
                               size: 20,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
                             ),
                           ],
                         ),
@@ -1760,7 +1744,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               _buildInterfaceStatusCards(appState),
               const SizedBox(height: 12),
               // Extra padding to ensure scroll behavior for RefreshIndicator
-              const SizedBox(height: 100),
+              SizedBox(height: 100 + TabBarInset.of(context)),
             ];
 
             return Padding(
@@ -1781,8 +1765,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: SizedBox(
                   height: constraints.maxHeight,
+                  // Clear of the iOS 26 tab bar that floats over the page.
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      0,
+                      16,
+                      TabBarInset.of(context),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

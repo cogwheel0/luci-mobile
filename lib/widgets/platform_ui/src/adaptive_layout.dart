@@ -1,0 +1,1062 @@
+import 'package:cupertino_native_better/cupertino_native_better.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:material_ui/material_ui.dart';
+
+import 'adaptive_controls.dart';
+import 'platform_ui_capabilities.dart';
+
+enum ToolbarSpacerType { none, fixed, flexible }
+
+class AdaptiveAppBarAction {
+  const AdaptiveAppBarAction({
+    this.iosSymbol,
+    this.icon,
+    this.title,
+    this.semanticLabel,
+    this.onPressed,
+    this.spacerAfter = ToolbarSpacerType.none,
+    this.prominent = false,
+    this.tintColor,
+  }) : assert(iosSymbol != null || icon != null || title != null);
+
+  final String? iosSymbol;
+  final IconData? icon;
+
+  /// Shown as the button's text in place of its icon.
+  final String? title;
+
+  /// Names an icon-only action for assistive technology without showing it.
+  final String? semanticLabel;
+
+  /// Null keeps the action visible while rendering it disabled.
+  final VoidCallback? onPressed;
+  final ToolbarSpacerType spacerAfter;
+  final bool prominent;
+  final Color? tintColor;
+
+  Map<String, dynamic> toNativeMap() => {
+    if (iosSymbol != null) 'icon': iosSymbol,
+    if (title != null) 'title': title,
+    'spacerAfter': spacerAfter.index,
+    if (prominent) 'prominent': true,
+    if (tintColor != null) 'tint': tintColor!.toARGB32(),
+  };
+}
+
+class AdaptiveAppBar {
+  const AdaptiveAppBar({
+    this.title,
+    this.subtitle,
+    this.actions,
+    this.leading,
+    this.useNativeToolbar = true,
+    this.tintColor,
+    this.titleWidget,
+    this.cupertinoNavigationBar,
+    this.appBar,
+  });
+
+  final String? title;
+  final String? subtitle;
+  final List<AdaptiveAppBarAction>? actions;
+  final Widget? leading;
+  final bool useNativeToolbar;
+  final Color? tintColor;
+  final Widget? titleWidget;
+  final ObstructingPreferredSizeWidget? cupertinoNavigationBar;
+  final PreferredSizeWidget? appBar;
+
+  AdaptiveAppBar copyWith({
+    String? title,
+    String? subtitle,
+    List<AdaptiveAppBarAction>? actions,
+    Widget? leading,
+    bool? useNativeToolbar,
+    Color? tintColor,
+    Widget? titleWidget,
+    ObstructingPreferredSizeWidget? cupertinoNavigationBar,
+    PreferredSizeWidget? appBar,
+  }) {
+    return AdaptiveAppBar(
+      title: title ?? this.title,
+      subtitle: subtitle ?? this.subtitle,
+      actions: actions ?? this.actions,
+      leading: leading ?? this.leading,
+      useNativeToolbar: useNativeToolbar ?? this.useNativeToolbar,
+      tintColor: tintColor ?? this.tintColor,
+      titleWidget: titleWidget ?? this.titleWidget,
+      cupertinoNavigationBar:
+          cupertinoNavigationBar ?? this.cupertinoNavigationBar,
+      appBar: appBar ?? this.appBar,
+    );
+  }
+}
+
+sealed class AdaptiveNavigationIcon {
+  const AdaptiveNavigationIcon();
+
+  const factory AdaptiveNavigationIcon.symbol(String name) =
+      AdaptiveSymbolNavigationIcon;
+  const factory AdaptiveNavigationIcon.icon(IconData data) =
+      AdaptiveIconDataNavigationIcon;
+  const factory AdaptiveNavigationIcon.asset(String assetName, {double size}) =
+      AdaptiveAssetNavigationIcon;
+}
+
+final class AdaptiveSymbolNavigationIcon extends AdaptiveNavigationIcon {
+  const AdaptiveSymbolNavigationIcon(this.name);
+
+  final String name;
+}
+
+final class AdaptiveIconDataNavigationIcon extends AdaptiveNavigationIcon {
+  const AdaptiveIconDataNavigationIcon(this.data);
+
+  final IconData data;
+}
+
+final class AdaptiveAssetNavigationIcon extends AdaptiveNavigationIcon {
+  const AdaptiveAssetNavigationIcon(this.assetName, {this.size = 24.0});
+
+  final String assetName;
+  final double size;
+}
+
+class AdaptiveNavigationDestination {
+  const AdaptiveNavigationDestination({
+    required this.icon,
+    required this.label,
+    this.selectedIcon,
+    this.isSearch = false,
+    this.badgeCount,
+    this.addSpacerAfter = false,
+  });
+
+  final AdaptiveNavigationIcon icon;
+  final String label;
+  final AdaptiveNavigationIcon? selectedIcon;
+  final bool isSearch;
+  final int? badgeCount;
+  final bool addSpacerAfter;
+}
+
+enum AdaptiveBottomNavigationRenderer { adaptive, nativeOverlay, fullWidth }
+
+class AdaptiveBottomNavigationBar {
+  AdaptiveBottomNavigationBar({
+    required List<AdaptiveNavigationDestination> items,
+    required this.selectedIndex,
+    required this.onTap,
+    this.renderer = AdaptiveBottomNavigationRenderer.adaptive,
+    this.cupertinoTabBar,
+    this.bottomNavigationBar,
+    this.selectedItemColor,
+    this.unselectedItemColor,
+  }) : items = _validatedNavigationItems(items, selectedIndex);
+
+  final List<AdaptiveNavigationDestination> items;
+  final int selectedIndex;
+  final ValueChanged<int> onTap;
+  final AdaptiveBottomNavigationRenderer renderer;
+  final CupertinoTabBar? cupertinoTabBar;
+  final Widget? bottomNavigationBar;
+  final Color? selectedItemColor;
+  final Color? unselectedItemColor;
+}
+
+List<AdaptiveNavigationDestination> _validatedNavigationItems(
+  List<AdaptiveNavigationDestination> items,
+  int selectedIndex,
+) {
+  if (items.isEmpty) {
+    throw ArgumentError.value(items, 'items', 'must not be empty');
+  }
+  if (selectedIndex < 0 || selectedIndex >= items.length) {
+    throw RangeError.range(selectedIndex, 0, items.length - 1, 'selectedIndex');
+  }
+  return List.unmodifiable(items);
+}
+
+class AdaptiveScaffold extends StatelessWidget {
+  const AdaptiveScaffold({
+    super.key,
+    this.appBar,
+    this.bottomNavigationBar,
+    this.body,
+    this.resizeToAvoidBottomInset,
+    this.floatingActionButton,
+    this.extendBodyBehindAppBar = false,
+    this.drawer,
+    this.endDrawer,
+    this.drawerScrimColor,
+    this.onDrawerChanged,
+    this.onEndDrawerChanged,
+    this.drawerEnableOpenDragGesture = true,
+    this.endDrawerEnableOpenDragGesture = true,
+    this.scaffoldKey,
+    this.tabBarHidden = false,
+    this.backgroundColor,
+  });
+
+  final AdaptiveAppBar? appBar;
+  final AdaptiveBottomNavigationBar? bottomNavigationBar;
+  final Widget? body;
+  final bool? resizeToAvoidBottomInset;
+  final Widget? floatingActionButton;
+  final bool extendBodyBehindAppBar;
+  final Widget? drawer;
+  final Widget? endDrawer;
+  final Color? drawerScrimColor;
+  final DrawerCallback? onDrawerChanged;
+  final DrawerCallback? onEndDrawerChanged;
+  final bool drawerEnableOpenDragGesture;
+  final bool endDrawerEnableOpenDragGesture;
+  final GlobalKey<ScaffoldState>? scaffoldKey;
+  final bool tabBarHidden;
+
+  /// The page colour behind everything, including the strip the keyboard
+  /// covers. Without it the iOS keyboard's rounded corners show the default
+  /// scaffold colour around a differently coloured page.
+  final Color? backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return PlatformUiCapabilities.isIOS
+        ? _buildCupertino(context)
+        : _buildMaterial(context);
+  }
+
+  Widget _buildCupertino(BuildContext context) {
+    final navigationBar = _cupertinoNavigationBar(context);
+    final navigation = bottomNavigationBar;
+    final items = navigation?.items ?? const <AdaptiveNavigationDestination>[];
+    final hasNavigation = navigation != null;
+    final useNativeTabBar =
+        hasNavigation &&
+        !tabBarHidden &&
+        navigation.renderer != AdaptiveBottomNavigationRenderer.fullWidth &&
+        PlatformUiCapabilities.usesNativeIOS26 &&
+        items.length >= 2 &&
+        items.length <= 5;
+
+    Widget content = body ?? const SizedBox.shrink();
+    Widget? bottomBar;
+    if (hasNavigation && !tabBarHidden) {
+      if (useNativeTabBar) {
+        bottomBar = buildAdaptiveNativeTabBar(navigation);
+      } else {
+        bottomBar = buildAdaptiveCupertinoTabBar(navigation);
+      }
+    }
+
+    if (bottomBar != null) {
+      content = useNativeTabBar
+          ? Stack(
+              children: [
+                Positioned.fill(child: content),
+                Positioned(left: 0, right: 0, bottom: 0, child: bottomBar),
+              ],
+            )
+          : Column(
+              children: [
+                // The tab bar pads itself for the home indicator, so the
+                // page above it must not pad for it again.
+                Expanded(
+                  child: MediaQuery.removePadding(
+                    context: context,
+                    removeBottom: true,
+                    child: content,
+                  ),
+                ),
+                bottomBar,
+              ],
+            );
+    }
+    if (floatingActionButton != null) {
+      content = Stack(
+        children: [
+          Positioned.fill(child: content),
+          Positioned(
+            right: 16,
+            bottom: bottomBar == null ? 16 : 96,
+            child: floatingActionButton!,
+          ),
+        ],
+      );
+    }
+    content = DefaultTextStyle(
+      style: CupertinoTheme.of(context).textTheme.textStyle,
+      child: content,
+    );
+    // CupertinoPageScaffold provides no Material, but page bodies host
+    // Material controls (text fields, chips, Fleather checklist boxes) that
+    // assert one. A transparency Material paints nothing; it sits outside the
+    // Cupertino text style so that style still applies to the body.
+    content = Material(type: MaterialType.transparency, child: content);
+
+    Widget page = CupertinoPageScaffold(
+      backgroundColor: backgroundColor,
+      resizeToAvoidBottomInset: resizeToAvoidBottomInset ?? !useNativeTabBar,
+      navigationBar: navigationBar,
+      child: content,
+    );
+    if (drawer != null || endDrawer != null) {
+      page = Scaffold(
+        key: scaffoldKey,
+        backgroundColor: Colors.transparent,
+        body: page,
+        drawer: drawer,
+        endDrawer: endDrawer,
+        drawerScrimColor: drawerScrimColor,
+        onDrawerChanged: onDrawerChanged,
+        onEndDrawerChanged: onEndDrawerChanged,
+        drawerEnableOpenDragGesture: drawerEnableOpenDragGesture,
+        endDrawerEnableOpenDragGesture: endDrawerEnableOpenDragGesture,
+      );
+    }
+    return page;
+  }
+
+  ObstructingPreferredSizeWidget? _cupertinoNavigationBar(
+    BuildContext context,
+  ) {
+    final custom = appBar?.cupertinoNavigationBar;
+    if (custom != null) return custom;
+    if (appBar == null) return null;
+    final title =
+        appBar!.titleWidget ??
+        (appBar!.title == null
+            ? null
+            : appBar!.subtitle?.isNotEmpty == true
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(appBar!.title!),
+                  Text(appBar!.subtitle!, style: const TextStyle(fontSize: 12)),
+                ],
+              )
+            : Text(appBar!.title!));
+    return CupertinoNavigationBar(
+      middle: title,
+      leading: appBar!.leading,
+      trailing: appBar!.actions?.isEmpty != false
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final action in appBar!.actions!)
+                  _cupertinoAction(action, appBar!.tintColor),
+              ],
+            ),
+    );
+  }
+
+  Widget _cupertinoAction(AdaptiveAppBarAction action, Color? fallbackTint) {
+    if (PlatformUiCapabilities.usesNativeIOS26 && action.title != null) {
+      return AdaptiveButton(
+        label: action.title!,
+        onPressed: action.onPressed,
+        color: action.tintColor ?? fallbackTint,
+        style: action.prominent
+            ? AdaptiveButtonStyle.prominentGlass
+            : AdaptiveButtonStyle.glass,
+        minSize: const Size(0, 36),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+      );
+    }
+    if (PlatformUiCapabilities.usesNativeIOS26 &&
+        action.iosSymbol != null &&
+        action.title == null) {
+      return AdaptiveButton.sfSymbol(
+        onPressed: action.onPressed,
+        semanticLabel: action.semanticLabel,
+        sfSymbol: SFSymbol(
+          action.iosSymbol!,
+          color: action.tintColor ?? fallbackTint,
+        ),
+        style: action.prominent
+            ? AdaptiveButtonStyle.prominentGlass
+            : AdaptiveButtonStyle.glass,
+        minSize: const Size.square(36),
+        padding: EdgeInsets.zero,
+        useSmoothRectangleBorder: false,
+      );
+    }
+    return CupertinoButton(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      onPressed: action.onPressed,
+      child: action.title != null
+          ? Text(action.title!)
+          : Icon(
+              action.icon ?? CupertinoIcons.circle,
+              semanticLabel: action.semanticLabel,
+            ),
+    );
+  }
+
+  Widget _buildMaterial(BuildContext context) {
+    final actions = appBar?.actions;
+    final materialAppBar =
+        appBar?.appBar ??
+        (appBar == null
+            ? null
+            : AppBar(
+                title: appBar!.titleWidget ?? _materialAppBarTitle(appBar!),
+                leading: appBar!.leading,
+                actions: actions
+                    ?.map(
+                      (action) => action.title != null
+                          ? TextButton(
+                              onPressed: action.onPressed,
+                              child: Text(action.title!),
+                            )
+                          : IconButton(
+                              onPressed: action.onPressed,
+                              tooltip: action.semanticLabel,
+                              icon: Icon(action.icon ?? Icons.circle),
+                            ),
+                    )
+                    .toList(),
+              ));
+    final navigation = bottomNavigationBar;
+    final bottomBar =
+        navigation?.bottomNavigationBar ??
+        (navigation == null
+            ? null
+            : NavigationBar(
+                selectedIndex: navigation.selectedIndex,
+                onDestinationSelected: navigation.onTap,
+                indicatorColor: navigation.selectedItemColor,
+                destinations: [
+                  for (final item in navigation.items)
+                    NavigationDestination(
+                      icon: adaptiveFlutterNavigationIcon(item.icon),
+                      selectedIcon: adaptiveFlutterNavigationIcon(
+                        item.selectedIcon ?? item.icon,
+                      ),
+                      label: item.label,
+                    ),
+                ],
+              ));
+    return Scaffold(
+      key: scaffoldKey,
+      backgroundColor: backgroundColor,
+      appBar: materialAppBar,
+      body: body,
+      resizeToAvoidBottomInset: resizeToAvoidBottomInset,
+      floatingActionButton: floatingActionButton,
+      bottomNavigationBar: tabBarHidden ? null : bottomBar,
+      extendBodyBehindAppBar: extendBodyBehindAppBar,
+      drawer: drawer,
+      endDrawer: endDrawer,
+      drawerScrimColor: drawerScrimColor,
+      onDrawerChanged: onDrawerChanged,
+      onEndDrawerChanged: onEndDrawerChanged,
+      drawerEnableOpenDragGesture: drawerEnableOpenDragGesture,
+      endDrawerEnableOpenDragGesture: endDrawerEnableOpenDragGesture,
+    );
+  }
+
+  Widget? _materialAppBarTitle(AdaptiveAppBar bar) {
+    final title = bar.title;
+    if (title == null) return null;
+    if (bar.subtitle?.isNotEmpty != true) return Text(title);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title),
+        Text(bar.subtitle!, style: const TextStyle(fontSize: 12)),
+      ],
+    );
+  }
+}
+
+CupertinoTabBar buildAdaptiveCupertinoTabBar(
+  AdaptiveBottomNavigationBar navigation,
+) {
+  return navigation.cupertinoTabBar ??
+      CupertinoTabBar(
+        currentIndex: navigation.selectedIndex,
+        onTap: navigation.onTap,
+        activeColor: navigation.selectedItemColor,
+        inactiveColor:
+            navigation.unselectedItemColor ?? CupertinoColors.inactiveGray,
+        items: [
+          for (final item in navigation.items)
+            BottomNavigationBarItem(
+              icon: adaptiveFlutterNavigationIcon(item.icon),
+              activeIcon: adaptiveFlutterNavigationIcon(
+                item.selectedIcon ?? item.icon,
+              ),
+              label: item.label,
+            ),
+        ],
+      );
+}
+
+CNTabBar buildAdaptiveNativeTabBar(
+  AdaptiveBottomNavigationBar navigation, {
+  Color? tint,
+}) {
+  return CNTabBar(
+    items: [for (final item in navigation.items) adaptiveNativeTabItem(item)],
+    currentIndex: navigation.selectedIndex,
+    onTap: navigation.onTap,
+    tint: tint ?? navigation.selectedItemColor,
+  );
+}
+
+CNTabBarItem adaptiveNativeTabItem(AdaptiveNavigationDestination item) {
+  final icon = item.icon;
+  final selected = item.selectedIcon ?? icon;
+  return CNTabBarItem(
+    label: item.label,
+    icon: _adaptiveSymbol(icon),
+    activeIcon: _adaptiveSymbol(selected),
+    customIcon: _adaptiveIconData(icon),
+    activeCustomIcon: _adaptiveIconData(selected),
+    imageAsset: _adaptiveImageAsset(icon),
+    activeImageAsset: _adaptiveImageAsset(selected),
+    badge: item.badgeCount == null || item.badgeCount == 0
+        ? null
+        : '${item.badgeCount}',
+  );
+}
+
+CNSymbol? _adaptiveSymbol(AdaptiveNavigationIcon value) => switch (value) {
+  AdaptiveSymbolNavigationIcon(:final name) => CNSymbol(
+    name,
+    size: kCupertinoNativeControlSymbolExtent,
+  ),
+  _ => null,
+};
+
+IconData? _adaptiveIconData(AdaptiveNavigationIcon value) => switch (value) {
+  AdaptiveIconDataNavigationIcon(:final data) => data,
+  _ => null,
+};
+
+CNImageAsset? _adaptiveImageAsset(AdaptiveNavigationIcon value) =>
+    switch (value) {
+      AdaptiveAssetNavigationIcon(:final assetName, :final size) =>
+        CNImageAsset(assetName, size: size),
+      _ => null,
+    };
+
+Widget adaptiveFlutterNavigationIcon(AdaptiveNavigationIcon value) =>
+    switch (value) {
+      AdaptiveSymbolNavigationIcon(:final name) => Icon(
+        cupertinoIconForSFSymbol(name) ?? CupertinoIcons.circle,
+        size: kCupertinoNativeControlSymbolExtent,
+      ),
+      AdaptiveIconDataNavigationIcon(:final data) => Icon(
+        data,
+        size: kCupertinoNativeControlSymbolExtent,
+      ),
+      AdaptiveAssetNavigationIcon(:final assetName) => ImageIcon(
+        AssetImage(assetName),
+        size: kCupertinoNativeControlSymbolExtent,
+      ),
+    };
+
+class AdaptiveCard extends StatelessWidget {
+  const AdaptiveCard({
+    super.key,
+    this.color,
+    this.elevation,
+    this.shape,
+    this.borderOnForeground = true,
+    this.margin,
+    this.clipBehavior,
+    this.semanticContainer = true,
+    required this.child,
+    this.padding,
+    this.borderRadius,
+  });
+
+  final Color? color;
+  final double? elevation;
+  final ShapeBorder? shape;
+  final bool borderOnForeground;
+  final EdgeInsetsGeometry? margin;
+  final Clip? clipBehavior;
+  final bool semanticContainer;
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final BorderRadius? borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = padding == null
+        ? child
+        : Padding(padding: padding!, child: child);
+    if (!PlatformUiCapabilities.isIOS) {
+      return Card(
+        color: color,
+        elevation: elevation,
+        shape:
+            shape ??
+            (borderRadius == null
+                ? null
+                : RoundedRectangleBorder(borderRadius: borderRadius!)),
+        borderOnForeground: borderOnForeground,
+        margin: margin,
+        clipBehavior: clipBehavior,
+        semanticContainer: semanticContainer,
+        child: content,
+      );
+    }
+    return Semantics(
+      container: semanticContainer,
+      child: Container(
+        margin: margin,
+        clipBehavior: clipBehavior ?? Clip.none,
+        decoration: BoxDecoration(
+          color:
+              color ??
+              CupertinoColors.secondarySystemBackground.resolveFrom(context),
+          borderRadius: borderRadius ?? BorderRadius.circular(12),
+        ),
+        child: content,
+      ),
+    );
+  }
+}
+
+class AdaptiveListTile extends StatelessWidget {
+  const AdaptiveListTile({
+    super.key,
+    this.leading,
+    this.title,
+    this.subtitle,
+    this.trailing,
+    this.onTap,
+    this.onLongPress,
+    this.enabled = true,
+    this.selected = false,
+    this.hideBottomDivider = false,
+    this.backgroundColor,
+    this.separatorColor,
+    this.padding,
+  });
+
+  final Widget? leading;
+  final Widget? title;
+  final Widget? subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final bool enabled;
+  final bool selected;
+  final bool hideBottomDivider;
+  final Color? backgroundColor;
+  final Color? separatorColor;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PlatformUiCapabilities.isIOS) {
+      return ListTile(
+        leading: leading,
+        title: title,
+        subtitle: subtitle,
+        trailing: trailing,
+        onTap: enabled ? onTap : null,
+        onLongPress: enabled ? onLongPress : null,
+        enabled: enabled,
+        selected: selected,
+        tileColor: backgroundColor,
+        contentPadding: padding,
+      );
+    }
+    Widget tile = Container(
+      padding:
+          padding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color:
+            backgroundColor ??
+            (selected
+                ? CupertinoColors.systemGrey6.resolveFrom(context)
+                : CupertinoColors.systemBackground.resolveFrom(context)),
+        border: hideBottomDivider
+            ? null
+            : Border(
+                bottom: BorderSide(
+                  color:
+                      separatorColor ??
+                      CupertinoColors.separator.resolveFrom(context),
+                  width: 0.5,
+                ),
+              ),
+      ),
+      child: Row(
+        children: [
+          if (leading != null) ...[leading!, const SizedBox(width: 12)],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ?title,
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  DefaultTextStyle(
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
+                    ),
+                    child: subtitle!,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+        ],
+      ),
+    );
+    if (enabled && (onTap != null || onLongPress != null)) {
+      tile = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: tile,
+      );
+    }
+    return tile;
+  }
+}
+
+class AdaptiveTooltip extends StatelessWidget {
+  const AdaptiveTooltip({
+    super.key,
+    required this.message,
+    this.excludeFromSemantics,
+    this.preferBelow = true,
+    this.verticalOffset,
+    this.padding,
+    this.margin,
+    this.height,
+    this.decoration,
+    this.textStyle,
+    this.waitDuration,
+    this.showDuration,
+    required this.child,
+  });
+
+  final String message;
+  final bool? excludeFromSemantics;
+  final bool preferBelow;
+  final double? verticalOffset;
+  final EdgeInsetsGeometry? padding;
+  final EdgeInsetsGeometry? margin;
+  final double? height;
+  final Decoration? decoration;
+  final TextStyle? textStyle;
+  final Duration? waitDuration;
+  final Duration? showDuration;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: message,
+    excludeFromSemantics: excludeFromSemantics,
+    preferBelow: preferBelow,
+    verticalOffset: verticalOffset,
+    padding: padding,
+    margin: margin,
+    constraints: height == null ? null : BoxConstraints(minHeight: height!),
+    decoration: decoration,
+    textStyle: textStyle,
+    waitDuration: waitDuration,
+    showDuration: showDuration,
+    child: child,
+  );
+}
+
+class AdaptiveContextMenuAction {
+  const AdaptiveContextMenuAction({
+    required this.title,
+    required this.onPressed,
+    this.icon,
+    this.iosSymbol,
+    this.isDestructive = false,
+    this.isDisabled = false,
+  });
+
+  final String title;
+  final VoidCallback onPressed;
+  final dynamic icon;
+  final String? iosSymbol;
+  final bool isDestructive;
+  final bool isDisabled;
+}
+
+Future<void> showAdaptiveContextMenu({
+  required BuildContext context,
+  required List<AdaptiveContextMenuAction> actions,
+  required Rect globalAnchor,
+}) async {
+  final overlayObject = Overlay.of(context).context.findRenderObject();
+  if (overlayObject is! RenderBox || !overlayObject.attached) return;
+
+  final anchor = Rect.fromPoints(
+    overlayObject.globalToLocal(globalAnchor.topLeft),
+    overlayObject.globalToLocal(globalAnchor.bottomRight),
+  );
+  final selected = await showMenu<int>(
+    context: context,
+    position: RelativeRect.fromRect(anchor, Offset.zero & overlayObject.size),
+    items: [
+      for (var index = 0; index < actions.length; index++)
+        PopupMenuItem<int>(
+          value: index,
+          enabled: !actions[index].isDisabled,
+          child: Text(
+            actions[index].title,
+            style: actions[index].isDestructive
+                ? const TextStyle(color: Colors.red)
+                : null,
+          ),
+        ),
+    ],
+  );
+  if (selected != null) actions[selected].onPressed();
+}
+
+class AdaptiveContextMenu extends StatelessWidget {
+  const AdaptiveContextMenu({
+    super.key,
+    required this.child,
+    required this.actions,
+    this.previewBuilder,
+  });
+
+  final Widget child;
+  final List<AdaptiveContextMenuAction> actions;
+  final Widget Function(BuildContext)? previewBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    if (PlatformUiCapabilities.isIOS) {
+      return CupertinoContextMenu.builder(
+        actions: [
+          for (final action in actions)
+            CupertinoContextMenuAction(
+              onPressed: action.isDisabled
+                  ? null
+                  : () {
+                      Navigator.of(context, rootNavigator: true).pop();
+                      Future.microtask(action.onPressed);
+                    },
+              isDestructiveAction: action.isDestructive,
+              trailingIcon: action.icon is IconData
+                  ? action.icon as IconData
+                  : null,
+              child: Text(action.title),
+            ),
+        ],
+        builder: (context, animation) => previewBuilder?.call(context) ?? child,
+      );
+    }
+    return GestureDetector(
+      onSecondaryTapDown: (details) => showAdaptiveContextMenu(
+        context: context,
+        actions: actions,
+        globalAnchor: Rect.fromLTWH(
+          details.globalPosition.dx,
+          details.globalPosition.dy,
+          0,
+          0,
+        ),
+      ),
+      onLongPress: () {
+        final renderObject = context.findRenderObject();
+        if (renderObject is! RenderBox || !renderObject.attached) {
+          return;
+        }
+        final topLeft = renderObject.localToGlobal(Offset.zero);
+        final bottomRight = renderObject.localToGlobal(
+          renderObject.size.bottomRight(Offset.zero),
+        );
+        showAdaptiveContextMenu(
+          context: context,
+          actions: actions,
+          globalAnchor: Rect.fromPoints(topLeft, bottomRight),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
+class AdaptiveExpansionTile extends StatefulWidget {
+  const AdaptiveExpansionTile({
+    super.key,
+    this.leading,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    required this.children,
+    this.onExpansionChanged,
+    this.initiallyExpanded = false,
+    this.maintainState = false,
+    this.tilePadding,
+    this.childrenPadding,
+    this.backgroundColor,
+    this.collapsedBackgroundColor,
+    this.textColor,
+    this.collapsedTextColor,
+    this.iconColor,
+    this.collapsedIconColor,
+    this.shape,
+    this.collapsedShape,
+    this.enabled = true,
+    this.clipBehavior = Clip.none,
+    this.expandedAlignment,
+    this.expandedCrossAxisAlignment,
+  });
+
+  final Widget? leading;
+  final Widget title;
+  final Widget? subtitle;
+  final Widget? trailing;
+  final List<Widget> children;
+  final ValueChanged<bool>? onExpansionChanged;
+  final bool initiallyExpanded;
+  final bool maintainState;
+  final EdgeInsetsGeometry? tilePadding;
+  final EdgeInsetsGeometry? childrenPadding;
+  final Color? backgroundColor;
+  final Color? collapsedBackgroundColor;
+  final Color? textColor;
+  final Color? collapsedTextColor;
+  final Color? iconColor;
+  final Color? collapsedIconColor;
+  final ShapeBorder? shape;
+  final ShapeBorder? collapsedShape;
+  final bool enabled;
+  final Clip clipBehavior;
+  final Alignment? expandedAlignment;
+  final CrossAxisAlignment? expandedCrossAxisAlignment;
+
+  @override
+  State<AdaptiveExpansionTile> createState() => _AdaptiveExpansionTileState();
+}
+
+class _AdaptiveExpansionTileState extends State<AdaptiveExpansionTile> {
+  late bool _expanded = widget.initiallyExpanded;
+
+  @override
+  void didUpdateWidget(covariant AdaptiveExpansionTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initiallyExpanded != widget.initiallyExpanded) {
+      _expanded = widget.initiallyExpanded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PlatformUiCapabilities.isIOS) {
+      return ExpansionTile(
+        leading: widget.leading,
+        title: widget.title,
+        subtitle: widget.subtitle,
+        trailing: widget.trailing,
+        initiallyExpanded: widget.initiallyExpanded,
+        maintainState: widget.maintainState,
+        onExpansionChanged: widget.onExpansionChanged,
+        tilePadding: widget.tilePadding,
+        childrenPadding: widget.childrenPadding,
+        backgroundColor: widget.backgroundColor,
+        collapsedBackgroundColor: widget.collapsedBackgroundColor,
+        textColor: widget.textColor,
+        collapsedTextColor: widget.collapsedTextColor,
+        iconColor: widget.iconColor,
+        collapsedIconColor: widget.collapsedIconColor,
+        shape: widget.shape,
+        collapsedShape: widget.collapsedShape,
+        enabled: widget.enabled,
+        clipBehavior: widget.clipBehavior,
+        expandedAlignment: widget.expandedAlignment,
+        expandedCrossAxisAlignment: widget.expandedCrossAxisAlignment,
+        children: widget.children,
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.enabled
+              ? () {
+                  setState(() => _expanded = !_expanded);
+                  widget.onExpansionChanged?.call(_expanded);
+                }
+              : null,
+          child: Padding(
+            padding:
+                widget.tilePadding ??
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                if (widget.leading != null) ...[
+                  widget.leading!,
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      widget.title,
+                      if (widget.subtitle != null) widget.subtitle!,
+                    ],
+                  ),
+                ),
+                widget.trailing ??
+                    Icon(
+                      _expanded
+                          ? CupertinoIcons.chevron_up
+                          : CupertinoIcons.chevron_down,
+                      size: 18,
+                      color: _expanded
+                          ? widget.iconColor
+                          : widget.collapsedIconColor,
+                    ),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded || widget.maintainState)
+          Offstage(
+            offstage: !_expanded,
+            child: Padding(
+              padding: widget.childrenPadding ?? EdgeInsets.zero,
+              child: Column(
+                crossAxisAlignment:
+                    widget.expandedCrossAxisAlignment ??
+                    CrossAxisAlignment.center,
+                children: widget.children,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A layer that paints nothing, for a surface that draws its own background:
+/// text fields and switch ink inside it then draw on that surface instead of
+/// on the page beneath it.
+class AdaptiveTransparentLayer extends StatelessWidget {
+  const AdaptiveTransparentLayer({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      Material(type: MaterialType.transparency, child: child);
+}

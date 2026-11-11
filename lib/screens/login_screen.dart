@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
-import 'package:flutter/material.dart';
+
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/l10n/failure_text.dart';

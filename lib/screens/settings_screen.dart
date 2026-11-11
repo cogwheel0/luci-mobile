@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/screens/login_screen.dart';
@@ -18,6 +18,7 @@ import 'package:luci_mobile/screens/manage_routers_screen.dart';
 import 'package:luci_mobile/screens/wifi_scan_screen.dart';
 import 'package:luci_mobile/utils/http_client_manager.dart';
 import 'package:luci_mobile/state/app_state.dart';
+import 'package:luci_mobile/navigation/tab_bar_inset.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -284,7 +285,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Scaffold(
       appBar: LuciAppBar(title: context.l10n.settings),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(vertical: LuciSpacing.sm),
+        padding: EdgeInsets.only(
+          top: LuciSpacing.sm,
+          bottom: LuciSpacing.sm + TabBarInset.of(context),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -422,9 +426,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   title: context.l10n.logout,
                   subtitle: context.l10n.logoutDescription,
                   titleColor: Theme.of(context).colorScheme.error,
-                  subtitleColor: Theme.of(
-                    context,
-                  ).colorScheme.error.withValues(alpha: 0.7),
+                  subtitleColor: Theme.of(context).colorScheme.error
+                      .withValues(alpha: 0.7),
                   onTap: () => _showLogoutDialog(context),
                 ),
               ],

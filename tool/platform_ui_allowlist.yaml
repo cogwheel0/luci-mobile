@@ -1,0 +1,1116 @@
+# luci-mobile's baseline when the platform UI seam was introduced: 185 entries, 335 occurrences.
+# Each entry is a direct Material or Cupertino import or control outside
+# lib/widgets/platform_ui. Counts may only go down: migrate a screen to the
+# platform UI layer and remove or lower its entries.
+version: 1
+exceptions:
+  - path: lib/design/luci_design_system.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: design
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/design/luci_design_system.dart
+    symbol: "Chip"
+    count: 1
+    owner: design
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/l10n/luci_localizations.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: localization
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/main.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: app
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/addon_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/addon_screen.dart
+    symbol: "ButtonSegment"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/addon_screen.dart
+    symbol: "CheckboxListTile"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/addon_screen.dart
+    symbol: "DropdownButtonFormField"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/addon_screen.dart
+    symbol: "DropdownMenuItem"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/addon_screen.dart
+    symbol: "FilledButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/addon_screen.dart
+    symbol: "SegmentedButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/addon_screen.dart
+    symbol: "SwitchListTile"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/addon_screen.dart
+    symbol: "TextField"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/addons_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/app_preferences_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/app_preferences_screen.dart
+    symbol: "AlertDialog"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/app_preferences_screen.dart
+    symbol: "Card"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/app_preferences_screen.dart
+    symbol: "FilledButton"
+    count: 4
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/app_preferences_screen.dart
+    symbol: "TextButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/client_detail_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/client_detail_screen.dart
+    symbol: "AlertDialog"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/client_detail_screen.dart
+    symbol: "CheckboxListTile"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/client_detail_screen.dart
+    symbol: "FilledButton"
+    count: 4
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/client_detail_screen.dart
+    symbol: "IconButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/client_detail_screen.dart
+    symbol: "SwitchListTile"
+    count: 4
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/client_detail_screen.dart
+    symbol: "TextButton"
+    count: 3
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/client_detail_screen.dart
+    symbol: "TextField"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/clients_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/clients_screen.dart
+    symbol: "ButtonSegment"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/clients_screen.dart
+    symbol: "Card"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/clients_screen.dart
+    symbol: "Chip"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/clients_screen.dart
+    symbol: "IconButton"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/clients_screen.dart
+    symbol: "SegmentedButton"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/clients_screen.dart
+    symbol: "TextField"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/dashboard_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/dashboard_screen.dart
+    symbol: "Card"
+    count: 6
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/dashboard_settings_list_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/dashboard_settings_list_screen.dart
+    symbol: "Card"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/diagnostics_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/diagnostics_screen.dart
+    symbol: "ButtonSegment"
+    count: 3
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/diagnostics_screen.dart
+    symbol: "Card"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/diagnostics_screen.dart
+    symbol: "CircularProgressIndicator"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/diagnostics_screen.dart
+    symbol: "IconButton"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/diagnostics_screen.dart
+    symbol: "SegmentedButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/diagnostics_screen.dart
+    symbol: "TextField"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/event_feed_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/event_feed_screen.dart
+    symbol: "CircularProgressIndicator"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/event_feed_screen.dart
+    symbol: "IconButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/firewall_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/firewall_screen.dart
+    symbol: "AppBar"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/firewall_screen.dart
+    symbol: "Chip"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/firewall_screen.dart
+    symbol: "DropdownButtonFormField"
+    count: 3
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/firewall_screen.dart
+    symbol: "DropdownMenuItem"
+    count: 3
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/firewall_screen.dart
+    symbol: "FilledButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/firewall_screen.dart
+    symbol: "FloatingActionButton"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/firewall_screen.dart
+    symbol: "IconButton"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/firewall_screen.dart
+    symbol: "Switch"
+    count: 4
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/firewall_screen.dart
+    symbol: "TextButton"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/firewall_screen.dart
+    symbol: "TextField"
+    count: 5
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/insights_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/interfaces_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/interfaces_screen.dart
+    symbol: "AlertDialog"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/interfaces_screen.dart
+    symbol: "Card"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/interfaces_screen.dart
+    symbol: "CircularProgressIndicator"
+    count: 3
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/interfaces_screen.dart
+    symbol: "DropdownButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/interfaces_screen.dart
+    symbol: "DropdownMenuItem"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/interfaces_screen.dart
+    symbol: "FilledButton"
+    count: 5
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/interfaces_screen.dart
+    symbol: "IconButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/interfaces_screen.dart
+    symbol: "OutlinedButton"
+    count: 6
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/interfaces_screen.dart
+    symbol: "Switch"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/interfaces_screen.dart
+    symbol: "TextButton"
+    count: 4
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/interfaces_screen.dart
+    symbol: "TextField"
+    count: 3
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/log_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/log_screen.dart
+    symbol: "ButtonSegment"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/log_screen.dart
+    symbol: "CircularProgressIndicator"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/log_screen.dart
+    symbol: "IconButton"
+    count: 3
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/log_screen.dart
+    symbol: "SegmentedButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/log_screen.dart
+    symbol: "TextField"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/login_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/login_screen.dart
+    symbol: "AlertDialog"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/login_screen.dart
+    symbol: "Card"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/login_screen.dart
+    symbol: "CircularProgressIndicator"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/login_screen.dart
+    symbol: "ElevatedButton"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/login_screen.dart
+    symbol: "FilledButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/login_screen.dart
+    symbol: "IconButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/login_screen.dart
+    symbol: "LinearProgressIndicator"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/login_screen.dart
+    symbol: "TextButton"
+    count: 6
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/login_screen.dart
+    symbol: "TextField"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/login_screen.dart
+    symbol: "TextFormField"
+    count: 4
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/main_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/main_screen.dart
+    symbol: "NavigationBar"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/main_screen.dart
+    symbol: "NavigationDestination"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/manage_routers_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/manage_routers_screen.dart
+    symbol: "AlertDialog"
+    count: 3
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/manage_routers_screen.dart
+    symbol: "Card"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/manage_routers_screen.dart
+    symbol: "Chip"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/manage_routers_screen.dart
+    symbol: "CircularProgressIndicator"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/manage_routers_screen.dart
+    symbol: "ElevatedButton"
+    count: 5
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/manage_routers_screen.dart
+    symbol: "IconButton"
+    count: 3
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/manage_routers_screen.dart
+    symbol: "TextButton"
+    count: 6
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/manage_routers_screen.dart
+    symbol: "TextFormField"
+    count: 4
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/network_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/notifications_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/notifications_screen.dart
+    symbol: "CircularProgressIndicator"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/notifications_screen.dart
+    symbol: "SwitchListTile"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/router_dashboard_settings_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/router_dashboard_settings_screen.dart
+    symbol: "Card"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/router_dashboard_settings_screen.dart
+    symbol: "CheckboxListTile"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/router_dashboard_settings_screen.dart
+    symbol: "CircularProgressIndicator"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/router_dashboard_settings_screen.dart
+    symbol: "ExpansionTile"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/router_dashboard_settings_screen.dart
+    symbol: "SwitchListTile"
+    count: 6
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/services_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/services_screen.dart
+    symbol: "AlertDialog"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/services_screen.dart
+    symbol: "CircularProgressIndicator"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/services_screen.dart
+    symbol: "FilledButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/services_screen.dart
+    symbol: "PopupMenuButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/services_screen.dart
+    symbol: "PopupMenuDivider"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/services_screen.dart
+    symbol: "PopupMenuItem"
+    count: 4
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/services_screen.dart
+    symbol: "TextButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/settings_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/settings_screen.dart
+    symbol: "AlertDialog"
+    count: 3
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/settings_screen.dart
+    symbol: "TextButton"
+    count: 5
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/splash_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/splash_screen.dart
+    symbol: "CircularProgressIndicator"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/system_settings_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/system_settings_screen.dart
+    symbol: "AlertDialog"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/system_settings_screen.dart
+    symbol: "FilledButton"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/system_settings_screen.dart
+    symbol: "IconButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/system_settings_screen.dart
+    symbol: "TextButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/system_settings_screen.dart
+    symbol: "TextField"
+    count: 6
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/traffic_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/traffic_screen.dart
+    symbol: "DropdownButtonFormField"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/traffic_screen.dart
+    symbol: "DropdownMenuItem"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/traffic_screen.dart
+    symbol: "LinearProgressIndicator"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wifi_scan_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wifi_scan_screen.dart
+    symbol: "AppBar"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wifi_scan_screen.dart
+    symbol: "Card"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wifi_scan_screen.dart
+    symbol: "CircularProgressIndicator"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wifi_scan_screen.dart
+    symbol: "DropdownButton"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wifi_scan_screen.dart
+    symbol: "DropdownMenuItem"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wifi_scan_screen.dart
+    symbol: "FilledButton"
+    count: 6
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wifi_scan_screen.dart
+    symbol: "IconButton"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wifi_scan_screen.dart
+    symbol: "OutlinedButton"
+    count: 6
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wifi_scan_screen.dart
+    symbol: "TextField"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wireless_screen.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wireless_screen.dart
+    symbol: "DropdownButtonFormField"
+    count: 3
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wireless_screen.dart
+    symbol: "DropdownMenuItem"
+    count: 4
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wireless_screen.dart
+    symbol: "FilledButton"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wireless_screen.dart
+    symbol: "IconButton"
+    count: 2
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wireless_screen.dart
+    symbol: "Switch"
+    count: 4
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wireless_screen.dart
+    symbol: "SwitchListTile"
+    count: 4
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wireless_screen.dart
+    symbol: "TextButton"
+    count: 5
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/screens/wireless_screen.dart
+    symbol: "TextField"
+    count: 3
+    owner: screens
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/services/api_service.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: services
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/services/auth_service.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: services
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/services/interfaces/api_service_interface.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: services
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/services/interfaces/auth_service_interface.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: services
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/services/mock_api_service.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: services
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/services/mock_auth_service.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: services
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/state/app_state.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: state
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/utils/http_client_manager.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: utilities
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/utils/http_client_manager.dart
+    symbol: "AlertDialog"
+    count: 1
+    owner: utilities
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/utils/http_client_manager.dart
+    symbol: "FilledButton"
+    count: 2
+    owner: utilities
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/utils/http_client_manager.dart
+    symbol: "TextButton"
+    count: 1
+    owner: utilities
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/autofill_form.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_animation_system.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_app_bar.dart
+    package: "package:cupertino_ui/cupertino_ui.dart"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_app_bar.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_app_bar.dart
+    symbol: "AppBar"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_app_bar.dart
+    symbol: "CircularProgressIndicator"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_app_bar.dart
+    symbol: "ElevatedButton"
+    count: 6
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_app_bar.dart
+    symbol: "IconButton"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_apply_progress.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_apply_progress.dart
+    symbol: "AlertDialog"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_apply_progress.dart
+    symbol: "CircularProgressIndicator"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_hub_tile.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_hub_tile.dart
+    symbol: "Card"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_loading_states.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_loading_states.dart
+    symbol: "Card"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_loading_states.dart
+    symbol: "TextButton"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_navigation_enhancements.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_navigation_enhancements.dart
+    symbol: "CircularProgressIndicator"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_navigation_enhancements.dart
+    symbol: "FloatingActionButton"
+    count: 3
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/luci_refresh_components.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration
+  - path: lib/widgets/system_details_sheet.dart
+    package: "package:material_ui/material_ui.dart"
+    count: 1
+    owner: widgets
+    reason: "Existing use awaiting migration to the platform UI seam"
+    removal: platform-ui-migration

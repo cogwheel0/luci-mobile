@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
+
 import '../design/luci_design_system.dart';
 
 /// A skeleton loading widget that displays animated placeholders
@@ -68,9 +69,8 @@ class _LuciSkeletonState extends State<LuciSkeleton>
                 end: Alignment.centerRight,
                 colors: [
                   Theme.of(context).colorScheme.surfaceContainerHighest,
-                  Theme.of(
-                    context,
-                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                  Theme.of(context).colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.5),
                   Theme.of(context).colorScheme.surfaceContainerHighest,
                 ],
                 stops: [
@@ -215,9 +215,8 @@ class LuciChartSkeleton extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: LuciCardStyles.standardRadius,
                 border: Border.all(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.outline.withValues(alpha: 0.2),
+                  color: Theme.of(context).colorScheme.outline
+                      .withValues(alpha: 0.2),
                 ),
               ),
               child: Stack(

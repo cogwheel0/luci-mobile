@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/models/dashboard_preferences.dart';
@@ -174,9 +175,8 @@ class _RouterDashboardSettingsScreenState
       children: [
         Container(
           decoration: BoxDecoration(
-            color: Theme.of(
-              context,
-            ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest
+                .withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
@@ -184,9 +184,8 @@ class _RouterDashboardSettingsScreenState
               SwitchListTile.adaptive(
                 title: Text(
                   context.l10n.showAllInterfaces,
-                  style: LuciTextStyles.detailValue(
-                    context,
-                  ).copyWith(fontWeight: FontWeight.w600),
+                  style: LuciTextStyles.detailValue(context)
+                      .copyWith(fontWeight: FontWeight.w600),
                 ),
                 value: _preferences.showAllThroughput,
                 onChanged: (value) {
@@ -264,9 +263,8 @@ class _RouterDashboardSettingsScreenState
       children: [
         Container(
           decoration: BoxDecoration(
-            color: Theme.of(
-              context,
-            ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest
+                .withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
@@ -274,9 +272,8 @@ class _RouterDashboardSettingsScreenState
               SwitchListTile.adaptive(
                 title: Text(
                   context.l10n.showAllNetworks,
-                  style: LuciTextStyles.detailValue(
-                    context,
-                  ).copyWith(fontWeight: FontWeight.w600),
+                  style: LuciTextStyles.detailValue(context)
+                      .copyWith(fontWeight: FontWeight.w600),
                 ),
                 value: _preferences.enabledWirelessInterfaces.isEmpty,
                 onChanged: (value) {
@@ -319,9 +316,8 @@ class _RouterDashboardSettingsScreenState
                   size: 20,
                   color: isEnabled
                       ? Theme.of(context).colorScheme.primary
-                      : Theme.of(
-                          context,
-                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                      : Theme.of(context).colorScheme.onSurfaceVariant
+                            .withValues(alpha: 0.5),
                 ),
                 value: isEnabled,
                 onChanged: (value) {
@@ -361,9 +357,8 @@ class _RouterDashboardSettingsScreenState
       children: [
         Container(
           decoration: BoxDecoration(
-            color: Theme.of(
-              context,
-            ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest
+                .withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
@@ -371,9 +366,8 @@ class _RouterDashboardSettingsScreenState
               SwitchListTile.adaptive(
                 title: Text(
                   context.l10n.showAllInterfaces,
-                  style: LuciTextStyles.detailValue(
-                    context,
-                  ).copyWith(fontWeight: FontWeight.w600),
+                  style: LuciTextStyles.detailValue(context)
+                      .copyWith(fontWeight: FontWeight.w600),
                 ),
                 value: _preferences.enabledWiredInterfaces.isEmpty,
                 onChanged: (value) {
@@ -418,9 +412,8 @@ class _RouterDashboardSettingsScreenState
                   size: 20,
                   color: isEnabled
                       ? Theme.of(context).colorScheme.primary
-                      : Theme.of(
-                          context,
-                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                      : Theme.of(context).colorScheme.onSurfaceVariant
+                            .withValues(alpha: 0.5),
                 ),
                 value: isEnabled,
                 onChanged: (value) {

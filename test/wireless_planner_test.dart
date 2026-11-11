@@ -77,9 +77,8 @@ void main() {
     // Older configs predate the `band` option; falling back to `hwmode` keeps
     // the channel and width pickers correct on them.
     test('falls back to hwmode when band is absent', () {
-      final r1 = WirelessPlanner.parse(
-        _config,
-      ).firstWhere((r) => r.section == 'radio1');
+      final r1 = WirelessPlanner.parse(_config)
+          .firstWhere((r) => r.section == 'radio1');
       expect(r1.band, '5g');
       expect(r1.label, '5 GHz');
     });
@@ -228,9 +227,8 @@ void main() {
     });
 
     test('a new SSID is added to the chosen radio in AP mode', () {
-      final radio = WirelessPlanner.parse(
-        _config,
-      ).firstWhere((r) => r.section == 'radio0');
+      final radio = WirelessPlanner.parse(_config)
+          .firstWhere((r) => r.section == 'radio0');
       final ops = WirelessPlanner.planCreateNetwork(
         radio: radio,
         ssid: 'Visitors',

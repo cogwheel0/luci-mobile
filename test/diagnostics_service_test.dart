@@ -107,9 +107,8 @@ void main() {
       final log = [for (var i = 1; i <= 300; i++) 'line $i'].join('\n');
       final api = _AclApi({'/usr/libexec/syslog-wrapper': _stdout(log)});
 
-      final result = await DiagnosticsService(
-        api,
-      ).systemLog(_session, lines: 200);
+      final result = await DiagnosticsService(api)
+          .systemLog(_session, lines: 200);
 
       final lines = result.output.split('\n');
       expect(lines, hasLength(200));
@@ -276,9 +275,8 @@ void main() {
         },
       ];
 
-    final result = await DiagnosticsService(
-      api,
-    ).run(_session, DiagnosticTool.ping, '10.0.0.9');
+    final result = await DiagnosticsService(api)
+        .run(_session, DiagnosticTool.ping, '10.0.0.9');
 
     expect(result.succeeded, isFalse);
     expect(result.exitCode, 1);
@@ -291,9 +289,8 @@ void main() {
   test('a reply with no exit status is not a success', () async {
     final api = _ExecApi()..reply = [0, {}];
 
-    final result = await DiagnosticsService(
-      api,
-    ).run(_session, DiagnosticTool.ping, '10.0.0.9');
+    final result = await DiagnosticsService(api)
+        .run(_session, DiagnosticTool.ping, '10.0.0.9');
 
     expect(result.succeeded, isFalse);
     expect(result.exitCode, -1);

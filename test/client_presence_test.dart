@@ -151,9 +151,8 @@ void main() {
     // rpcd leaves stdout out when a command prints nothing.
     test('an empty table says no one is there', () {
       expect(
-        ClientPresence(
-          neighbours: ClientPresence.parseNeighbours(''),
-        ).isOnline(mac: 'aa:bb:cc:00:00:20', ip: null, associated: false),
+        ClientPresence(neighbours: ClientPresence.parseNeighbours(''))
+            .isOnline(mac: 'aa:bb:cc:00:00:20', ip: null, associated: false),
         isFalse,
       );
     });

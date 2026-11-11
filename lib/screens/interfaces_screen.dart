@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/l10n/failure_text.dart';
 import 'package:luci_mobile/utils/uci_values.dart';
@@ -2276,9 +2276,8 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
   Widget _buildLabel(BuildContext context, String text) {
     return Text(
       text,
-      style: Theme.of(
-        context,
-      ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+      style: Theme.of(context).textTheme.titleSmall
+          ?.copyWith(fontWeight: FontWeight.w600),
     );
   }
 

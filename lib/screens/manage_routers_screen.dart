@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/navigation/luci_tab.dart';
@@ -54,9 +54,9 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                             context.l10n.noRoutersYet,
                             style: Theme.of(context).textTheme.bodyLarge
                                 ?.copyWith(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                                 ),
                           ),
                         ),
@@ -112,9 +112,8 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                     );
                                     if (!context.mounted) return;
                                     // Pop all the way back to MainScreen
-                                    Navigator.of(
-                                      context,
-                                    ).popUntil((route) => route.isFirst);
+                                    Navigator.of(context)
+                                        .popUntil((route) => route.isFirst);
                                     // Set Dashboard tab as active
                                     WidgetsBinding.instance
                                         .addPostFrameCallback((_) {
@@ -194,12 +193,11 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                   if (!context.mounted) return;
                                   if (appState.routers.isEmpty) {
                                     unawaited(
-                                      Navigator.of(
-                                        context,
-                                      ).pushNamedAndRemoveUntil(
-                                        '/login',
-                                        (route) => false,
-                                      ),
+                                      Navigator.of(context)
+                                          .pushNamedAndRemoveUntil(
+                                            '/login',
+                                            (route) => false,
+                                          ),
                                     );
                                   }
                                 }
@@ -227,12 +225,12 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.primary,
-                                foregroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.onPrimary,
+                                backgroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .primary,
+                                foregroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .onPrimary,
                                 elevation: 2,
                               ),
                               onPressed: () async {
@@ -378,8 +376,7 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                             validator: (value) {
                                                               if (value ==
                                                                       null ||
-                                                                  value
-                                                                      .isEmpty) {
+                                                                  value.isEmpty) {
                                                                 return null;
                                                               }
                                                               final parsed =
@@ -530,10 +527,10 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                 Expanded(
                                                                   child: Text(
                                                                     errorMessage!,
-                                                                    style: Theme.of(context)
-                                                                        .textTheme
-                                                                        .bodyMedium
-                                                                        ?.copyWith(
+                                                                    style:
+                                                                        Theme.of(
+                                                                          context,
+                                                                        ).textTheme.bodyMedium?.copyWith(
                                                                           color: Theme.of(
                                                                             context,
                                                                           ).colorScheme.onErrorContainer,
@@ -662,12 +659,9 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                         // Only what was signed in with, not anything typed since.
                                                                         AutofillForm.saveCredentials(
                                                                           unchanged:
-                                                                              ipController.text.trim() ==
-                                                                                  input &&
-                                                                              userController.text.trim() ==
-                                                                                  user &&
-                                                                              passController.text ==
-                                                                                  pass,
+                                                                              ipController.text.trim() == input &&
+                                                                              userController.text.trim() == user &&
+                                                                              passController.text == pass,
                                                                         );
                                                                         Navigator.pop(
                                                                           context,
@@ -742,14 +736,11 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                         child: CircularProgressIndicator(
                                                                           strokeWidth:
                                                                               3,
-                                                                          valueColor:
-                                                                              AlwaysStoppedAnimation<
-                                                                                Color
-                                                                              >(
-                                                                                Theme.of(
-                                                                                  context,
-                                                                                ).colorScheme.onPrimary,
-                                                                              ),
+                                                                          valueColor: AlwaysStoppedAnimation<Color>(
+                                                                            Theme.of(
+                                                                              context,
+                                                                            ).colorScheme.onPrimary,
+                                                                          ),
                                                                         ),
                                                                       ),
                                                                       const SizedBox(

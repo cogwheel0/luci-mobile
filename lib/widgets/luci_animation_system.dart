@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
+
 import '../design/luci_design_system.dart';
 
 /// Advanced animation system for sophisticated transitions and micro-interactions

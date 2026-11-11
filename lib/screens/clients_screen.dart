@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/l10n/failure_text.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
@@ -13,6 +13,7 @@ import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
 import 'package:luci_mobile/widgets/luci_refresh_components.dart';
 import 'package:luci_mobile/widgets/luci_animation_system.dart';
+import 'package:luci_mobile/navigation/tab_bar_inset.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 
 class ClientsScreen extends ConsumerStatefulWidget {
@@ -328,7 +329,9 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                                   icon: Icons.people_outline,
                                 )
                               : ListView.separated(
-                                  padding: const EdgeInsets.only(bottom: 16),
+                                  padding: EdgeInsets.only(
+                                    bottom: 16 + TabBarInset.of(context),
+                                  ),
                                   separatorBuilder: (context, idx) =>
                                       const SizedBox(height: 4),
                                   itemCount: filteredClients.length,
@@ -675,9 +678,8 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
                   Text(
                     value,
                     style: valueColor != null
-                        ? LuciTextStyles.detailValue(
-                            context,
-                          ).copyWith(color: valueColor)
+                        ? LuciTextStyles.detailValue(context)
+                              .copyWith(color: valueColor)
                         : LuciTextStyles.detailValue(context),
                     semanticsLabel: semanticsLabel ?? value,
                   ),

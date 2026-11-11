@@ -135,12 +135,10 @@ class UciStagingException implements Exception {
 class UciChangesetService {
   UciChangesetService(
     this._api, {
-    IRouterLivenessProbe probe = const RouterLivenessProbe(),
-    DateTime Function() clock = DateTime.now,
-    Future<void> Function(Duration) delay = _defaultDelay,
-  }) : _probe = probe,
-       _clock = clock,
-       _delay = delay;
+    this._probe = const RouterLivenessProbe(),
+    this._clock = DateTime.now,
+    this._delay = _defaultDelay,
+  });
 
   final IApiService _api;
   final IRouterLivenessProbe _probe;

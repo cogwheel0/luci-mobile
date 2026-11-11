@@ -652,9 +652,8 @@ void main() {
         ],
       };
 
-      final foreign = (await h.service.pending(
-        _session,
-      )).foreignTo({'dhcp'}, writtenKeys: const {'dhcp|set|cfg01|name'});
+      final foreign = (await h.service.pending(_session))
+          .foreignTo({'dhcp'}, writtenKeys: const {'dhcp|set|cfg01|name'});
 
       expect(foreign.configs, {'network'});
     });

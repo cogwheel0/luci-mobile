@@ -115,9 +115,8 @@ void main() {
     });
     addTearDown(() => server.close(force: true));
 
-    final data = await GlInetApiService(
-      HttpClientManager(),
-    ).fetchData('127.0.0.1:${server.port}', 'password', false);
+    final data = await GlInetApiService(HttpClientManager())
+        .fetchData('127.0.0.1:${server.port}', 'password', false);
 
     expect(data?.radios['wifi0']?.channel, 44);
     expect(data?.clients['aa:bb:cc:dd:ee:ff']?.online, isTrue);
@@ -169,9 +168,8 @@ void main() {
     });
     addTearDown(() => server.close(force: true));
 
-    final data = await GlInetApiService(
-      HttpClientManager(),
-    ).fetchData('127.0.0.1:${server.port}', 'password', false);
+    final data = await GlInetApiService(HttpClientManager())
+        .fetchData('127.0.0.1:${server.port}', 'password', false);
 
     expect(loginCount, 2);
     expect(callSids.take(2), ['sid-1', 'sid-2']);

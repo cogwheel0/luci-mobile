@@ -19,7 +19,8 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 2.0.1+15
 
 environment:
-  sdk: ^3.8.1
+  sdk: ^3.13.0
+  flutter: ">=3.47.0"
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -32,6 +33,12 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+  # Material and Cupertino as the standalone packages, as Conduit uses them:
+  # the platform UI layer (lib/widgets/platform_ui) is written against these.
+  material_ui: ^1.10.0
+  cupertino_ui: ^1.1.6
+  # Native iOS controls (Liquid Glass on iOS 26+), behind platform_ui.
+  cupertino_native_better: ^2.5.2
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -57,6 +64,10 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  # tool/platform_ui_lint.dart, as in Conduit.
+  analyzer: ^13.3.0
+  path: ^1.9.0
+  yaml: ^3.1.2
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

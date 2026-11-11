@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/system_details.dart';

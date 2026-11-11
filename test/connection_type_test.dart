@@ -59,30 +59,27 @@ void main() {
       },
     );
 
-    test(
-      'device with no wireless indicators and not in assoclist should be unknown',
-      () {
-        final lease = {
-          'macaddr': '11:22:33:44:55:66',
-          'ipaddr': '192.168.1.200',
-          'hostname': 'generic-device',
-        };
-        final wirelessMacs = <String>{};
+    test('device with no wireless indicators and not in assoclist should be unknown', () {
+      final lease = {
+        'macaddr': '11:22:33:44:55:66',
+        'ipaddr': '192.168.1.200',
+        'hostname': 'generic-device',
+      };
+      final wirelessMacs = <String>{};
 
-        final client = Client.fromLease(lease);
-        final macNorm = client.macAddress.toUpperCase().replaceAll('-', ':');
-        final isWireless = wirelessMacs.contains(macNorm);
+      final client = Client.fromLease(lease);
+      final macNorm = client.macAddress.toUpperCase().replaceAll('-', ':');
+      final isWireless = wirelessMacs.contains(macNorm);
 
-        final classified = client.copyWith(
-          connectionType: isWireless
-              ? ConnectionType.wireless
-              : client.connectionType,
-        );
+      final classified = client.copyWith(
+        connectionType: isWireless
+            ? ConnectionType.wireless
+            : client.connectionType,
+      );
 
-        // No wireless indicators, not in assoclist → heuristic says unknown
-        expect(classified.connectionType, ConnectionType.unknown);
-      },
-    );
+      // No wireless indicators, not in assoclist → heuristic says unknown
+      expect(classified.connectionType, ConnectionType.unknown);
+    });
 
     test('device with ethernet interface should stay wired', () {
       final lease = {

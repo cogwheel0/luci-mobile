@@ -102,9 +102,8 @@ void main() {
 
   group('reading port forwards', () {
     test('reads the fields a forward is made of', () {
-      final fwd = FirewallPlanner.portForwards(
-        _firewall,
-      ).firstWhere((f) => f.name == 'SSH');
+      final fwd = FirewallPlanner.portForwards(_firewall)
+          .firstWhere((f) => f.name == 'SSH');
       expect(fwd.sourcePort, '2222');
       expect(fwd.destIp, '192.168.1.10');
       expect(fwd.destPort, '22');
@@ -127,9 +126,8 @@ void main() {
     });
 
     test('a disabled forward is reported as disabled', () {
-      final web = FirewallPlanner.portForwards(
-        _firewall,
-      ).firstWhere((f) => f.name == 'Web');
+      final web = FirewallPlanner.portForwards(_firewall)
+          .firstWhere((f) => f.name == 'Web');
       expect(web.enabled, isFalse);
       // With no dest_port the external port is reused internally.
       expect(web.effectiveDestPort, '8080');
@@ -153,9 +151,8 @@ void main() {
 
     // Destroying configuration the user wrote by hand is not ours to do.
     test("removing a user's rule disables it instead of deleting", () {
-      final rule = FirewallPlanner.trafficRules(
-        _firewall,
-      ).firstWhere((r) => r.section == 'user_rule');
+      final rule = FirewallPlanner.trafficRules(_firewall)
+          .firstWhere((r) => r.section == 'user_rule');
       final ops = FirewallPlanner.planRemoveRule(rule);
       final set = ops.single as UciSet;
       expect(set.section, 'user_rule');
@@ -163,9 +160,8 @@ void main() {
     });
 
     test('removing our own rule deletes it', () {
-      final rule = FirewallPlanner.trafficRules(
-        _firewall,
-      ).firstWhere((r) => r.ownedByApp);
+      final rule = FirewallPlanner.trafficRules(_firewall)
+          .firstWhere((r) => r.ownedByApp);
       expect(FirewallPlanner.planRemoveRule(rule).single, isA<UciRemove>());
     });
   });
