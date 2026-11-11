@@ -17,6 +17,7 @@ import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_apply_progress.dart';
 import 'package:luci_mobile/widgets/luci_feature_gate.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 /// Configures one add-on package.
 ///
@@ -199,15 +200,10 @@ class _Form extends StatelessWidget {
         // Only shown when there is a choice to make; a single queue or a
         // single service should not look like a picker.
         if (!spec.singleSection && sections.length > 1) ...[
-          SegmentedButton<String>(
-            segments: [
-              for (final s in sections)
-                ButtonSegment(value: s.name, label: Text(s.label)),
-            ],
-            selected: {section.name},
-            showSelectedIcon: false,
-            onSelectionChanged: (set) =>
-                onSelect(sections.firstWhere((s) => s.name == set.first)),
+          AdaptiveSegmentedControl(
+            labels: [for (final s in sections) s.label],
+            selectedIndex: sections.indexWhere((s) => s.name == section.name),
+            onValueChanged: (index) => onSelect(sections[index]),
           ),
           const SizedBox(height: LuciSpacing.md),
         ],
@@ -262,7 +258,7 @@ class _FieldTile extends StatelessWidget {
         return LuciCardStyles.standardCardWrapper(
           context: context,
           padding: EdgeInsets.zero,
-          child: SwitchListTile(
+          child: AdaptiveSwitchListTile(
             title: Text(label),
             subtitle: help == null ? null : Text(help),
             value: value,
@@ -367,14 +363,14 @@ class _FieldTile extends StatelessWidget {
                 ),
               ),
               for (final v in field.values)
-                CheckboxListTile(
+                AdaptiveCheckboxListTile(
                   dense: true,
                   title: Text(v),
                   value: current.contains(v),
                   onChanged: editable
                       ? (on) {
                           final next = Set<String>.from(current);
-                          if (on == true) {
+                          if (on) {
                             next.add(v);
                           } else {
                             next.remove(v);

@@ -1,4 +1,4 @@
-# luci-mobile's baseline when the platform UI seam was introduced: 185 entries, 335 occurrences.
+# luci-mobile's platform UI baseline: 166 entries, 292 occurrences.
 # Each entry is a direct Material or Cupertino import or control outside
 # lib/widgets/platform_ui. Counts may only go down: migrate a screen to the
 # platform UI layer and remove or lower its entries.
@@ -35,18 +35,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/addon_screen.dart
-    symbol: "ButtonSegment"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/addon_screen.dart
-    symbol: "CheckboxListTile"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/addon_screen.dart
     symbol: "DropdownButtonFormField"
     count: 1
     owner: screens
@@ -60,18 +48,6 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/screens/addon_screen.dart
     symbol: "FilledButton"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/addon_screen.dart
-    symbol: "SegmentedButton"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/addon_screen.dart
-    symbol: "SwitchListTile"
     count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
@@ -131,12 +107,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/client_detail_screen.dart
-    symbol: "CheckboxListTile"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/client_detail_screen.dart
     symbol: "FilledButton"
     count: 4
     owner: screens
@@ -145,12 +115,6 @@ exceptions:
   - path: lib/screens/client_detail_screen.dart
     symbol: "IconButton"
     count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/client_detail_screen.dart
-    symbol: "SwitchListTile"
-    count: 4
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -173,12 +137,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/clients_screen.dart
-    symbol: "ButtonSegment"
-    count: 2
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/clients_screen.dart
     symbol: "Card"
     count: 1
     owner: screens
@@ -192,12 +150,6 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/screens/clients_screen.dart
     symbol: "IconButton"
-    count: 2
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/clients_screen.dart
-    symbol: "SegmentedButton"
     count: 2
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
@@ -239,12 +191,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/diagnostics_screen.dart
-    symbol: "ButtonSegment"
-    count: 3
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/diagnostics_screen.dart
     symbol: "Card"
     count: 2
     owner: screens
@@ -259,12 +205,6 @@ exceptions:
   - path: lib/screens/diagnostics_screen.dart
     symbol: "IconButton"
     count: 2
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/diagnostics_screen.dart
-    symbol: "SegmentedButton"
-    count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -341,12 +281,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/firewall_screen.dart
-    symbol: "Switch"
-    count: 4
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/firewall_screen.dart
     symbol: "TextButton"
     count: 2
     owner: screens
@@ -419,12 +353,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/interfaces_screen.dart
-    symbol: "Switch"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/interfaces_screen.dart
     symbol: "TextButton"
     count: 4
     owner: screens
@@ -443,12 +371,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/log_screen.dart
-    symbol: "ButtonSegment"
-    count: 2
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/log_screen.dart
     symbol: "CircularProgressIndicator"
     count: 1
     owner: screens
@@ -457,12 +379,6 @@ exceptions:
   - path: lib/screens/log_screen.dart
     symbol: "IconButton"
     count: 3
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/log_screen.dart
-    symbol: "SegmentedButton"
-    count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -628,12 +544,6 @@ exceptions:
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
-  - path: lib/screens/notifications_screen.dart
-    symbol: "SwitchListTile"
-    count: 2
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
   - path: lib/screens/router_dashboard_settings_screen.dart
     package: "package:material_ui/material_ui.dart"
     count: 1
@@ -647,12 +557,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/router_dashboard_settings_screen.dart
-    symbol: "CheckboxListTile"
-    count: 2
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/router_dashboard_settings_screen.dart
     symbol: "CircularProgressIndicator"
     count: 1
     owner: screens
@@ -661,12 +565,6 @@ exceptions:
   - path: lib/screens/router_dashboard_settings_screen.dart
     symbol: "ExpansionTile"
     count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/router_dashboard_settings_screen.dart
-    symbol: "SwitchListTile"
-    count: 6
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -895,18 +793,6 @@ exceptions:
   - path: lib/screens/wireless_screen.dart
     symbol: "IconButton"
     count: 2
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/wireless_screen.dart
-    symbol: "Switch"
-    count: 4
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/wireless_screen.dart
-    symbol: "SwitchListTile"
-    count: 4
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration

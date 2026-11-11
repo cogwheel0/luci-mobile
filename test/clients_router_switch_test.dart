@@ -10,6 +10,7 @@ import 'package:luci_mobile/services/mock_api_service.dart';
 import 'package:luci_mobile/services/mock_auth_service.dart';
 import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 model.Router _router(String id) => model.Router(
   id: id,
@@ -76,17 +77,17 @@ void main() {
     // control is a switch between a thing and itself.
     testWidgets('is hidden when only one router is saved', (tester) async {
       await _pump(tester, 1);
-      expect(find.byType(SegmentedButton<bool>), findsNothing);
+      expect(find.byType(AdaptiveSegmentedControl), findsNothing);
     });
 
     testWidgets('appears once a second router is saved', (tester) async {
       await _pump(tester, 2);
-      expect(find.byType(SegmentedButton<bool>), findsOneWidget);
+      expect(find.byType(AdaptiveSegmentedControl), findsOneWidget);
     });
 
     testWidgets('is hidden when no routers are saved', (tester) async {
       await _pump(tester, 0);
-      expect(find.byType(SegmentedButton<bool>), findsNothing);
+      expect(find.byType(AdaptiveSegmentedControl), findsNothing);
     });
   });
 

@@ -7,6 +7,7 @@ import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/services/diagnostics_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 final diagnosticsServiceProvider = Provider<DiagnosticsService?>((ref) {
   final api = ref.watch(apiServiceProvider);
@@ -26,6 +27,13 @@ class DiagnosticsScreen extends ConsumerStatefulWidget {
 
 class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
   final _target = TextEditingController(text: 'openwrt.org');
+
+  /// The segments' order.
+  static const _tools = [
+    DiagnosticTool.ping,
+    DiagnosticTool.traceroute,
+    DiagnosticTool.nslookup,
+  ];
   DiagnosticTool _tool = DiagnosticTool.ping;
   bool _running = false;
   String? _output;
@@ -74,28 +82,12 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(LuciSpacing.md),
         children: [
-          SegmentedButton<DiagnosticTool>(
-            segments: [
-              ButtonSegment(
-                value: DiagnosticTool.ping,
-                label: Text(l10n.toolPing),
-                icon: const Icon(Icons.network_ping),
-              ),
-              ButtonSegment(
-                value: DiagnosticTool.traceroute,
-                label: Text(l10n.toolTraceroute),
-                icon: const Icon(Icons.route),
-              ),
-              ButtonSegment(
-                value: DiagnosticTool.nslookup,
-                label: Text(l10n.toolNslookup),
-                icon: const Icon(Icons.dns),
-              ),
-            ],
-            selected: {_tool},
-            onSelectionChanged: _running
-                ? null
-                : (s) => setState(() => _tool = s.first),
+          AdaptiveSegmentedControl(
+            labels: [l10n.toolPing, l10n.toolTraceroute, l10n.toolNslookup],
+            materialIcons: const [Icons.network_ping, Icons.route, Icons.dns],
+            selectedIndex: _tools.indexOf(_tool),
+            enabled: !_running,
+            onValueChanged: (index) => setState(() => _tool = _tools[index]),
           ),
           const SizedBox(height: LuciSpacing.md),
           TextField(

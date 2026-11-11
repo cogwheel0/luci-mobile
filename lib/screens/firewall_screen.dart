@@ -11,6 +11,7 @@ import 'package:luci_mobile/services/firewall_planner.dart';
 import 'package:luci_mobile/state/firewall_notifier.dart';
 import 'package:luci_mobile/widgets/luci_apply_progress.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 /// Port forwards, traffic rules, zones and static routes.
 ///
@@ -192,8 +193,9 @@ class _ForwardsTab extends StatelessWidget {
                     // A restricted forward reads as open without this.
                     '${f.sourceIp == null ? '' : '\n${l10n.sourceAddress}: ${f.sourceIp}'}',
                   ),
-                  trailing: Switch.adaptive(
+                  trailing: AdaptiveSwitch(
                     value: f.enabled,
+                    semanticLabel: f.name ?? '${f.sourceZone}:${f.sourcePort}',
                     onChanged: busy ? null : (v) => onToggle(f, v),
                   ),
                 );
@@ -255,8 +257,9 @@ class _RulesTab extends StatelessWidget {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Switch.adaptive(
+              AdaptiveSwitch(
                 value: r.enabled,
+                semanticLabel: r.name ?? r.section,
                 onChanged: busy ? null : (v) => onToggle(r, v),
               ),
               IconButton(

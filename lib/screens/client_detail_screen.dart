@@ -20,6 +20,7 @@ import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_feature_gate.dart';
 import 'package:luci_mobile/widgets/luci_apply_progress.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 class ClientDetailScreen extends ConsumerStatefulWidget {
   const ClientDetailScreen({super.key, required this.client});
@@ -171,7 +172,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SwitchListTile.adaptive(
+          AdaptiveSwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: Text(context.l10n.reserveThisAddress),
             subtitle: detail.hasReservation
@@ -259,7 +260,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       // Without a resolvable zone the rule would have to guess `lan`, which
       // is wrong on any guest-VLAN or multi-zone router.
       extraNote: noZone ? context.l10n.noZoneForClient : null,
-      child: SwitchListTile.adaptive(
+      child: AdaptiveSwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: Text(context.l10n.blockClient),
         subtitle: Text(
@@ -843,11 +844,11 @@ class _RenameDialogState extends State<_RenameDialog> {
             onChanged: (_) => setState(() {}),
           ),
           if (widget.canSetHostname)
-            CheckboxListTile(
+            AdaptiveCheckboxListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(l10n.setDhcpHostname),
               value: _alsoHostname,
-              onChanged: (v) => setState(() => _alsoHostname = v ?? false),
+              onChanged: (v) => setState(() => _alsoHostname = v),
             ),
         ],
       ),

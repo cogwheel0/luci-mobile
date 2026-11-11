@@ -14,6 +14,7 @@ import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_apply_progress.dart';
 import 'package:luci_mobile/widgets/luci_feature_gate.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 /// Every SSID on the router, grouped by the radio that hosts it.
 class WirelessScreen extends ConsumerStatefulWidget {
@@ -193,8 +194,9 @@ class _RadioCard extends StatelessWidget {
                   tooltip: l10n.radioSettings,
                   onPressed: busy ? null : onRadioSettings,
                 ),
-                Switch.adaptive(
+                AdaptiveSwitch(
                   value: !radio.disabled,
+                  semanticLabel: radio.label,
                   onChanged: busy ? null : onToggleRadio,
                 ),
               ],
@@ -277,8 +279,9 @@ class _NetworkRow extends StatelessWidget {
       ),
       title: Text(network.ssid ?? l10n.hiddenNetwork),
       subtitle: Text(badges.join(' · ')),
-      trailing: Switch.adaptive(
+      trailing: AdaptiveSwitch(
         value: !network.disabled,
+        semanticLabel: network.ssid ?? l10n.hiddenNetwork,
         onChanged: busy ? null : onToggle,
       ),
     );
@@ -455,7 +458,7 @@ class _NetworkSheetState extends State<_NetworkSheet> {
               ),
             ],
 
-            SwitchListTile.adaptive(
+            AdaptiveSwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(l10n.hiddenSsid),
               subtitle: Text(l10n.hiddenSsidDescription),
@@ -464,7 +467,7 @@ class _NetworkSheetState extends State<_NetworkSheet> {
                   ? null
                   : (v) => setState(() => _hidden = v),
             ),
-            SwitchListTile.adaptive(
+            AdaptiveSwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(l10n.clientIsolation),
               subtitle: Text(l10n.clientIsolationDescription),

@@ -9,6 +9,7 @@ import 'package:luci_mobile/screens/diagnostics_screen.dart';
 import 'package:luci_mobile/services/diagnostics_service.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 enum _LogSource { system, kernel }
 
@@ -111,24 +112,18 @@ class _LogScreenState extends ConsumerState<LogScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(LuciSpacing.md),
-            child: SegmentedButton<_LogSource>(
-              segments: [
-                ButtonSegment(
-                  value: _LogSource.system,
-                  label: Text(l10n.systemLog),
-                ),
-                ButtonSegment(
-                  value: _LogSource.kernel,
-                  label: Text(l10n.kernelLog),
-                ),
-              ],
-              selected: {_source},
-              onSelectionChanged: _loading
-                  ? null
-                  : (s) {
-                      setState(() => _source = s.first);
-                      _load();
-                    },
+            child: AdaptiveSegmentedControl(
+              labels: [l10n.systemLog, l10n.kernelLog],
+              selectedIndex: _source == _LogSource.system ? 0 : 1,
+              enabled: !_loading,
+              onValueChanged: (index) {
+                setState(
+                  () => _source = index == 0
+                      ? _LogSource.system
+                      : _LogSource.kernel,
+                );
+                _load();
+              },
             ),
           ),
           Padding(

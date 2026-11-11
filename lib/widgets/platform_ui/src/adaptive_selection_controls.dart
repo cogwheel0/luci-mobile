@@ -357,12 +357,17 @@ class AdaptiveSegmentedControl extends StatelessWidget {
     this.textColor,
     this.selectedTextColor,
     this.semanticLabel,
+    this.materialIcons,
   });
 
   final List<String> labels;
   final int selectedIndex;
   final ValueChanged<int> onValueChanged;
   final bool enabled;
+
+  /// Icons Material shows beside each label. iOS segments stay text, as
+  /// the platform's do; use [sfSymbols] for icon-only segments everywhere.
+  final List<IconData>? materialIcons;
   final Color? color;
   final double height;
   final bool shrinkWrap;
@@ -480,12 +485,14 @@ class AdaptiveSegmentedControl extends StatelessWidget {
               label: fallbackIcon(iconAt(index)) == null
                   ? Text(labels[index])
                   : null,
-              icon: fallbackIcon(iconAt(index)) == null
-                  ? null
-                  : Icon(
+              icon: fallbackIcon(iconAt(index)) != null
+                  ? Icon(
                       fallbackIcon(iconAt(index))!,
                       semanticLabel: labels[index],
-                    ),
+                    )
+                  : materialIcons != null && index < materialIcons!.length
+                  ? Icon(materialIcons![index])
+                  : null,
             ),
         ],
         selected: {selectedIndex},
@@ -595,6 +602,159 @@ class AdaptiveCheckbox extends StatelessWidget {
                       color: checkColor ?? CupertinoColors.white,
                     )
                   : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A settings row that turns something on or off.
+///
+/// Android shows Material's [SwitchListTile]. iOS shows the same row with
+/// the platform switch trailing, the native one on iOS 26; as in iOS
+/// Settings, only the switch responds to touch. Assistive technology reads
+/// the row as one switch either way.
+class AdaptiveSwitchListTile extends StatelessWidget {
+  const AdaptiveSwitchListTile({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.title,
+    this.subtitle,
+    this.secondary,
+    this.contentPadding,
+    this.dense,
+  });
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final Widget? title;
+  final Widget? subtitle;
+  final Widget? secondary;
+  final EdgeInsetsGeometry? contentPadding;
+  final bool? dense;
+
+  @override
+  Widget build(BuildContext context) {
+    final change = onChanged;
+    if (!PlatformUiCapabilities.isIOS) {
+      return SwitchListTile(
+        value: value,
+        onChanged: change == null
+            ? null
+            : (next) {
+                AppHaptics.selectionClick();
+                change(next);
+              },
+        title: title,
+        subtitle: subtitle,
+        secondary: secondary,
+        contentPadding: contentPadding,
+        dense: dense,
+      );
+    }
+    return MergeSemantics(
+      child: Semantics(
+        toggled: value,
+        enabled: change != null,
+        onTap: change == null ? null : () => change(!value),
+        child: ListTile(
+          leading: secondary,
+          title: title,
+          subtitle: subtitle,
+          contentPadding: contentPadding,
+          dense: dense,
+          enabled: change != null,
+          trailing: ExcludeSemantics(
+            child: AdaptiveSwitch(value: value, onChanged: change),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A row that includes or leaves out one choice of several.
+///
+/// Android shows Material's [CheckboxListTile]. iOS shows the selection
+/// circle of iOS lists, empty or checked, and the whole row toggles. The
+/// empty circle is what marks a lone option as one.
+class AdaptiveCheckboxListTile extends StatelessWidget {
+  const AdaptiveCheckboxListTile({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.title,
+    this.subtitle,
+    this.secondary,
+    this.contentPadding,
+    this.dense,
+    this.activeColor,
+    this.controlAffinity = ListTileControlAffinity.platform,
+  });
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final Widget? title;
+  final Widget? subtitle;
+  final Widget? secondary;
+  final EdgeInsetsGeometry? contentPadding;
+  final bool? dense;
+
+  /// The checkbox fill on Android and the checked circle on iOS.
+  final Color? activeColor;
+
+  /// Where Material puts the checkbox. iOS always puts the circle trailing.
+  final ListTileControlAffinity controlAffinity;
+
+  @override
+  Widget build(BuildContext context) {
+    final change = onChanged;
+    void toggle() {
+      AppHaptics.selectionClick();
+      change!(!value);
+    }
+
+    if (!PlatformUiCapabilities.isIOS) {
+      return CheckboxListTile(
+        value: value,
+        onChanged: change == null ? null : (_) => toggle(),
+        title: title,
+        subtitle: subtitle,
+        secondary: secondary,
+        contentPadding: contentPadding,
+        dense: dense,
+        activeColor: activeColor,
+        controlAffinity: controlAffinity,
+      );
+    }
+    final theme = Theme.of(context);
+    return MergeSemantics(
+      child: Semantics(
+        checked: value,
+        // iOS rows highlight on touch rather than ripple.
+        child: Theme(
+          data: theme.copyWith(splashFactory: NoSplash.splashFactory),
+          child: ListTile(
+            leading: secondary,
+            title: title,
+            subtitle: subtitle,
+            contentPadding: contentPadding,
+            dense: dense,
+            enabled: change != null,
+            onTap: change == null ? null : toggle,
+            trailing: Icon(
+              value
+                  ? CupertinoIcons.checkmark_circle_fill
+                  : CupertinoIcons.circle,
+              size: 24,
+              color: change == null
+                  ? CupertinoColors.inactiveGray.resolveFrom(context)
+                  : value
+                  ? activeColor ?? theme.colorScheme.primary
+                  : CupertinoColors.systemGrey3.resolveFrom(context),
             ),
           ),
         ),
