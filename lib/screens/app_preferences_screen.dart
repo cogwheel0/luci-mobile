@@ -11,36 +11,26 @@ import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 class AppPreferencesScreen extends ConsumerWidget {
   const AppPreferencesScreen({super.key});
 
-  void _showReviewerModeResetDialog(BuildContext context, WidgetRef ref) {
+  Future<void> _showReviewerModeResetDialog(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final appState = ref.read(appStateProvider);
-    // Capture the root navigator before any awaits: the dialog's context is
-    // dead once popped, so a later context.mounted check would skip the
-    // navigation and leave the user on a stale screen.
+    // Capture the root navigator before any awaits: this screen can be gone
+    // by the time logging out finishes.
     final navigator = Navigator.of(context);
-    showDialog(
+    final l10n = context.l10n;
+    final confirmed = await AdaptiveAlertDialog.confirm(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(context.l10n.exitReviewerModeQuestion),
-        content: Text(context.l10n.exitReviewerModeDescription),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(context.l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.of(dialogContext).pop();
-              await appState.setReviewerMode(false);
-              await appState.logout();
-              unawaited(
-                navigator.pushNamedAndRemoveUntil('/login', (route) => false),
-              );
-            },
-            child: Text(context.l10n.exit),
-          ),
-        ],
-      ),
+      title: l10n.exitReviewerModeQuestion,
+      message: l10n.exitReviewerModeDescription,
+      cancelLabel: l10n.cancel,
+      confirmLabel: l10n.exit,
     );
+    if (!confirmed) return;
+    await appState.setReviewerMode(false);
+    await appState.logout();
+    unawaited(navigator.pushNamedAndRemoveUntil('/login', (route) => false));
   }
 
   @override

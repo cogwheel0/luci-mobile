@@ -20,6 +20,7 @@ import 'package:luci_mobile/utils/http_client_manager.dart';
 import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/navigation/tab_bar_inset.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -90,117 +91,83 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _showLogoutDialog(BuildContext context) async {
     final appState = ref.read(appStateProvider);
-    return showDialog<void>(
+    final l10n = context.l10n;
+    // Capture the navigator before any awaits: once the alert closes, the
+    // user can switch tabs while logging out, which removes this screen,
+    // and the session must still end on the login screen.
+    final navigator = Navigator.of(context);
+    final confirmed = await AdaptiveAlertDialog.confirm(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(context.l10n.logoutQuestion),
-          content: Text(context.l10n.logoutConfirmation),
-          actions: <Widget>[
-            TextButton(
-              child: Text(context.l10n.cancel),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: Text(context.l10n.logout),
-              onPressed: () async {
-                await appState.logout(userInitiated: true);
-                // Clear all accepted certificates on logout
-                await HttpClientManager().clearAcceptedCertificates();
-                if (context.mounted) {
-                  unawaited(
-                    Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(
-                        builder: (context) => const LoginScreen(),
-                      ),
-                      (Route<dynamic> route) => false,
-                    ),
-                  );
-                }
-              },
-            ),
-          ],
-        );
-      },
+      title: l10n.logoutQuestion,
+      message: l10n.logoutConfirmation,
+      cancelLabel: l10n.cancel,
+      confirmLabel: l10n.logout,
+      destructive: true,
+    );
+    if (!confirmed) return;
+    await appState.logout(userInitiated: true);
+    // Clear all accepted certificates on logout
+    await HttpClientManager().clearAcceptedCertificates();
+    unawaited(
+      navigator.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (Route<dynamic> route) => false,
+      ),
     );
   }
 
   Future<void> _showRebootDialog(BuildContext context) async {
     final appState = ref.read(appStateProvider);
-    return showDialog<void>(
+    final l10n = context.l10n;
+    final confirmed = await AdaptiveAlertDialog.confirm(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(context.l10n.rebootRouterQuestion),
-          content: Text(context.l10n.rebootRouterConfirmation),
-          actions: <Widget>[
-            TextButton(
-              child: Text(context.l10n.cancel),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+      title: l10n.rebootRouterQuestion,
+      message: l10n.rebootRouterConfirmation,
+      cancelLabel: l10n.cancel,
+      confirmLabel: l10n.reboot,
+      destructive: true,
+    );
+    if (!confirmed || !context.mounted) return;
+    // Captured now: the reboot can outlive this screen, and the result
+    // still has somewhere to show.
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final messenger = ScaffoldMessenger.of(context);
+    // Show persistent warning snackbar
+    messenger.showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: colorScheme.onPrimary,
+              size: 20,
             ),
-            TextButton(
-              child: Text(context.l10n.reboot),
-              onPressed: () async {
-                // Captured before the pop: afterwards this dialog's context
-                // is unmounted, so every `context.mounted` guard below the
-                // await fails and the result snackbar never appears.
-                final theme = Theme.of(context);
-                final colorScheme = theme.colorScheme;
-                final messenger = ScaffoldMessenger.of(context);
-                final l10n = context.l10n;
-                Navigator.of(context).pop();
-                // Show persistent warning snackbar
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Row(
-                      children: [
-                        Icon(
-                          Icons.warning_amber_rounded,
-                          color: colorScheme.onPrimary,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            context.l10n.rebootingConnectionInterrupted,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onPrimary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    backgroundColor: colorScheme.primary,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
-                    ),
-                    duration: const Duration(days: 1), // effectively indefinite
-                  ),
-                );
-                final success = await appState.reboot();
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      success
-                          ? l10n.rebootCommandSent
-                          : l10n.rebootCommandFailed,
-                    ),
-                  ),
-                );
-              },
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                l10n.rebootingConnectionInterrupted,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onPrimary,
+                ),
+              ),
             ),
           ],
-        );
-      },
+        ),
+        backgroundColor: colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        duration: const Duration(days: 1), // effectively indefinite
+      ),
+    );
+    final success = await appState.reboot();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          success ? l10n.rebootCommandSent : l10n.rebootCommandFailed,
+        ),
+      ),
     );
   }
 

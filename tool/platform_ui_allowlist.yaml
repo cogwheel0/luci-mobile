@@ -1,4 +1,4 @@
-# luci-mobile's platform UI baseline: 150 entries, 220 occurrences.
+# luci-mobile's platform UI baseline: 144 entries, 202 occurrences.
 # Each entry is a direct Material or Cupertino import or control outside
 # lib/widgets/platform_ui. Counts may only go down: migrate a screen to the
 # platform UI layer and remove or lower its entries.
@@ -65,25 +65,7 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/app_preferences_screen.dart
-    symbol: "AlertDialog"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/app_preferences_screen.dart
     symbol: "Card"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/app_preferences_screen.dart
-    symbol: "FilledButton"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/app_preferences_screen.dart
-    symbol: "TextButton"
     count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
@@ -432,7 +414,7 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/screens/manage_routers_screen.dart
     symbol: "AlertDialog"
-    count: 3
+    count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -468,7 +450,7 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/screens/manage_routers_screen.dart
     symbol: "TextButton"
-    count: 6
+    count: 2
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -527,19 +509,7 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/services_screen.dart
-    symbol: "AlertDialog"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/services_screen.dart
     symbol: "CircularProgressIndicator"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/services_screen.dart
-    symbol: "FilledButton"
     count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
@@ -562,12 +532,6 @@ exceptions:
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
-  - path: lib/screens/services_screen.dart
-    symbol: "TextButton"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
   - path: lib/screens/settings_screen.dart
     package: "package:material_ui/material_ui.dart"
     count: 1
@@ -576,13 +540,13 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/screens/settings_screen.dart
     symbol: "AlertDialog"
-    count: 3
+    count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/settings_screen.dart
     symbol: "TextButton"
-    count: 5
+    count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
