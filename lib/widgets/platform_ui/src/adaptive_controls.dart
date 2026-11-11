@@ -347,7 +347,12 @@ class AdaptiveButton extends StatelessWidget {
         );
       } else if (symbol != null) {
         button = CNButton.icon(
-          icon: CNSymbol(symbol.name, size: symbol.size, color: symbol.color),
+          icon: CNSymbol(
+            symbol.name,
+            size: symbol.size,
+            // Alone on the tint, the symbol takes the paired colour too.
+            color: symbol.color ?? (onTint ? nativeLabelColor : null),
+          ),
           semanticLabel: semanticLabel,
           onPressed: onPressed,
           enabled: active,
@@ -359,7 +364,11 @@ class AdaptiveButton extends StatelessWidget {
         button = CNButton.icon(
           icon: symbolName == null
               ? null
-              : CNSymbol(symbolName, size: iconSize ?? 20, color: iconColor),
+              : CNSymbol(
+                  symbolName,
+                  size: iconSize ?? 20,
+                  color: iconColor ?? (onTint ? nativeLabelColor : null),
+                ),
           customIcon: symbolName == null ? iconData : null,
           semanticLabel: semanticLabel,
           onPressed: onPressed,

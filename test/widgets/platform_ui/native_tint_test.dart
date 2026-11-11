@@ -144,6 +144,36 @@ void main() {
     );
   }
 
+  for (final (state, symbolColor, onPressed, expected) in [
+    ('an uncoloured', null, () {}, 'onPrimary'),
+    ('an explicitly coloured', const Color(0xFFFF9500), () {}, 'explicit'),
+    ('a disabled', null, null, 'system'),
+  ]) {
+    testWidgets('$state filled icon-only native button\'s symbol in the '
+        'dark theme', (tester) async {
+      final scheme = _scheme(Brightness.dark);
+      await tester.pumpWidget(
+        _host(
+          brightness: Brightness.dark,
+          AdaptiveButton.sfSymbol(
+            onPressed: onPressed,
+            sfSymbol: SFSymbol('plus', color: symbolColor),
+            style: AdaptiveButtonStyle.filled,
+          ),
+        ),
+      );
+
+      final button = tester.widget<CNButton>(find.byType(CNButton));
+      expect(button.tint, scheme.primary);
+      expect(button.icon!.color, switch (expected) {
+        'onPrimary' => scheme.onPrimary,
+        'explicit' => symbolColor,
+        _ => isNull,
+      });
+      await unmount(tester);
+    });
+  }
+
   testWidgets('a plain native button takes the app primary', (tester) async {
     await tester.pumpWidget(
       _host(
