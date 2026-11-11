@@ -1,4 +1,4 @@
-# luci-mobile's platform UI baseline: 144 entries, 202 occurrences.
+# luci-mobile's platform UI baseline: 138 entries, 193 occurrences.
 # Each entry is a direct Material or Cupertino import or control outside
 # lib/widgets/platform_ui. Counts may only go down: migrate a screen to the
 # platform UI layer and remove or lower its entries.
@@ -73,24 +73,6 @@ exceptions:
   - path: lib/screens/client_detail_screen.dart
     package: "package:material_ui/material_ui.dart"
     count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/client_detail_screen.dart
-    symbol: "AlertDialog"
-    count: 2
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/client_detail_screen.dart
-    symbol: "FilledButton"
-    count: 2
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/client_detail_screen.dart
-    symbol: "TextButton"
-    count: 2
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -569,25 +551,7 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/system_settings_screen.dart
-    symbol: "AlertDialog"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/system_settings_screen.dart
-    symbol: "FilledButton"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/system_settings_screen.dart
     symbol: "IconButton"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/system_settings_screen.dart
-    symbol: "TextButton"
     count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"

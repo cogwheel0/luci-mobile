@@ -346,7 +346,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   /// is the default; the hostname is a real change to `dhcp` and goes
   /// through the usual apply.
   Future<void> _rename(ClientDetail? detail, String current) async {
-    final result = await showDialog<_RenameResult>(
+    final result = await showAdaptiveFormSheet<_RenameResult>(
       context: context,
       builder: (_) => _RenameDialog(
         initialName: detail?.alias ?? '',
@@ -373,15 +373,16 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     );
   }
 
-  Future<String?> _askForIp(ClientDetail detail) => showDialog<String>(
-    context: context,
-    builder: (dialogContext) => _ReservationDialog(
-      initialText:
-          detail.host?.ip ??
-          (client.ipAddress == 'N/A' ? '' : client.ipAddress),
-      detail: detail,
-    ),
-  );
+  Future<String?> _askForIp(ClientDetail detail) =>
+      showAdaptiveFormSheet<String>(
+        context: context,
+        builder: (dialogContext) => _ReservationDialog(
+          initialText:
+              detail.host?.ip ??
+              (client.ipAddress == 'N/A' ? '' : client.ipAddress),
+          detail: detail,
+        ),
+      );
 
   Future<void> _apply(List<UciOperation> ops) async {
     if (ops.isEmpty || _busy) return;
@@ -751,9 +752,14 @@ class _ReservationDialogState extends State<_ReservationDialog> {
   @override
   Widget build(BuildContext context) {
     final message = _message(context);
-    return AlertDialog(
-      title: Text(context.l10n.reserveThisAddress),
-      content: TextField(
+    return AdaptiveFormSheet(
+      title: context.l10n.reserveThisAddress,
+      cancelLabel: context.l10n.cancel,
+      confirmLabel: context.l10n.saveAction,
+      onConfirm: _check.isBlocking
+          ? null
+          : () => Navigator.of(context).pop(_controller.text.trim()),
+      child: TextField(
         controller: _controller,
         autofocus: true,
         keyboardType: TextInputType.number,
@@ -766,18 +772,6 @@ class _ReservationDialogState extends State<_ReservationDialog> {
         ),
         onChanged: _validate,
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(context.l10n.cancel),
-        ),
-        FilledButton(
-          onPressed: _check.isBlocking
-              ? null
-              : () => Navigator.of(context).pop(_controller.text.trim()),
-          child: Text(context.l10n.saveAction),
-        ),
-      ],
     );
   }
 }
@@ -831,9 +825,19 @@ class _RenameDialogState extends State<_RenameDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return AlertDialog(
-      title: Text(l10n.clientDetails),
-      content: Column(
+    return AdaptiveFormSheet(
+      title: l10n.clientDetails,
+      cancelLabel: l10n.cancel,
+      confirmLabel: l10n.saveAction,
+      onConfirm: _valid
+          ? () => Navigator.of(context).pop(
+              _RenameResult(
+                name: _name.text.trim(),
+                alsoSetHostname: _alsoHostname,
+              ),
+            )
+          : null,
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -859,23 +863,6 @@ class _RenameDialogState extends State<_RenameDialog> {
             ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancel),
-        ),
-        FilledButton(
-          onPressed: _valid
-              ? () => Navigator.of(context).pop(
-                  _RenameResult(
-                    name: _name.text.trim(),
-                    alsoSetHostname: _alsoHostname,
-                  ),
-                )
-              : null,
-          child: Text(l10n.saveAction),
-        ),
-      ],
     );
   }
 }

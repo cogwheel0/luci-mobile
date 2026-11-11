@@ -78,7 +78,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
   }
 
   Future<void> _changePassword() async {
-    final password = await showDialog<String>(
+    final password = await showAdaptiveFormSheet<String>(
       context: context,
       builder: (_) => const _PasswordDialog(),
     );
@@ -408,9 +408,12 @@ class _PasswordDialogState extends State<_PasswordDialog> {
     final mismatch = _confirm.text.isNotEmpty && _confirm.text != value;
     final valid = value.length >= 5 && _confirm.text == value;
 
-    return AlertDialog(
-      title: Text(l10n.routerPassword),
-      content: Column(
+    return AdaptiveFormSheet(
+      title: l10n.routerPassword,
+      cancelLabel: l10n.cancel,
+      confirmLabel: l10n.saveAction,
+      onConfirm: valid ? () => Navigator.of(context).pop(value) : null,
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -451,16 +454,6 @@ class _PasswordDialogState extends State<_PasswordDialog> {
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancel),
-        ),
-        FilledButton(
-          onPressed: valid ? () => Navigator.of(context).pop(value) : null,
-          child: Text(l10n.save),
-        ),
-      ],
     );
   }
 }
