@@ -14,6 +14,7 @@ import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_apply_progress.dart';
 import 'package:luci_mobile/widgets/luci_feature_gate.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 /// Router identity and clock — LuCI's System → General Settings.
 class SystemSettingsScreen extends ConsumerStatefulWidget {
@@ -292,9 +293,9 @@ class _Form extends StatelessWidget {
           ),
         ),
         const SizedBox(height: LuciSpacing.lg),
-        FilledButton(
+        AdaptiveButton(
           onPressed: editable && dirty && valid ? onSave : null,
-          child: Text(l10n.save),
+          label: l10n.save,
         ),
       ],
     );

@@ -5,6 +5,7 @@ import 'package:luci_mobile/models/wifi_scan_result.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 String _signalStrength(BuildContext context, int signal) {
   if (signal >= -50) return context.l10n.excellent;
@@ -354,68 +355,50 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
             children: [
               // Scan / Stop button
               Expanded(
+                // Text only on iOS: at its label size, a symbol leaves half
+                // the row too narrow for "Scan Networks".
                 child: _isScanning
-                    ? OutlinedButton.icon(
+                    ? AdaptiveButton(
                         onPressed: _stopScan,
-                        icon: const Icon(Icons.stop, size: 20),
-                        label: Text(context.l10n.stopScan),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          foregroundColor: colorScheme.error,
-                          side: BorderSide(
-                            color: colorScheme.error.withValues(alpha: 0.5),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
+                        label: context.l10n.stopScan,
+                        materialIcon: Icons.stop,
+                        style: AdaptiveButtonStyle.bordered,
+                        color: colorScheme.error.withValues(alpha: 0.5),
+                        textColor: colorScheme.error,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        borderRadius: BorderRadius.circular(12),
+                        useSmoothRectangleBorder: false,
                       )
-                    : FilledButton.icon(
+                    : AdaptiveButton(
                         onPressed: _isRestarting || _selectedRadio == null
                             ? null
                             : _startScan,
-                        icon: const Icon(Icons.radar, size: 20),
-                        label: Text(context.l10n.scanNetworks),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
+                        label: context.l10n.scanNetworks,
+                        materialIcon: Icons.radar,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        borderRadius: BorderRadius.circular(12),
+                        useSmoothRectangleBorder: false,
                       ),
               ),
               const SizedBox(width: 10),
               // Restart Radio button
               Expanded(
-                child: OutlinedButton.icon(
+                child: AdaptiveButton(
                   onPressed:
                       _isScanning || _isRestarting || _selectedRadio == null
                       ? null
                       : _restartRadio,
-                  icon: _isRestarting
-                      ? SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colorScheme.primary,
-                          ),
-                        )
-                      : const Icon(Icons.restart_alt, size: 20),
-                  label: Text(
-                    _isRestarting
-                        ? context.l10n.restarting
-                        : context.l10n.restartRadio,
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: BorderSide(
-                      color: colorScheme.primary.withValues(alpha: 0.5),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
+                  busy: _isRestarting,
+                  label: _isRestarting
+                      ? context.l10n.restarting
+                      : context.l10n.restartRadio,
+                  materialIcon: Icons.restart_alt,
+                  style: AdaptiveButtonStyle.bordered,
+                  color: colorScheme.primary.withValues(alpha: 0.5),
+                  textColor: colorScheme.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  borderRadius: BorderRadius.circular(12),
+                  useSmoothRectangleBorder: false,
                 ),
               ),
             ],
@@ -1248,33 +1231,22 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
               // Connect button
               SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
+                child: AdaptiveButton(
                   onPressed: _isConnecting ? null : _connect,
-                  icon: _isConnecting
-                      ? SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colorScheme.onPrimary,
-                          ),
-                        )
-                      : const Icon(Icons.wifi),
-                  label: Text(
-                    _isConnecting
-                        ? context.l10n.connecting
-                        : context.l10n.connect,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  busy: _isConnecting,
+                  label: _isConnecting
+                      ? context.l10n.connecting
+                      : context.l10n.connect,
+                  sfSymbol: const SFSymbol('wifi'),
+                  materialIcon: Icons.wifi,
+                  size: AdaptiveButtonSize.large,
+                  labelStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                   ),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  borderRadius: BorderRadius.circular(14),
+                  useSmoothRectangleBorder: false,
                 ),
               ),
 

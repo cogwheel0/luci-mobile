@@ -183,17 +183,14 @@ class LuciErrorDisplay extends StatelessWidget {
             if (showRetry || onAction != null) ...[
               const SizedBox(height: LuciSpacing.xl),
               if (showRetry)
-                ElevatedButton.icon(
+                AdaptiveButton(
                   onPressed: onAction,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: Text(actionLabel ?? context.l10n.retry),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: colorScheme.primary,
-                    foregroundColor: colorScheme.onPrimary,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: LuciSpacing.lg,
-                      vertical: 12,
-                    ),
+                  label: actionLabel ?? context.l10n.retry,
+                  sfSymbol: const SFSymbol('arrow.clockwise'),
+                  materialIcon: Icons.refresh_rounded,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: LuciSpacing.lg,
+                    vertical: 12,
                   ),
                 ),
             ],
@@ -256,17 +253,14 @@ class LuciEmptyState extends StatelessWidget {
             ),
             if (onAction != null) ...[
               const SizedBox(height: LuciSpacing.lg),
-              ElevatedButton.icon(
+              AdaptiveButton(
                 onPressed: onAction,
-                icon: const Icon(Icons.add_rounded),
-                label: Text(actionLabel ?? context.l10n.add),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.primary,
-                  foregroundColor: colorScheme.onPrimary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: LuciSpacing.lg,
-                    vertical: 12,
-                  ),
+                label: actionLabel ?? context.l10n.add,
+                sfSymbol: const SFSymbol('plus'),
+                materialIcon: Icons.add_rounded,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: LuciSpacing.lg,
+                  vertical: 12,
                 ),
               ),
             ],

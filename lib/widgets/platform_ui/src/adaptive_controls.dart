@@ -24,6 +24,15 @@ IconData? cupertinoIconForSFSymbol(String symbol) => switch (symbol) {
   'waveform.path.ecg' => CupertinoIcons.waveform_path_ecg,
   'gearshape' => CupertinoIcons.gear_alt,
   'gearshape.fill' => CupertinoIcons.gear_alt_fill,
+  'arrow.clockwise' => CupertinoIcons.refresh,
+  'rectangle.portrait.and.arrow.right' => CupertinoIcons.square_arrow_right,
+  'antenna.radiowaves.left.and.right' =>
+    CupertinoIcons.antenna_radiowaves_left_right,
+  'dot.radiowaves.left.and.right' => CupertinoIcons.dot_radiowaves_left_right,
+  'square.and.arrow.down' => CupertinoIcons.square_arrow_down,
+  'stop.fill' => CupertinoIcons.stop_fill,
+  'wifi' => CupertinoIcons.wifi,
+  'arrow.right.to.line' => CupertinoIcons.arrow_right_to_line,
   'bubble.left' => CupertinoIcons.chat_bubble,
   'bubble.left.fill' => CupertinoIcons.chat_bubble_fill,
   'doc.text' => CupertinoIcons.doc_text,
@@ -96,6 +105,7 @@ class AdaptiveButton extends StatelessWidget {
     required this.onPressed,
     required this.label,
     this.sfSymbol,
+    this.materialIcon,
     this.color,
     this.textColor,
     this.labelStyle,
@@ -108,6 +118,8 @@ class AdaptiveButton extends StatelessWidget {
     this.semanticLabel,
     this.useSmoothRectangleBorder = true,
     this.useNative = true,
+    this.busy = false,
+    this.materialVisualDensity,
   }) : child = null,
        icon = null,
        iconColor = null,
@@ -133,7 +145,10 @@ class AdaptiveButton extends StatelessWidget {
        icon = null,
        iconColor = null,
        iconSize = null,
-       sfSymbol = null;
+       sfSymbol = null,
+       materialIcon = null,
+       busy = false,
+       materialVisualDensity = null;
 
   const AdaptiveButton.icon({
     super.key,
@@ -155,7 +170,10 @@ class AdaptiveButton extends StatelessWidget {
        textColor = null,
        labelStyle = null,
        child = null,
-       sfSymbol = null;
+       sfSymbol = null,
+       materialIcon = null,
+       busy = false,
+       materialVisualDensity = null;
 
   const AdaptiveButton.sfSymbol({
     super.key,
@@ -177,13 +195,20 @@ class AdaptiveButton extends StatelessWidget {
        child = null,
        icon = null,
        iconColor = null,
-       iconSize = null;
+       iconSize = null,
+       materialIcon = null,
+       busy = false,
+       materialVisualDensity = null;
 
   final VoidCallback? onPressed;
   final String? label;
   final Widget? child;
   final IconData? icon;
   final SFSymbol? sfSymbol;
+
+  /// The icon Material shows before [label]. iOS shows [sfSymbol], so a
+  /// button with both keeps each platform's own icon.
+  final IconData? materialIcon;
   final Color? color;
   final Color? textColor;
   final TextStyle? labelStyle;
@@ -198,6 +223,15 @@ class AdaptiveButton extends StatelessWidget {
   final String? semanticLabel;
   final bool useSmoothRectangleBorder;
   final bool useNative;
+
+  /// Work started by the button is under way: it is disabled, and shows an
+  /// activity indicator where it would show its icon. The native iOS 26
+  /// button has no indicator, so it shows only its label, which should say
+  /// what is happening.
+  final bool busy;
+
+  /// Material's density. iOS ignores it.
+  final VisualDensity? materialVisualDensity;
 
   bool _canUseNative(BuildContext context) =>
       useNative &&
@@ -253,9 +287,9 @@ class AdaptiveButton extends StatelessWidget {
         imagePadding: label != null && sfSymbol != null ? 8 : null,
         customIconSize: iconSize,
       );
-      final active = enabled && onPressed != null;
+      final active = enabled && onPressed != null && !busy;
       Widget button;
-      final symbol = sfSymbol;
+      final symbol = busy ? null : sfSymbol;
       if (label != null) {
         button = CNButton(
           label: label!,
@@ -323,6 +357,23 @@ class AdaptiveButton extends StatelessWidget {
   }
 
   Widget _content({required Color fallbackColor, bool wrapCustomChild = true}) {
+    if (busy && label != null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CupertinoActivityIndicator(radius: 8),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label!,
+              style: (labelStyle ?? const TextStyle()).copyWith(
+                color: fallbackColor,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     if (label != null && sfSymbol != null) {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -371,12 +422,21 @@ class AdaptiveButton extends StatelessWidget {
   Widget _buildCupertino(BuildContext context) {
     final primary = color ?? CupertinoTheme.of(context).primaryColor;
     final resolvedRadius = borderRadius ?? BorderRadius.circular(8);
-    final foreground = switch (style) {
-      AdaptiveButtonStyle.filled => textColor ?? CupertinoColors.white,
-      AdaptiveButtonStyle.gray =>
-        textColor ?? CupertinoColors.label.resolveFrom(context),
-      _ => textColor ?? primary,
-    };
+    final active = enabled && !busy && onPressed != null;
+    // An inactive CupertinoButton draws its pale disabled fill, so its label
+    // goes grey as CupertinoButton's own would. A busy label says what is
+    // happening, so it keeps the stronger grey.
+    final foreground =
+        textColor ??
+        switch (style) {
+          _ when busy => CupertinoColors.secondaryLabel.resolveFrom(context),
+          _ when !active => CupertinoColors.tertiaryLabel.resolveFrom(context),
+          AdaptiveButtonStyle.filled => _onFill(context, primary),
+          AdaptiveButtonStyle.gray => CupertinoColors.label.resolveFrom(
+            context,
+          ),
+          _ => primary,
+        };
     final customGlass =
         useNative &&
         PlatformUiCapabilities.usesNativeIOS26 &&
@@ -395,7 +455,7 @@ class AdaptiveButton extends StatelessWidget {
       AdaptiveButtonStyle.plain => null,
     };
     final button = CupertinoButton(
-      onPressed: enabled ? onPressed : null,
+      onPressed: enabled && !busy ? onPressed : null,
       padding: padding ?? _defaultPadding,
       borderRadius: resolvedRadius,
       color: customGlass ? null : background,
@@ -455,6 +515,22 @@ class AdaptiveButton extends StatelessWidget {
     );
   }
 
+  /// A readable label colour for a [fill]: the Material scheme's pairing
+  /// when the fill is one of its colours (the Cupertino primary is the
+  /// Material primary, which is light in a dark theme), else black or
+  /// white by the fill's brightness.
+  static Color _onFill(BuildContext context, Color fill) {
+    // CupertinoButton draws a dynamic fill resolved for the current
+    // brightness, so measure that colour, not its light default.
+    final drawn = CupertinoDynamicColor.resolve(fill, context);
+    final scheme = Theme.of(context).colorScheme;
+    if (drawn == scheme.primary) return scheme.onPrimary;
+    if (drawn == scheme.error) return scheme.onError;
+    return ThemeData.estimateBrightnessForColor(drawn) == Brightness.dark
+        ? CupertinoColors.white
+        : CupertinoColors.black;
+  }
+
   EdgeInsetsGeometry get _defaultPadding => switch (size) {
     AdaptiveButtonSize.small => const EdgeInsets.symmetric(
       horizontal: 12,
@@ -470,73 +546,149 @@ class AdaptiveButton extends StatelessWidget {
     ),
   };
 
+  /// Material 3's own buttons, so Android keeps the theme's shapes, colours
+  /// and spacing. A caller's [borderRadius], colours, [padding], [minSize]
+  /// and [labelStyle] still apply.
   Widget _buildMaterial(BuildContext context) {
-    final callback = enabled ? onPressed : null;
-    final colorScheme = Theme.of(context).colorScheme;
-    final effectiveRadius = borderRadius ?? BorderRadius.circular(8);
-    final OutlinedBorder? shape = useSmoothRectangleBorder
-        ? ContinuousRectangleBorder(borderRadius: effectiveRadius)
-        : borderRadius == null
+    final callback = enabled && !busy ? onPressed : null;
+    final radius = borderRadius;
+    final OutlinedBorder? shape = radius == null
         ? null
-        : RoundedRectangleBorder(borderRadius: effectiveRadius);
-    final primaryContent = _semanticContent(
-      _content(
-        fallbackColor: textColor ?? colorScheme.onPrimary,
-        wrapCustomChild: false,
+        : useSmoothRectangleBorder
+        ? ContinuousRectangleBorder(borderRadius: radius)
+        : RoundedRectangleBorder(borderRadius: radius);
+    final buttonStyle = switch (style) {
+      AdaptiveButtonStyle.filled => FilledButton.styleFrom(
+        visualDensity: materialVisualDensity,
+        backgroundColor: color,
+        foregroundColor: textColor,
+        padding: padding,
+        minimumSize: minSize,
+        shape: shape,
+        textStyle: labelStyle,
       ),
-    );
-    final accentContent = _semanticContent(
-      _content(
-        fallbackColor: textColor ?? color ?? colorScheme.primary,
-        wrapCustomChild: false,
+      AdaptiveButtonStyle.bordered => OutlinedButton.styleFrom(
+        visualDensity: materialVisualDensity,
+        foregroundColor: textColor ?? color,
+        side: color == null ? null : BorderSide(color: color!),
+        padding: padding,
+        minimumSize: minSize,
+        shape: shape,
+        textStyle: labelStyle,
       ),
-    );
-    return switch (style) {
-      AdaptiveButtonStyle.filled => ElevatedButton(
-        onPressed: callback,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color ?? colorScheme.primary,
-          foregroundColor: textColor ?? colorScheme.onPrimary,
-          padding: padding,
-          minimumSize: minSize,
-          shape: shape,
+      AdaptiveButtonStyle.plain => TextButton.styleFrom(
+        visualDensity: materialVisualDensity,
+        foregroundColor: textColor ?? color,
+        padding: padding,
+        minimumSize: minSize,
+        shape: shape,
+        textStyle: labelStyle,
+      ),
+      _ => FilledButton.styleFrom(
+        visualDensity: materialVisualDensity,
+        backgroundColor: color?.withValues(alpha: 0.15),
+        foregroundColor: textColor ?? color,
+        padding: padding,
+        minimumSize: minSize,
+        shape: shape,
+        textStyle: labelStyle,
+      ),
+    };
+
+    final text = label;
+    final leading = busy && text != null
+        ? SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              // Busy buttons are disabled; this is Material's disabled
+              // foreground, which every button style shows on its fill.
+              color: Theme.of(context).colorScheme.onSurface
+                  .withValues(alpha: 0.38),
+            ),
+          )
+        : _materialLeading();
+    if (text != null && leading != null) {
+      final labelWidget = _semanticContent(Text(text));
+      return switch (style) {
+        AdaptiveButtonStyle.filled => FilledButton.icon(
+          onPressed: callback,
+          style: buttonStyle,
+          icon: leading,
+          label: labelWidget,
         ),
-        child: primaryContent,
+        AdaptiveButtonStyle.bordered => OutlinedButton.icon(
+          onPressed: callback,
+          style: buttonStyle,
+          icon: leading,
+          label: labelWidget,
+        ),
+        AdaptiveButtonStyle.plain => TextButton.icon(
+          onPressed: callback,
+          style: buttonStyle,
+          icon: leading,
+          label: labelWidget,
+        ),
+        _ => FilledButton.tonalIcon(
+          onPressed: callback,
+          style: buttonStyle,
+          icon: leading,
+          label: labelWidget,
+        ),
+      };
+    }
+
+    final content = _semanticContent(switch (this) {
+      AdaptiveButton(label: final text?) => Text(text),
+      AdaptiveButton(child: final custom?) => custom,
+      AdaptiveButton(sfSymbol: final symbol?) => Icon(
+        cupertinoIconForSFSymbol(symbol.name) ?? CupertinoIcons.circle_fill,
+        size: symbol.size,
+        color: symbol.color,
+      ),
+      AdaptiveButton(icon: final data?) => Icon(
+        data,
+        size: iconSize,
+        color: iconColor,
+      ),
+      _ => const SizedBox.shrink(),
+    });
+    return switch (style) {
+      AdaptiveButtonStyle.filled => FilledButton(
+        onPressed: callback,
+        style: buttonStyle,
+        child: content,
       ),
       AdaptiveButtonStyle.bordered => OutlinedButton(
         onPressed: callback,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: textColor ?? color,
-          side: color == null ? null : BorderSide(color: color!),
-          padding: padding,
-          minimumSize: minSize,
-          shape: shape,
-        ),
-        child: accentContent,
+        style: buttonStyle,
+        child: content,
       ),
       AdaptiveButtonStyle.plain => TextButton(
         onPressed: callback,
-        style: TextButton.styleFrom(
-          foregroundColor:
-              textColor ?? color ?? Theme.of(context).colorScheme.primary,
-          padding: padding,
-          minimumSize: minSize,
-          shape: shape,
-        ),
-        child: accentContent,
+        style: buttonStyle,
+        child: content,
       ),
       _ => FilledButton.tonal(
         onPressed: callback,
-        style: FilledButton.styleFrom(
-          backgroundColor: color?.withValues(alpha: 0.15),
-          foregroundColor: textColor ?? color,
-          padding: padding,
-          minimumSize: minSize,
-          shape: shape,
-        ),
-        child: accentContent,
+        style: buttonStyle,
+        child: content,
       ),
     };
+  }
+
+  /// The Material icon before a label: [materialIcon], else [sfSymbol]'s
+  /// Flutter fallback.
+  Widget? _materialLeading() {
+    if (label == null) return null;
+    if (materialIcon case final data?) return Icon(data);
+    if (sfSymbol case final symbol?) {
+      return Icon(
+        cupertinoIconForSFSymbol(symbol.name) ?? CupertinoIcons.circle_fill,
+        color: symbol.color,
+      );
+    }
+    return null;
   }
 }
 

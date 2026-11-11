@@ -221,10 +221,12 @@ class _RadioCard extends StatelessWidget {
               ),
             Align(
               alignment: Alignment.centerLeft,
-              child: TextButton.icon(
+              child: AdaptiveButton(
                 onPressed: busy ? null : onAdd,
-                icon: const Icon(Icons.add),
-                label: Text(l10n.addNetwork),
+                label: l10n.addNetwork,
+                sfSymbol: const SFSymbol('plus'),
+                materialIcon: Icons.add,
+                style: AdaptiveButtonStyle.plain,
               ),
             ),
           ],
@@ -482,26 +484,24 @@ class _NetworkSheetState extends State<_NetworkSheet> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 if (widget.existing != null)
-                  TextButton(
+                  AdaptiveButton(
                     onPressed: () => Navigator.of(
                       context,
                     ).pop(WirelessPlanner.planDeleteNetwork(widget.existing!)),
-                    child: Text(
-                      l10n.remove,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
+                    label: l10n.remove,
+                    style: AdaptiveButtonStyle.plain,
+                    color: Theme.of(context).colorScheme.error,
                   ),
                 const Spacer(),
-                TextButton(
+                AdaptiveButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: Text(l10n.cancel),
+                  label: l10n.cancel,
+                  style: AdaptiveButtonStyle.plain,
                 ),
                 const SizedBox(width: LuciSpacing.sm),
-                FilledButton(
+                AdaptiveButton(
                   onPressed: _isEnterprise || !_canSave ? null : _save,
-                  child: Text(l10n.saveAction),
+                  label: l10n.saveAction,
                 ),
               ],
             ),
@@ -645,12 +645,13 @@ class _RadioSheetState extends State<_RadioSheet> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                AdaptiveButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: Text(l10n.cancel),
+                  label: l10n.cancel,
+                  style: AdaptiveButtonStyle.plain,
                 ),
                 const SizedBox(width: LuciSpacing.sm),
-                FilledButton(
+                AdaptiveButton(
                   onPressed: () {
                     final radio = widget.radio;
                     final country = _country.text.trim().toUpperCase();
@@ -677,7 +678,7 @@ class _RadioSheetState extends State<_RadioSheet> {
                       ),
                     );
                   },
-                  child: Text(l10n.saveAction),
+                  label: l10n.saveAction,
                 ),
               ],
             ),

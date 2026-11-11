@@ -506,7 +506,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                                 context.l10n.wireless,
                                 style: LuciTextStyles.sectionHeader(context),
                               ),
-                              TextButton.icon(
+                              AdaptiveButton(
                                 onPressed: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
@@ -515,15 +515,19 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                                     ),
                                   );
                                 },
-                                icon: Icon(Icons.cell_tower, size: 16),
-                                label: Text(context.l10n.radio),
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 4,
-                                  ),
-                                  visualDensity: VisualDensity.compact,
+                                label: context.l10n.radio,
+                                sfSymbol: const SFSymbol(
+                                  'antenna.radiowaves.left.and.right',
+                                  size: 16,
                                 ),
+                                materialIcon: Icons.cell_tower,
+                                style: AdaptiveButtonStyle.plain,
+                                size: AdaptiveButtonSize.small,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 4,
+                                ),
+                                materialVisualDensity: VisualDensity.compact,
                               ),
                             ],
                           ),
@@ -919,38 +923,35 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton.icon(
+                      child: AdaptiveButton(
                         onPressed: () => _showEditWifiSheet(context, iface),
-                        icon: Icon(Icons.edit_outlined, size: 18),
-                        label: Text(context.l10n.edit),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: colorScheme.primary,
-                          side: BorderSide(
-                            color: colorScheme.primary.withValues(alpha: 0.5),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        label: context.l10n.edit,
+                        sfSymbol: SFSymbol(
+                          'pencil',
+                          color: colorScheme.primary,
                         ),
+                        materialIcon: Icons.edit_outlined,
+                        style: AdaptiveButtonStyle.bordered,
+                        color: colorScheme.primary.withValues(alpha: 0.5),
+                        textColor: colorScheme.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        borderRadius: BorderRadius.circular(10),
+                        useSmoothRectangleBorder: false,
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: OutlinedButton.icon(
+                      child: AdaptiveButton(
                         onPressed: () => _showDeleteWifiDialog(context, iface),
-                        icon: Icon(Icons.delete_outline, size: 18),
-                        label: Text(context.l10n.remove),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: colorScheme.error,
-                          side: BorderSide(
-                            color: colorScheme.error.withValues(alpha: 0.5),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                        ),
+                        label: context.l10n.remove,
+                        sfSymbol: SFSymbol('trash', color: colorScheme.error),
+                        materialIcon: Icons.delete_outline,
+                        style: AdaptiveButtonStyle.bordered,
+                        color: colorScheme.error.withValues(alpha: 0.5),
+                        textColor: colorScheme.error,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        borderRadius: BorderRadius.circular(10),
+                        useSmoothRectangleBorder: false,
                       ),
                     ),
                   ],
@@ -2236,33 +2237,22 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
               // Save button
               SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
+                child: AdaptiveButton(
                   onPressed: _isSaving ? null : _save,
-                  icon: _isSaving
-                      ? SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colorScheme.onPrimary,
-                          ),
-                        )
-                      : const Icon(Icons.save),
-                  label: Text(
-                    _isSaving
-                        ? context.l10n.applying
-                        : context.l10n.saveChanges,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  busy: _isSaving,
+                  label: _isSaving
+                      ? context.l10n.applying
+                      : context.l10n.saveChanges,
+                  sfSymbol: const SFSymbol('square.and.arrow.down'),
+                  materialIcon: Icons.save,
+                  size: AdaptiveButtonSize.large,
+                  labelStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                   ),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  borderRadius: BorderRadius.circular(14),
+                  useSmoothRectangleBorder: false,
                 ),
               ),
 

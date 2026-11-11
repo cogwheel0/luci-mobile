@@ -6,6 +6,7 @@ import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/screens/dashboard_settings_list_screen.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 class AppPreferencesScreen extends ConsumerWidget {
   const AppPreferencesScreen({super.key});
@@ -166,17 +167,16 @@ class AppPreferencesScreen extends ConsumerWidget {
                         horizontal: 16,
                         vertical: 8,
                       ),
-                      child: FilledButton.icon(
+                      child: AdaptiveButton(
                         onPressed: () =>
                             _showReviewerModeResetDialog(context, ref),
-                        icon: const Icon(Icons.exit_to_app),
-                        label: Text(context.l10n.exitReviewerMode),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.error,
-                          foregroundColor: Theme.of(context)
-                              .colorScheme
-                              .onError,
+                        label: context.l10n.exitReviewerMode,
+                        sfSymbol: const SFSymbol(
+                          'rectangle.portrait.and.arrow.right',
                         ),
+                        materialIcon: Icons.exit_to_app,
+                        color: Theme.of(context).colorScheme.error,
+                        textColor: Theme.of(context).colorScheme.onError,
                       ),
                     ),
                   ],

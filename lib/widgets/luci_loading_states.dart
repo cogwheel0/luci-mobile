@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 import '../design/luci_design_system.dart';
 
@@ -327,7 +328,11 @@ class LuciMessageState extends StatelessWidget {
       if (action != null)
         Padding(
           padding: const EdgeInsets.only(top: LuciSpacing.md),
-          child: TextButton(onPressed: onAction, child: Text(action!)),
+          child: AdaptiveButton(
+            onPressed: onAction,
+            label: action!,
+            style: AdaptiveButtonStyle.plain,
+          ),
         ),
     ];
 

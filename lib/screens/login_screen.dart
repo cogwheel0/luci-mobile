@@ -13,6 +13,7 @@ import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/utils/url_parser.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/widgets/autofill_form.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -528,26 +529,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                           if (!_showAlternateAddress)
                                             Align(
                                               alignment: Alignment.centerLeft,
-                                              child: TextButton.icon(
+                                              child: AdaptiveButton(
                                                 onPressed: () => setState(
                                                   () => _showAlternateAddress =
                                                       true,
                                                 ),
-                                                icon: const Icon(
-                                                  Icons.add,
-                                                  size: 18,
+                                                label: context
+                                                    .l10n
+                                                    .addFallbackAddress,
+                                                sfSymbol: const SFSymbol(
+                                                  'plus',
                                                 ),
-                                                label: Text(
-                                                  context
-                                                      .l10n
-                                                      .addFallbackAddress,
-                                                ),
-                                                style: TextButton.styleFrom(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 4,
-                                                      ),
-                                                ),
+                                                materialIcon: Icons.add,
+                                                style:
+                                                    AdaptiveButtonStyle.plain,
                                               ),
                                             )
                                           else ...[
@@ -757,60 +752,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                             },
                                             child: SizedBox(
                                               width: double.infinity,
-                                              child: ElevatedButton(
+                                              child: AdaptiveButton(
                                                 onPressed: appState.isLoading
                                                     ? null
                                                     : _connect,
-                                                style: ElevatedButton.styleFrom(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        vertical: 18,
-                                                      ),
-                                                  textStyle: const TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          14,
-                                                        ),
-                                                  ),
-                                                  elevation: 4,
-                                                  backgroundColor:
-                                                      colorScheme.primary,
-                                                  foregroundColor:
-                                                      colorScheme.onPrimary,
+                                                busy: appState.isLoading,
+                                                label: appState.isLoading
+                                                    ? context.l10n.connecting
+                                                    : context.l10n.connect,
+                                                sfSymbol: const SFSymbol(
+                                                  'arrow.right.to.line',
                                                 ),
-                                                child: appState.isLoading
-                                                    ? const SizedBox(
-                                                        height: 26,
-                                                        width: 26,
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                              strokeWidth: 3,
-                                                              color:
-                                                                  Colors.white,
-                                                            ),
-                                                      )
-                                                    : Row(
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .center,
-                                                        children: [
-                                                          const Icon(
-                                                            Icons.login,
-                                                          ),
-                                                          const SizedBox(
-                                                            width: 12,
-                                                          ),
-                                                          Text(
-                                                            context
-                                                                .l10n
-                                                                .connect,
-                                                          ),
-                                                        ],
-                                                      ),
+                                                materialIcon: Icons.login,
+                                                size: AdaptiveButtonSize.large,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 18,
+                                                    ),
+                                                labelStyle: const TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                                useSmoothRectangleBorder: false,
                                               ),
                                             ),
                                           ),
@@ -826,12 +791,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         const SizedBox(height: 16),
                         Tooltip(
                           message: context.l10n.githubIssuesHelp,
-                          child: TextButton(
+                          child: AdaptiveButton(
                             onPressed: _openGitHubIssues,
-                            style: TextButton.styleFrom(
-                              foregroundColor: colorScheme.primary,
-                            ),
-                            child: Text(context.l10n.needHelp),
+                            label: context.l10n.needHelp,
+                            style: AdaptiveButtonStyle.plain,
                           ),
                         ),
                         FutureBuilder<PackageInfo>(
