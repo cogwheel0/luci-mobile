@@ -66,6 +66,8 @@ class ThroughputService {
     'vtiv6',
   };
 
+  static bool _isTunnel(Map iface) => _tunnelProtos.contains(iface['proto']);
+
   static bool _isNamedWan(Map iface) =>
       iface['interface']?.toString().startsWith('wan') ?? false;
 
@@ -99,19 +101,21 @@ class ThroughputService {
   /// as before.
   ///
   /// A tunnel (a WireGuard full tunnel, an L2TP or 6in4 uplink) is left out
-  /// when a direct uplink is also counted: everything in the tunnel crosses
-  /// that uplink as well, so adding both showed tunnelled traffic at about
-  /// twice its rate. Counting the outer layer catches all of it once.
+  /// when an active direct uplink is also counted: everything in the tunnel
+  /// crosses that uplink as well, so adding both showed tunnelled traffic at
+  /// about twice its rate. Counting the outer layer catches all of it once.
+  /// A direct uplink that is down carries nothing, so it does not stand in
+  /// for a tunnel that runs over some other link.
   static Set<String> combinedThroughputDevices(Map? interfaceDump) {
     final upstream = upstreamInterfaces(interfaceDump);
     if (upstream.isNotEmpty) {
-      final direct = [
-        for (final i in upstream)
-          if (!_tunnelProtos.contains(i['proto'])) i,
-      ];
+      final carrierActive = upstream.any(
+        (i) =>
+            !_isTunnel(i) && (i['up'] == true || _hasDefaultRoute(i['route'])),
+      );
       return {
-        for (final i in direct.isNotEmpty ? direct : upstream)
-          ?_countedDevice(i),
+        for (final i in upstream)
+          if (!carrierActive || !_isTunnel(i)) ?_countedDevice(i),
       };
     }
     final interfaces = interfaceDump?['interface'];

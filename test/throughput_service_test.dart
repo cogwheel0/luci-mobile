@@ -269,6 +269,7 @@ void main() {
           {
             'interface': 'wan',
             'proto': 'dhcp',
+            'up': true,
             'l3_device': 'eth1',
             'route': [
               if (wanRoute) {'target': '0.0.0.0', 'mask': 0},
@@ -296,6 +297,43 @@ void main() {
             reason: 'wan default route: $wanRoute',
           );
         }
+      });
+
+      // A WAN that is down carries nothing: dropping the tunnel for it, when
+      // the tunnel runs over a link that is not counted, showed zero.
+      test('a down WAN does not stand in for the tunnel\'s carrier', () {
+        final overLte = {
+          'interface': [
+            {
+              'interface': 'wan',
+              'proto': 'dhcp',
+              'up': false,
+              'l3_device': 'eth1',
+            },
+            {
+              'interface': 'lte',
+              'proto': 'qmi',
+              'up': true,
+              'l3_device': 'wwan0',
+              'route': [
+                {'target': '203.0.113.7', 'mask': 32},
+              ],
+            },
+            {
+              'interface': 'wg0',
+              'proto': 'wireguard',
+              'up': true,
+              'l3_device': 'wg0',
+              'route': [
+                {'target': '0.0.0.0', 'mask': 0},
+              ],
+            },
+          ],
+        };
+        expect(
+          ThroughputService.combinedThroughputDevices(overLte),
+          contains('wg0'),
+        );
       });
 
       test('a tunnel that is the only uplink is still counted', () {
