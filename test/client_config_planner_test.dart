@@ -823,6 +823,49 @@ void main() {
         );
       });
 
+      // With more than one subnet to check against, the router's address on
+      // each is off limits - including one that sits inside another,
+      // narrower subnet whose own router address differs.
+      test('no candidate subnet gives away a router address', () {
+        final overlapping = ClientConfigPlanner.interfaceSubnets({
+          'interface': [
+            {
+              'interface': 'lan',
+              'l3_device': 'br-lan',
+              'ipv4-address': [
+                {'address': '10.0.5.254', 'mask': 16},
+              ],
+            },
+            {
+              'interface': 'cams',
+              'l3_device': 'br-lan',
+              'ipv4-address': [
+                {'address': '10.0.5.1', 'mask': 24},
+              ],
+            },
+          ],
+        });
+        for (final router in ['10.0.5.254', '10.0.5.1']) {
+          expect(
+            ClientConfigPlanner.checkReservationIp(
+              router,
+              subnets: overlapping,
+              alreadyReserved: const {},
+            ),
+            IpCheckResult.notAssignable,
+            reason: router,
+          );
+        }
+        expect(
+          ClientConfigPlanner.checkReservationIp(
+            '10.0.5.20',
+            subnets: overlapping,
+            alreadyReserved: const {},
+          ),
+          IpCheckResult.ok,
+        );
+      });
+
       // Either subnet on the bridge can be handed to the client; only a
       // subnet on another device is refused.
       test('a reservation may use any LAN subnet on the bridge', () {

@@ -396,6 +396,13 @@ class ClientConfigPlanner {
     if (alreadyReserved.contains(ip)) return IpCheckResult.duplicate;
     if (subnets.isEmpty) return IpCheckResult.ok;
 
+    // The router's own address on *any* of the subnets, not only the one
+    // the address lands in: two overlapping subnets on one bridge (a /16
+    // and a /24) put the wider one's router address inside the narrower
+    // one, whose own check would let it through.
+    if (subnets.any((s) => _toInt(s.base) == _toInt(octets))) {
+      return IpCheckResult.notAssignable;
+    }
     final subnet = subnetContaining(ip, subnets);
     if (subnet == null) return IpCheckResult.outsideSubnet;
     if (_isNotAssignable(octets, subnet)) return IpCheckResult.notAssignable;
