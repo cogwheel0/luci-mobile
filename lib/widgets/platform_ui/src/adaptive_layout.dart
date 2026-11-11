@@ -243,7 +243,14 @@ class AdaptiveScaffold extends StatelessWidget {
     Widget? bottomBar;
     if (hasNavigation && !tabBarHidden) {
       if (useNativeTabBar) {
-        bottomBar = buildAdaptiveNativeTabBar(navigation);
+        // The package's default tint reads Flutter's CupertinoTheme, which
+        // this app (on cupertino_ui) lacks; pass the app's primary.
+        bottomBar = buildAdaptiveNativeTabBar(
+          navigation,
+          tint:
+              navigation.selectedItemColor ??
+              CupertinoTheme.of(context).primaryColor,
+        );
       } else {
         bottomBar = buildAdaptiveCupertinoTabBar(navigation);
       }

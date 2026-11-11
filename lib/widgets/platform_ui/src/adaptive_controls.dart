@@ -277,6 +277,22 @@ class AdaptiveButton extends StatelessWidget {
 
   Widget _buildButton(BuildContext context) {
     if (_canUseNative(context)) {
+      // The package's own default tint reads Flutter's CupertinoTheme, which
+      // this app (on cupertino_ui) does not provide, so it fell back to the
+      // system blue. Pass the app's primary instead. Glass styles take no
+      // tint, so the system picks their foreground over the material.
+      final glass =
+          style == AdaptiveButtonStyle.glass ||
+          style == AdaptiveButtonStyle.clearGlass;
+      final tint =
+          color ?? (glass ? null : CupertinoTheme.of(context).primaryColor);
+      // A filled button's label sits on the tint; the system draws it
+      // white, which fades on a dark theme's light primary.
+      final nativeLabelColor =
+          textColor ??
+          (style == AdaptiveButtonStyle.filled && tint != null
+              ? _onFill(context, tint)
+              : null);
       final resolvedPadding = padding?.resolve(Directionality.of(context));
       final resolvedRadius = borderRadius?.resolve(Directionality.of(context));
       final config = CNButtonConfig(
@@ -289,7 +305,7 @@ class AdaptiveButton extends StatelessWidget {
             : null,
         shrinkWrap: label != null,
         style: _nativeStyle,
-        labelColor: textColor,
+        labelColor: nativeLabelColor,
         labelFontFamily: labelStyle?.fontFamily,
         labelFontSize: label == null
             ? null
@@ -310,11 +326,20 @@ class AdaptiveButton extends StatelessWidget {
           label: label!,
           icon: symbol == null
               ? null
-              : CNSymbol(symbol.name, size: symbol.size, color: symbol.color),
+              : CNSymbol(
+                  symbol.name,
+                  size: symbol.size,
+                  // On a filled button the symbol sits beside the label.
+                  color:
+                      symbol.color ??
+                      (style == AdaptiveButtonStyle.filled
+                          ? nativeLabelColor
+                          : null),
+                ),
           onPressed: onPressed,
           enabled: active,
           semanticLabel: semanticLabel,
-          tint: color,
+          tint: tint,
           config: config,
         );
       } else if (symbol != null) {
@@ -323,7 +348,7 @@ class AdaptiveButton extends StatelessWidget {
           semanticLabel: semanticLabel,
           onPressed: onPressed,
           enabled: active,
-          tint: color,
+          tint: tint,
           config: config,
         );
       } else if (icon case final iconData?) {
@@ -336,7 +361,7 @@ class AdaptiveButton extends StatelessWidget {
           semanticLabel: semanticLabel,
           onPressed: onPressed,
           enabled: active,
-          tint: symbolName == null ? iconColor ?? color : color,
+          tint: symbolName == null ? iconColor ?? tint : tint,
           config: config,
         );
       } else {
@@ -345,7 +370,7 @@ class AdaptiveButton extends StatelessWidget {
           semanticLabel: semanticLabel,
           onPressed: onPressed,
           enabled: active,
-          tint: color,
+          tint: tint,
           config: config,
         );
       }
