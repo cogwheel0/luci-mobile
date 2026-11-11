@@ -245,6 +245,12 @@ class AdaptiveButton extends StatelessWidget {
       child == null &&
       !isInsideMaterialAlertDialog(context);
 
+  /// An icon-only button with no [minSize] is at least iOS's minimum tap
+  /// target; its symbol keeps its own size.
+  static const double _kMinTapTarget = 44;
+
+  bool get _iconOnly => label == null && child == null;
+
   double get _defaultHeight => switch (size) {
     AdaptiveButtonSize.small => 28,
     AdaptiveButtonSize.medium => 36,
@@ -276,8 +282,11 @@ class AdaptiveButton extends StatelessWidget {
       final config = CNButtonConfig(
         padding: resolvedPadding,
         borderRadius: resolvedRadius?.topLeft.x,
-        minHeight: minSize?.height ?? _defaultHeight,
-        width: label == null ? minSize?.width : null,
+        minHeight:
+            minSize?.height ?? (_iconOnly ? _kMinTapTarget : _defaultHeight),
+        width: label == null
+            ? minSize?.width ?? (_iconOnly ? _kMinTapTarget : null)
+            : null,
         shrinkWrap: label != null,
         style: _nativeStyle,
         labelColor: textColor,
@@ -465,7 +474,11 @@ class AdaptiveButton extends StatelessWidget {
       padding: padding ?? _defaultPadding,
       borderRadius: resolvedRadius,
       color: customGlass ? null : background,
-      minimumSize: minSize ?? Size(0, _defaultHeight),
+      minimumSize:
+          minSize ??
+          (_iconOnly
+              ? const Size.square(_kMinTapTarget)
+              : Size(0, _defaultHeight)),
       child: _semanticContent(_content(fallbackColor: foreground)),
     );
     final borderSide = style == AdaptiveButtonStyle.bordered
@@ -557,7 +570,7 @@ class AdaptiveButton extends StatelessWidget {
   /// and [labelStyle] still apply.
   Widget _buildMaterial(BuildContext context) {
     final callback = enabled && !busy ? onPressed : null;
-    if (label == null && child == null) return _buildMaterialIcon(callback);
+    if (_iconOnly) return _buildMaterialIcon(callback);
     final radius = borderRadius;
     final OutlinedBorder? shape = radius == null
         ? null
@@ -681,14 +694,50 @@ class AdaptiveButton extends StatelessWidget {
           (symbol == null ? null : cupertinoIconForSFSymbol(symbol.name)) ??
           CupertinoIcons.circle_fill,
       size: iconSize,
-      color: symbol?.color ?? iconColor,
+      color: symbol?.color,
     );
-    final buttonStyle = IconButton.styleFrom(
-      foregroundColor: color,
-      padding: padding,
-      minimumSize: minSize,
-      visualDensity: materialVisualDensity,
-    );
+    final radius = borderRadius;
+    final OutlinedBorder? shape = radius == null
+        ? null
+        : useSmoothRectangleBorder
+        ? ContinuousRectangleBorder(borderRadius: radius)
+        : RoundedRectangleBorder(borderRadius: radius);
+    // [color] is the fill wherever the variant has one, as in the labelled
+    // and Cupertino buttons, and the icon's colour where it has none.
+    final buttonStyle = switch (style) {
+      AdaptiveButtonStyle.filled => IconButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: iconColor,
+        padding: padding,
+        minimumSize: minSize,
+        visualDensity: materialVisualDensity,
+        shape: shape,
+      ),
+      AdaptiveButtonStyle.tinted ||
+      AdaptiveButtonStyle.gray => IconButton.styleFrom(
+        backgroundColor: color?.withValues(alpha: 0.15),
+        foregroundColor: iconColor ?? color,
+        padding: padding,
+        minimumSize: minSize,
+        visualDensity: materialVisualDensity,
+        shape: shape,
+      ),
+      AdaptiveButtonStyle.bordered => IconButton.styleFrom(
+        foregroundColor: iconColor ?? color,
+        side: color == null ? null : BorderSide(color: color!),
+        padding: padding,
+        minimumSize: minSize,
+        visualDensity: materialVisualDensity,
+        shape: shape,
+      ),
+      _ => IconButton.styleFrom(
+        foregroundColor: iconColor ?? color,
+        padding: padding,
+        minimumSize: minSize,
+        visualDensity: materialVisualDensity,
+        shape: shape,
+      ),
+    };
     return switch (style) {
       AdaptiveButtonStyle.filled => IconButton.filled(
         onPressed: callback,

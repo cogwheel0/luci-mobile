@@ -92,6 +92,61 @@ void main() {
       });
     }
 
+    testWidgets('an icon-only button keeps a requested shape', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          AdaptiveButton.sfSymbol(
+            onPressed: () {},
+            sfSymbol: const SFSymbol('trash'),
+            style: AdaptiveButtonStyle.plain,
+            borderRadius: BorderRadius.circular(18),
+            useSmoothRectangleBorder: false,
+          ),
+        ),
+      );
+
+      expect(
+        tester
+            .widget<IconButton>(find.byType(IconButton))
+            .style!
+            .shape!
+            .resolve(const {}),
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      );
+    });
+
+    testWidgets('a filled icon-only button is filled with its colour', (
+      tester,
+    ) async {
+      const fill = Color(0xFF1B5E20);
+      await tester.pumpWidget(
+        _host(
+          AdaptiveButton.sfSymbol(
+            onPressed: () {},
+            sfSymbol: const SFSymbol('trash'),
+            materialIcon: Icons.delete_outline,
+            style: AdaptiveButtonStyle.filled,
+            color: fill,
+          ),
+        ),
+      );
+
+      final drawn = tester.widget<Material>(
+        find.descendant(
+          of: find.byType(IconButton),
+          matching: find.byType(Material),
+        ),
+      );
+      final icon = tester.widget<RichText>(
+        find.descendant(
+          of: find.byIcon(Icons.delete_outline),
+          matching: find.byType(RichText),
+        ),
+      );
+      expect(drawn.color, fill);
+      expect(icon.text.style!.color, isNot(fill));
+    });
+
     testWidgets('a given radius still shapes the button', (tester) async {
       await tester.pumpWidget(
         _host(
@@ -287,6 +342,52 @@ void main() {
       );
     });
   });
+
+  testWidgets('an icon-only Cupertino button is a 44 pt tap target', (
+    tester,
+  ) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Center(
+          child: AdaptiveButton.sfSymbol(
+            onPressed: () {},
+            sfSymbol: const SFSymbol('chevron.down'),
+            style: AdaptiveButtonStyle.plain,
+          ),
+        ),
+      ),
+    );
+
+    final size = tester.getSize(find.byType(CupertinoButton));
+    expect(size.width, greaterThanOrEqualTo(44));
+    expect(size.height, greaterThanOrEqualTo(44));
+  });
+
+  testWidgets(
+    'an icon-only native button is a 44 pt tap target',
+    (tester) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 26;
+      PlatformUiCapabilities.debugNativeIOS26Override = true;
+      await tester.pumpWidget(
+        _host(
+          AdaptiveButton.sfSymbol(
+            onPressed: () {},
+            sfSymbol: const SFSymbol('chevron.down'),
+            style: AdaptiveButtonStyle.plain,
+          ),
+        ),
+      );
+
+      expect(tester.getSize(find.byType(CNButton)), const Size.square(44));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    skip: !Platform.isMacOS,
+  );
 
   testWidgets('a busy Cupertino button shows an activity indicator', (
     tester,
