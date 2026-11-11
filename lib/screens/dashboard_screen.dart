@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:luci_mobile/l10n/failure_text.dart';
 import 'package:luci_mobile/utils/uci_values.dart';
+import 'package:luci_mobile/models/system_details.dart';
+import 'package:luci_mobile/widgets/system_details_sheet.dart';
 import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/navigation/luci_tab.dart';
@@ -226,76 +228,116 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       context,
     ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold);
 
+    final details = SystemDetail.of(boardInfo);
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(context.l10n.model, style: labelStyle),
-                  const SizedBox(height: 4),
-                  Text(
-                    model,
-                    style: valueStyle,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+      clipBehavior: Clip.antiAlias,
+      child: SystemDetailsTap(
+        details: details,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: _deviceInfoColumns(
+                  model: '$model',
+                  version: '$version',
+                  channelLabel: channelLabel,
+                  channelColors: channelColors,
+                  labelStyle: labelStyle,
+                  valueStyle: valueStyle,
+                ),
               ),
-            ),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(context.l10n.versionLabel, style: labelStyle),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          version,
-                          style: valueStyle,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: channelColors.background,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          channelLabel,
-                          style: TextStyle(
-                            color: channelColors.foreground,
-                            fontWeight: FontWeight.bold,
-                            fontSize: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.fontSize,
-                          ),
-                        ),
-                      ),
-                    ],
+              if (details.isNotEmpty)
+                Semantics(
+                  label: context.l10n.systemDetails,
+                  button: true,
+                  child: Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
-                ],
-              ),
-            ),
-          ],
+                ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _deviceInfoColumns({
+    required String model,
+    required String version,
+    required String channelLabel,
+    required ({Color background, Color foreground}) channelColors,
+    required TextStyle? labelStyle,
+    required TextStyle? valueStyle,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(context.l10n.model, style: labelStyle),
+              const SizedBox(height: 4),
+              Text(
+                model,
+                style: valueStyle,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(context.l10n.versionLabel, style: labelStyle),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      version,
+                      style: valueStyle,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: channelColors.background,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      channelLabel,
+                      style: TextStyle(
+                        color: channelColors.foreground,
+                        fontWeight: FontWeight.bold,
+                        fontSize: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.fontSize,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
