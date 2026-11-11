@@ -1,4 +1,5 @@
 import 'package:luci_mobile/utils/wifi_utils.dart';
+import 'package:luci_mobile/services/client_presence.dart';
 
 enum ConnectionType { wired, wireless, unknown }
 
@@ -135,6 +136,13 @@ class Client {
       return value?.toString();
     }
 
+    // A name, or null for none: dnsmasq writes `*` for a client that sent
+    // no hostname.
+    String? named(dynamic value) {
+      final s = value?.toString().trim();
+      return (s == null || s.isEmpty || s == '*') ? null : s;
+    }
+
     // Helper function to safely convert dynamic to int
     int? toIntValue(dynamic value) {
       if (value == null) return null;
@@ -183,9 +191,12 @@ class Client {
     return Client(
       ipAddress: toStringValue(lease['ipaddr']) ?? 'N/A',
       macAddress: toStringValue(lease['macaddr']) ?? 'N/A',
+      // The lease's own name, else the router's (`_hintName`: /etc/ethers,
+      // a static host, reverse DNS; see ClientPresence.annotate).
       hostname:
-          toStringValue(lease['hostname']) ??
-          toStringValue(lease['name']) ??
+          named(lease['hostname']) ??
+          named(lease['name']) ??
+          named(lease['_hintName']) ??
           'Unknown',
       hostId: toStringValue(lease['hostid']),
       leaseTime: remainingLeaseTime, // Use the 'expires' value directly
@@ -194,10 +205,19 @@ class Client {
       clientId: toStringValue(lease['clientid']),
       activeTime: activetime,
       expiresAt: expiresAtTimestamp, // Store the calculated absolute timestamp
-      connectionType: _determineConnectionType(lease),
+      // Guessed from vendor and hostname only while presence was never
+      // checked or confirmed it: see ClientPresence.mayGuessType.
+      connectionType:
+          ClientPresence.mayGuessType(
+            presenceChecked: lease.containsKey('_online'),
+            online: lease['_online'] is bool ? lease['_online'] as bool : null,
+          )
+          ? _determineConnectionType(lease)
+          : ConnectionType.unknown,
       ipv6Addresses: ipv6Addresses,
       routerId: toStringValue(lease['_routerId']),
       routerLabel: toStringValue(lease['_routerLabel']),
+      isOnline: lease['_online'] is bool ? lease['_online'] as bool : null,
     );
   }
 
@@ -306,4 +326,26 @@ class Client {
       routerLabel: routerLabel ?? this.routerLabel,
     );
   }
+
+  /// This client with [isOnline] exactly, null included; [copyWith] cannot
+  /// set it back to unknown.
+  Client withOnline(bool? isOnline) => Client(
+    ipAddress: ipAddress,
+    macAddress: macAddress,
+    hostname: hostname,
+    hostId: hostId,
+    leaseTime: leaseTime,
+    vendor: vendor,
+    dnsName: dnsName,
+    clientId: clientId,
+    activeTime: activeTime,
+    expiresAt: expiresAt,
+    connectionType: connectionType,
+    ipv6Addresses: ipv6Addresses,
+    wifiBand: wifiBand,
+    isOnline: isOnline,
+    deviceClass: deviceClass,
+    routerId: routerId,
+    routerLabel: routerLabel,
+  );
 }

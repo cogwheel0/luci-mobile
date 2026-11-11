@@ -566,6 +566,10 @@ class RealApiService implements IApiService {
     required String method,
     Map<String, dynamic>? params,
     BuildContext? context,
+    // Not on IApiService: for reads that may give up early, such as the
+    // client list's optional presence reads. Dio aborts the request at the
+    // deadline, so nothing is left running into the next one.
+    Duration? receiveTimeout,
   }) async {
     return await callWithContext(
       ipAddress,
@@ -575,6 +579,7 @@ class RealApiService implements IApiService {
       method: method,
       params: params,
       context: context,
+      receiveTimeout: receiveTimeout,
     );
   }
 
@@ -605,6 +610,7 @@ class RealApiService implements IApiService {
     required String method,
     Map<String, dynamic>? params,
     BuildContext? context,
+    Duration? receiveTimeout,
   }) {
     return _callWithTransport(
       ipAddress,
@@ -614,6 +620,7 @@ class RealApiService implements IApiService {
       method: method,
       params: params,
       context: context,
+      receiveTimeout: receiveTimeout,
     );
   }
 
@@ -1547,6 +1554,8 @@ class RealApiService implements IApiService {
     String sysauth,
     bool useHttps, {
     BuildContext? context,
+    // As on [call]: not on IApiService.
+    Duration? receiveTimeout,
   }) async {
     final result = _requireRpcSuccess(
       await callWithContext(
@@ -1556,6 +1565,7 @@ class RealApiService implements IApiService {
         object: 'luci-rpc',
         method: 'getHostHints',
         context: context,
+        receiveTimeout: receiveTimeout,
       ),
       'luci-rpc.getHostHints',
     );

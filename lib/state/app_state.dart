@@ -20,6 +20,7 @@ import 'package:luci_mobile/services/interfaces/auth_service_interface.dart';
 import 'package:luci_mobile/services/interfaces/api_service_interface.dart';
 import 'package:luci_mobile/services/interfaces/glinet_api_service_interface.dart';
 import 'package:luci_mobile/services/api_service.dart';
+import 'package:luci_mobile/services/client_presence.dart';
 import 'package:luci_mobile/services/service_factory.dart';
 import 'package:luci_mobile/config/app_config.dart';
 import 'package:luci_mobile/utils/http_client_manager.dart';
@@ -3203,23 +3204,44 @@ class AppState extends ChangeNotifier {
         final client = Client.fromLease(lease);
         final macNorm = StationInfo.normalizeMac(client.macAddress);
         final isWireless = normalizedWireless.contains(macNorm);
-        // If confirmed wireless by assoclist, mark wireless; otherwise keep heuristic
+        // If confirmed wireless by assoclist, mark wireless - and connected,
+        // whatever its own router's neighbour table said; otherwise keep
+        // heuristic
         final enriched = isWireless
-            ? client.copyWith(connectionType: ConnectionType.wireless)
+            ? client.copyWith(
+                connectionType: ConnectionType.wireless,
+                isOnline: true,
+              )
             : client;
-        // Prefer entries that have more info (hostname length as heuristic)
-        if (!clients.containsKey(macNorm) ||
-            (enriched.hostname.isNotEmpty &&
-                enriched.hostname.length >
-                    (clients[macNorm]?.hostname.length ?? 0))) {
-          clients[macNorm] = enriched;
-        }
+        // Prefer entries that have more info: a real name over the
+        // `Unknown` placeholder, else the longer name. The placeholder must
+        // not win on length over a short real name such as `nas`.
+        final previous = clients[macNorm];
+        final kept =
+            previous == null ||
+                ClientPresence.nameScore(enriched.hostname) >
+                    ClientPresence.nameScore(previous.hostname)
+            ? enriched
+            : previous;
+        // Presence is the client's, not the lease's: one router still
+        // seeing it outweighs another's stale lease, whichever lease is
+        // kept for display.
+        clients[macNorm] = previous == null
+            ? kept
+            : kept.withOnline(
+                ClientPresence.mergeOnline([
+                  previous.isOnline,
+                  enriched.isOnline,
+                ]),
+              );
       }
 
       // Add wireless stations not in DHCP leases (AP-mode fallback)
       for (final mac in normalizedWireless) {
         if (!clients.containsKey(mac)) {
-          clients[mac] = Client.fromWirelessStation(mac);
+          clients[mac] = Client.fromWirelessStation(
+            mac,
+          ).copyWith(isOnline: true);
         }
       }
 
@@ -3302,6 +3324,10 @@ class AppState extends ChangeNotifier {
           _authService!.ipAddress ??
           _routerService!.selectedRouter!.activeAddress;
       final activeHttps = _authService!.useHttps;
+      // Captured with the address: after an await the session may be
+      // another router's, whose token must not go to this one.
+      final sysauth = _authService!.sysauth!;
+      final token = _sessionToken;
 
       final wireless = <String>{};
       Object? wirelessError;
@@ -3310,7 +3336,7 @@ class AppState extends ChangeNotifier {
         final stationsMap = await _apiService!
             .fetchAllAssociatedWirelessMacsWithContext(
               ipAddress: activeIp,
-              sysauth: _authService!.sysauth!,
+              sysauth: sysauth,
               useHttps: activeHttps,
             );
         stationsMap.forEach(
@@ -3328,7 +3354,7 @@ class AppState extends ChangeNotifier {
       try {
         final callRes = await _apiService!.call(
           activeIp,
-          _authService!.sysauth!,
+          sysauth,
           activeHttps,
           object: 'luci-rpc',
           method: 'getDHCPLeases',
@@ -3386,6 +3412,20 @@ class AppState extends ChangeNotifier {
         }
       }
 
+      // A switch or logout since: these are the previous session's
+      // clients, and must not be stamped as the new router's.
+      if (token != _sessionToken) return const [];
+
+      // Names and presence beyond the leases; GL.iNet's own data, where
+      // there is any, is applied after and wins.
+      final presence = await _fetchClientPresence(
+        activeIp,
+        sysauth,
+        activeHttps,
+      );
+      if (token != _sessionToken) return const [];
+      _applyPresence(clientMap, presence, normalizedWireless);
+
       // Enrich with GL.iNet data
       _enrichClientsWithGlInet(clientMap);
 
@@ -3399,6 +3439,102 @@ class AppState extends ChangeNotifier {
   }
 
   /// Returns a union set of associated wireless MAC addresses across all routers
+  /// Host hints and the neighbour table of the router at [ip], each read on
+  /// its own and each optional: a router without either still lists its
+  /// clients, just without the names or presence they would add.
+  ///
+  /// One after the other, not together: some routers hang requests that
+  /// run in parallel.
+  Future<ClientPresence> _fetchClientPresence(
+    String ip,
+    String sysauth,
+    bool useHttps,
+  ) async {
+    // The budget goes on the request itself, so Dio aborts it: a Future
+    // timeout would only stop waiting, and leave the read running into the
+    // next one - overlap that some routers hang on.
+    final api = _apiService!;
+    final real = api is RealApiService ? api : null;
+    const budget = ClientPresence.readBudget;
+    var hints = const <String, dynamic>{};
+    try {
+      hints = real != null
+          ? await real.fetchHostHints(
+              ip,
+              sysauth,
+              useHttps,
+              receiveTimeout: budget,
+            )
+          : await api.fetchHostHints(ip, sysauth, useHttps);
+    } catch (e) {
+      Logger.debug('Host hints unavailable: $e');
+    }
+    List<Neighbour>? neighbours;
+    try {
+      final (command, params) = ClientPresence.neighbourCommand;
+      final execParams = {'command': command, 'params': params};
+      final result = real != null
+          ? await real.call(
+              ip,
+              sysauth,
+              useHttps,
+              object: 'file',
+              method: 'exec',
+              params: execParams,
+              receiveTimeout: budget,
+            )
+          : await api.call(
+              ip,
+              sysauth,
+              useHttps,
+              object: 'file',
+              method: 'exec',
+              params: execParams,
+            );
+      final body = result is List && result.length > 1 ? result[1] : null;
+      // rpcd leaves `stdout` out when the command printed nothing: an
+      // empty table, which says no one is there, not that it is unknown.
+      if (body is Map && body['code'] == 0) {
+        final out = body['stdout'];
+        neighbours = ClientPresence.parseNeighbours(out is String ? out : '');
+      }
+    } catch (e) {
+      Logger.debug('Neighbour table unavailable: $e');
+    }
+    return ClientPresence(hostHints: hints, neighbours: neighbours);
+  }
+
+  /// Puts [presence] into [clients] (keyed by normalised MAC): the router's
+  /// name for a client that sent none (#75), and whether it is connected,
+  /// so a phone that left is shown offline rather than as wired (#5).
+  static void _applyPresence(
+    Map<String, Client> clients,
+    ClientPresence presence,
+    Set<String> associated,
+  ) {
+    for (final entry in clients.entries.toList()) {
+      final client = entry.value;
+      final name = ClientPresence.isUnnamed(client.hostname)
+          ? presence.nameFor(client.macAddress)
+          : null;
+      final isAssociated = associated.contains(entry.key);
+      final online = presence.isOnline(
+        mac: client.macAddress,
+        ip: client.ipAddress == 'N/A' ? null : client.ipAddress,
+        associated: isAssociated,
+      );
+      final guessOk = ClientPresence.mayGuessType(
+        presenceChecked: presence.neighbours != null,
+        online: online,
+      );
+      clients[entry.key] = client.copyWith(
+        hostname: name,
+        isOnline: online,
+        connectionType: isAssociated || guessOk ? null : ConnectionType.unknown,
+      );
+    }
+  }
+
   /// Known GL.iNet model → CPU core count mapping.
   static int? _getGlInetCoreCount(String model) {
     // IPQ5332 (BE9300, BE6500): Quad-core Cortex-A53
@@ -3596,6 +3732,13 @@ class AppState extends ChangeNotifier {
               final leases = (data['dhcp_leases'] as List<dynamic>? ?? [])
                   .cast<Map<String, dynamic>>();
               successfulRouters++;
+              // This router's names and presence for its own leases; after
+              // the merge below they could no longer be told apart.
+              final presence = await _fetchClientPresence(
+                r.activeAddress,
+                res.token!,
+                res.actualUseHttps,
+              );
               // Record which router answered. Dedup below keeps one entry per
               // MAC+IP, so without this the detail page cannot tell which
               // router to write a reservation or block rule to.
@@ -3605,6 +3748,7 @@ class AppState extends ChangeNotifier {
                       ...lease,
                       '_routerId': r.id,
                       '_routerLabel': r.lastKnownHostname ?? r.activeAddress,
+                      ...presence.annotate(lease),
                     },
                   )
                   .toList();
