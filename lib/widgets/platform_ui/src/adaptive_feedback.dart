@@ -27,9 +27,11 @@ class AdaptiveSnackBar {
     // A navigator's own context (kept by callers whose page may be gone by
     // the time they report) sits above that navigator's overlay.
     final contextOverlay = Overlay.maybeOf(context);
+    final navigatorOverlay =
+        contextOverlay ?? Navigator.maybeOf(context)?.overlay;
     final nativeDuration = _nativeDuration(duration);
     if (PlatformUiCapabilities.usesNativeIOS26 &&
-        contextOverlay != null &&
+        navigatorOverlay != null &&
         action == null &&
         nativeDuration != null) {
       // The toast replaces a banner left up by a longer message.
@@ -40,23 +42,29 @@ class AdaptiveSnackBar {
         AdaptiveSnackBarType.warning => CNToastStyle.warning,
         AdaptiveSnackBarType.error => CNToastStyle.error,
       };
-      CNToast.show(
-        context: context,
+      void showToast(BuildContext toastContext) => CNToast.show(
+        context: toastContext,
         message: message,
         position: CNToastPosition.top,
         duration: nativeDuration,
         style: style,
       );
+      if (contextOverlay != null) {
+        showToast(context);
+      } else {
+        _withContextIn(navigatorOverlay, showToast);
+      }
       return;
     }
 
     if (!PlatformUiCapabilities.isIOS) {
       final messenger = ScaffoldMessenger.maybeOf(context);
       if (messenger == null) return;
-      // As on iOS, the newest message replaces the one showing, so a
-      // long-lived one (a reboot in progress) cannot hold back its result.
+      // As on iOS, the newest message replaces the one showing and any
+      // waiting, so a long-lived one (a reboot in progress) cannot hold back
+      // its result, even when they arrive while a bar is still closing.
       messenger
-        ..hideCurrentSnackBar()
+        ..clearSnackBars()
         ..showSnackBar(
           _materialSnackBar(
             Theme.of(context),
@@ -93,8 +101,35 @@ class AdaptiveSnackBar {
 
   static void _dismissIOSBanner() {
     final entry = _activeIOSEntry;
-    if (entry?.mounted == true) entry!.remove();
     _activeIOSEntry = null;
+    // Inserted this frame, it has not mounted yet but is in the overlay;
+    // a dismissed one has already cleared this reference.
+    entry?.remove();
+  }
+
+  /// Calls [use] with a context inside [overlay], from a zero-size entry
+  /// inserted for the purpose: CNToast finds its overlay from a context,
+  /// and a navigator's own context sits above that navigator's overlay.
+  static void _withContextIn(
+    OverlayState overlay,
+    void Function(BuildContext context) use,
+  ) {
+    var used = false;
+    late final OverlayEntry probe;
+    probe = OverlayEntry(
+      builder: (probeContext) {
+        if (!used) {
+          used = true;
+          // Not during build: showing inserts the toast's own entry.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (probeContext.mounted) use(probeContext);
+            if (probe.mounted) probe.remove();
+          });
+        }
+        return const SizedBox.shrink();
+      },
+    );
+    overlay.insert(probe);
   }
 
   /// luci-mobile's Material snackbars: information in the theme's plain
@@ -267,62 +302,70 @@ class _IOSBannerState extends State<_IOSBanner> {
       right: 12,
       child: SafeArea(
         bottom: false,
-        child: Semantics(
-          liveRegion: true,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: PlatformUiCapabilities.usesNativeIOS26
-                  ? null
-                  : bannerColor,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x26000000),
-                  blurRadius: 18,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Stack(
-              fit: StackFit.passthrough,
-              children: [
-                if (PlatformUiCapabilities.usesNativeIOS26)
-                  Positioned.fill(
-                    child: AdaptiveGlassBackdrop(
-                      borderRadius: BorderRadius.circular(14),
+        // Swiped up out of the way, as iOS banners are; it covers the
+        // navigation bar while it shows.
+        child: GestureDetector(
+          onVerticalDragEnd: (details) {
+            if ((details.primaryVelocity ?? 0) < 0) widget.onDismiss();
+          },
+          child: Semantics(
+            liveRegion: true,
+            onDismiss: widget.onDismiss,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: PlatformUiCapabilities.usesNativeIOS26
+                    ? null
+                    : bannerColor,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x26000000),
+                    blurRadius: 18,
+                    offset: Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Stack(
+                fit: StackFit.passthrough,
+                children: [
+                  if (PlatformUiCapabilities.usesNativeIOS26)
+                    Positioned.fill(
+                      child: AdaptiveGlassBackdrop(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(icon, color: tint, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          widget.message,
-                          style: TextStyle(
-                            color: CupertinoColors.label.resolveFrom(context),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(icon, color: tint, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            widget.message,
+                            style: TextStyle(
+                              color: CupertinoColors.label.resolveFrom(context),
+                            ),
                           ),
                         ),
-                      ),
-                      if (widget.action != null)
-                        CupertinoButton(
-                          padding: const EdgeInsets.only(left: 10),
-                          minimumSize: const Size(36, 36),
-                          onPressed: () {
-                            widget.onActionPressed?.call();
-                            widget.onDismiss();
-                          },
-                          child: Text(widget.action!),
-                        ),
-                    ],
+                        if (widget.action != null)
+                          CupertinoButton(
+                            padding: const EdgeInsets.only(left: 10),
+                            minimumSize: const Size(36, 36),
+                            onPressed: () {
+                              widget.onActionPressed?.call();
+                              widget.onDismiss();
+                            },
+                            child: Text(widget.action!),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

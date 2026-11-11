@@ -105,12 +105,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // Captured now: the reboot can outlive this screen, and its outcome
     // still has somewhere to show.
     final report = AdaptiveSnackBar.reporter(context);
-    // Up until the router is back, or until the command fails; a reboot that
-    // was sent needs no second message saying so.
+    // Up until the router is back or the command fails, a reboot that was
+    // sent needs no second message saying so. Only this screen hears that
+    // the router is back, so the warning is bounded to about a reboot's
+    // length rather than left up after the user moves on.
     report.show(
       message: l10n.rebootingConnectionInterrupted,
       type: AdaptiveSnackBarType.warning,
-      duration: const Duration(days: 1), // effectively indefinite
+      duration: const Duration(minutes: 2),
     );
     final success = await appState.reboot();
     if (!success) {

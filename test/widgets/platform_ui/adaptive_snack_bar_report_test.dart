@@ -1,4 +1,5 @@
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
+import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -67,6 +68,33 @@ void main() {
         tester.widget<Text>(find.text('Refresh failed')).style?.color,
         scheme.onError,
       );
+    });
+
+    testWidgets('messages arriving while a bar closes do not queue', (
+      tester,
+    ) async {
+      final context = await _page(tester);
+      AdaptiveSnackBar.show(context, message: 'Copied');
+      await tester.pumpAndSettle();
+      // Both arrive while that bar is closing.
+      AdaptiveSnackBar.show(
+        context,
+        message: 'Rebooting…',
+        type: AdaptiveSnackBarType.warning,
+        duration: const Duration(days: 1),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      AdaptiveSnackBar.show(
+        context,
+        message: 'Reboot command failed',
+        type: AdaptiveSnackBarType.error,
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Reboot command failed'), findsOneWidget);
+      expect(find.text('Rebooting…'), findsNothing);
+      expect(find.text('Copied'), findsNothing);
     });
 
     testWidgets('a new message replaces a long-lived one', (tester) async {
@@ -138,6 +166,67 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('a banner replaced before its first frame does not stay', (
+      tester,
+    ) async {
+      final context = await _page(tester);
+      AdaptiveSnackBar.show(
+        context,
+        message: 'Rebooting…',
+        type: AdaptiveSnackBarType.warning,
+        duration: const Duration(minutes: 2),
+      );
+      AdaptiveSnackBar.show(
+        context,
+        message: 'Reboot command failed',
+        type: AdaptiveSnackBarType.error,
+        duration: const Duration(seconds: 3),
+      );
+      await tester.pump();
+
+      expect(_banner, findsNothing);
+      expect(find.text('Rebooting…'), findsNothing);
+      expect(find.text('Reboot command failed'), findsWidgets);
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('a reporter whose page is gone still shows the native toast', (
+      tester,
+    ) async {
+      final navigatorKey = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: navigatorKey,
+          home: const Scaffold(body: SizedBox.expand()),
+        ),
+      );
+      navigatorKey.currentState!.push(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('Edit')),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final report = AdaptiveSnackBar.reporter(
+        tester.element(find.text('Edit')),
+      );
+      navigatorKey.currentState!.pop();
+      await tester.pumpAndSettle();
+
+      report.show(
+        message: 'Wi-Fi updated',
+        duration: const Duration(seconds: 3),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(_banner, findsNothing);
+      expect(find.text('Wi-Fi updated'), findsWidgets);
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('a message longer than the toast keeps the banner', (
       tester,
     ) async {
@@ -189,4 +278,48 @@ void main() {
       await tester.pumpAndSettle();
     });
   }
+
+  group('the iOS banner before iOS 26', () {
+    setUp(() {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    });
+
+    Future<void> showWarning(WidgetTester tester) async {
+      final context = await _page(tester);
+      AdaptiveSnackBar.show(
+        context,
+        message: 'Rebooting…',
+        type: AdaptiveSnackBarType.warning,
+        duration: const Duration(minutes: 2),
+      );
+      await tester.pump();
+      expect(_banner, findsOneWidget);
+    }
+
+    testWidgets('swiping it up dismisses it', (tester) async {
+      await showWarning(tester);
+
+      await tester.fling(find.text('Rebooting…'), const Offset(0, -60), 800);
+      await tester.pump();
+      expect(_banner, findsNothing);
+    });
+
+    testWidgets('VoiceOver can dismiss it', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await showWarning(tester);
+
+      expect(
+        tester.getSemantics(find.text('Rebooting…')),
+        isSemantics(hasDismissAction: true),
+      );
+      tester.semantics.performAction(
+        find.semantics.byLabel('Rebooting…'),
+        SemanticsAction.dismiss,
+      );
+      await tester.pump();
+      expect(_banner, findsNothing);
+      semantics.dispose();
+    });
+  });
 }
