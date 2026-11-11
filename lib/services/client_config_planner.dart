@@ -174,29 +174,23 @@ class ClientConfigPlanner {
       for (final network in wirelessNetworks)
         ...subnets.where((s) => s.name == network),
     ];
-    for (final address in addresses) {
-      final hit = subnetContaining(address, apSubnets);
-      if (hit != null) return ClientNetwork(hit.name, hit);
-    }
     // The AP's device can carry more than the network its `network` option
-    // names: a second interface on the same `br-lan` (another subnet, or an
-    // old-style alias) serves the same Wi-Fi clients. An address on one of
-    // those is where the client really is - falling back to the AP's
-    // network would check its own address against the wrong subnet (#90).
-    // A network on another device (a guest bridge) is not reachable from
-    // this AP, so an address there is a stale lease and the AP still wins.
-    final apDevices = {
-      for (final s in apSubnets)
-        if (s.device != null) s.device,
-    };
-    if (apDevices.isNotEmpty) {
-      final sameSegment = subnets
-          .where((s) => apDevices.contains(s.device))
-          .toList();
-      for (final address in addresses) {
-        final hit = subnetContaining(address, sameSegment);
-        if (hit != null) return ClientNetwork(hit.name, hit);
-      }
+    // names: a second LAN interface on the same `br-lan` (another subnet,
+    // or an old-style alias) serves the same Wi-Fi clients, so an address
+    // there is where the client really is (#90). A network on another
+    // device (a guest bridge) is not reachable from this AP: an address
+    // there is a stale lease, and the AP still wins.
+    //
+    // One pass, in the caller's order of trust, over both: a live lease on
+    // the second subnet must beat an old hint on the AP's own one.
+    final reachable = [
+      ...apSubnets,
+      for (final s in segmentSubnetsOf(apSubnets, subnets))
+        if (!apSubnets.contains(s)) s,
+    ];
+    for (final address in addresses) {
+      final hit = subnetContaining(address, reachable);
+      if (hit != null) return ClientNetwork(hit.name, hit);
     }
     if (apSubnets.isNotEmpty) {
       return ClientNetwork(apSubnets.first.name, apSubnets.first);
@@ -208,6 +202,44 @@ class ClientConfigPlanner {
     }
     for (final network in wirelessNetworks) {
       if (network.isNotEmpty) return ClientNetwork(network, null);
+    }
+    return null;
+  }
+
+  /// Every LAN-side subnet of [all] on the same device as one of [of]: the
+  /// subnets a client on [of] shares a segment with. A subnet with no known
+  /// device shares with nothing but itself.
+  static List<InterfaceSubnet> segmentSubnetsOf(
+    Iterable<InterfaceSubnet> of,
+    Iterable<InterfaceSubnet> all,
+  ) {
+    final devices = {
+      for (final s in of)
+        if (s.device != null) s.device,
+    };
+    return [
+      for (final s in of)
+        if (s.device == null) s,
+      for (final s in all)
+        if (!s.upstream && devices.contains(s.device)) s,
+    ];
+  }
+
+  /// The firewall zone for a client on [located].
+  ///
+  /// The network's own zone, else the zone of another network on the same
+  /// device: an alias such as `lan50` on `br-lan` is often in no zone of its
+  /// own, while fw4 still filters its traffic as `lan`'s, by device.
+  static String? zoneForClient(
+    Map<String, dynamic> firewallValues,
+    ClientNetwork? located,
+    Iterable<InterfaceSubnet> all,
+  ) {
+    final own = zoneForNetwork(firewallValues, located?.name);
+    if (own != null || located?.subnet == null) return own;
+    for (final s in segmentSubnetsOf([located!.subnet!], all)) {
+      final zone = zoneForNetwork(firewallValues, s.name);
+      if (zone != null) return zone;
     }
     return null;
   }

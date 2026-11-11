@@ -739,6 +739,113 @@ void main() {
           'lan',
         );
       });
+
+      // Callers list the live lease first and old hints after it; an old
+      // hint on the AP's own subnet must not beat the live lease.
+      test('the live address wins over an old one on the AP subnet', () {
+        expect(
+          ClientConfigPlanner.networkForClient(
+            subnets: subnets,
+            addresses: const ['192.168.50.238', '192.168.52.238'],
+            wirelessNetworks: const ['lan'],
+          )?.name,
+          'lan50',
+        );
+      });
+
+      test('the most specific subnet on the bridge wins', () {
+        final wide = ClientConfigPlanner.interfaceSubnets({
+          'interface': [
+            {
+              'interface': 'lan',
+              'l3_device': 'br-lan',
+              'ipv4-address': [
+                {'address': '10.0.0.1', 'mask': 16},
+              ],
+            },
+            {
+              'interface': 'cams',
+              'l3_device': 'br-lan',
+              'ipv4-address': [
+                {'address': '10.0.5.1', 'mask': 24},
+              ],
+            },
+          ],
+        });
+        expect(
+          ClientConfigPlanner.networkForClient(
+            subnets: wide,
+            addresses: const ['10.0.5.20'],
+            wirelessNetworks: const ['lan'],
+          )?.name,
+          'cams',
+        );
+      });
+
+      // An internet-facing interface on the same device is not where a
+      // Wi-Fi client sits, and naming it would put a block rule in the wrong
+      // zone.
+      test('an upstream interface on the bridge is not a candidate', () {
+        final withUplink = ClientConfigPlanner.interfaceSubnets({
+          'interface': [
+            ...shared['interface'] as List,
+            {
+              'interface': 'uplink',
+              'l3_device': 'br-lan',
+              'ipv4-address': [
+                {'address': '100.64.0.2', 'mask': 24},
+              ],
+            },
+          ],
+        }, hints: const UpstreamHints(named: {'uplink'}, masq: {}));
+        expect(
+          ClientConfigPlanner.networkForClient(
+            subnets: withUplink,
+            addresses: const ['100.64.0.9'],
+            wirelessNetworks: const ['lan'],
+          )?.name,
+          'lan',
+        );
+      });
+
+      // fw4 filters by device, so an alias in no zone of its own is still
+      // covered by its bridge's zone; blocking must stay available.
+      test('an alias in no zone takes its bridge zone', () {
+        final located = ClientConfigPlanner.networkForClient(
+          subnets: subnets,
+          addresses: const ['192.168.50.238'],
+          wirelessNetworks: const ['lan'],
+        );
+        expect(ClientConfigPlanner.zoneForNetwork(_firewall, 'lan50'), isNull);
+        expect(
+          ClientConfigPlanner.zoneForClient(_firewall, located, subnets),
+          'lan',
+        );
+      });
+
+      // Either subnet on the bridge can be handed to the client; only a
+      // subnet on another device is refused.
+      test('a reservation may use any LAN subnet on the bridge', () {
+        final lan50 = subnets.firstWhere((s) => s.name == 'lan50');
+        final allowed = ClientConfigPlanner.segmentSubnetsOf([lan50], subnets);
+        expect(allowed.map((s) => s.name), containsAll(['lan', 'lan50']));
+        expect(
+          ClientConfigPlanner.checkReservationIp(
+            '192.168.52.40',
+            subnets: allowed,
+            alreadyReserved: const {},
+          ),
+          IpCheckResult.ok,
+        );
+        expect(
+          ClientConfigPlanner.checkReservationIp(
+            '192.168.2.40',
+            subnets: allowed,
+            alreadyReserved: const {},
+          ),
+          IpCheckResult.outsideSubnet,
+        );
+      });
     });
 
     test('an AP on an interface the dump does not list still names it', () {
