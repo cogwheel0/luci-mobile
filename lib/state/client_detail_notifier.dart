@@ -201,12 +201,20 @@ class ClientDetailLoader {
       },
       wirelessNetworks: stationNetworks,
     );
-    final network = located?.name;
     // A reservation is checked against the client's own subnet when it is
-    // known; otherwise against every LAN-side one, so an address that no
-    // interface would ever serve is still refused.
-    final subnets = located?.subnet != null
-        ? [located!.subnet!]
+    // known, and any other LAN subnet on the same device, which the client
+    // can equally be given an address on; otherwise against every LAN-side
+    // one, so an address that no interface would ever serve is still
+    // refused.
+    final ownSubnet = located?.subnet;
+    final subnets = ownSubnet != null
+        ? [
+            ownSubnet,
+            for (final s in ClientConfigPlanner.segmentSubnetsOf([
+              ownSubnet,
+            ], allSubnets))
+              if (!identical(s, ownSubnet)) s,
+          ]
         : allSubnets.where((s) => !s.upstream).toList();
 
     return ClientDetail(
@@ -217,7 +225,7 @@ class ClientDetailLoader {
       hintIpv6: _hintList(hint, 'ip6addrs'),
       host: host,
       blockRule: ClientConfigPlanner.findBlockRule(firewall, mac),
-      zone: ClientConfigPlanner.zoneForNetwork(firewall, network),
+      zone: ClientConfigPlanner.zoneForClient(firewall, located, allSubnets),
       subnets: subnets,
       pools: ClientConfigPlanner.dhcpPools(dhcp),
       reservedIps: ClientConfigPlanner.reservedIps(

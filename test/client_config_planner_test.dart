@@ -678,6 +678,242 @@ void main() {
       expect(byFirewall.every((s) => !s.upstream), isTrue);
     });
 
+    // #90: two subnets on one bridge, the SSID's `network` naming only one.
+    // A Wi-Fi client on the other had its own address refused as "outside
+    // this network's subnet" when reserving it.
+    group('two networks on one bridge', () {
+      final shared = <String, dynamic>{
+        'interface': [
+          {
+            'interface': 'lan',
+            'l3_device': 'br-lan',
+            'ipv4-address': [
+              {'address': '192.168.52.1', 'mask': 24},
+            ],
+          },
+          {
+            'interface': 'lan50',
+            'device': '@lan',
+            'l3_device': 'br-lan',
+            'ipv4-address': [
+              {'address': '192.168.50.1', 'mask': 24},
+            ],
+          },
+          {
+            'interface': 'guest',
+            'l3_device': 'br-guest',
+            'ipv4-address': [
+              {'address': '192.168.2.1', 'mask': 24},
+            ],
+          },
+        ],
+      };
+      final subnets = ClientConfigPlanner.interfaceSubnets(shared);
+
+      test('a client on the other subnet is placed on it', () {
+        final located = ClientConfigPlanner.networkForClient(
+          subnets: subnets,
+          addresses: const ['192.168.50.238'],
+          wirelessNetworks: const ['lan'],
+        );
+        expect(located?.name, 'lan50');
+        expect(
+          ClientConfigPlanner.checkReservationIp(
+            '192.168.50.238',
+            subnets: [located!.subnet!],
+            alreadyReserved: const {},
+          ),
+          IpCheckResult.ok,
+        );
+      });
+
+      // A network on another bridge cannot be reached through this AP: an
+      // address there is a lease left over from before the client moved.
+      test('an address on another bridge does not outrank the AP', () {
+        expect(
+          ClientConfigPlanner.networkForClient(
+            subnets: subnets,
+            addresses: const ['192.168.2.50'],
+            wirelessNetworks: const ['lan'],
+          )?.name,
+          'lan',
+        );
+      });
+
+      // Callers list the live lease first and old hints after it; an old
+      // hint on the AP's own subnet must not beat the live lease.
+      test('the live address wins over an old one on the AP subnet', () {
+        expect(
+          ClientConfigPlanner.networkForClient(
+            subnets: subnets,
+            addresses: const ['192.168.50.238', '192.168.52.238'],
+            wirelessNetworks: const ['lan'],
+          )?.name,
+          'lan50',
+        );
+      });
+
+      test('the most specific subnet on the bridge wins', () {
+        final wide = ClientConfigPlanner.interfaceSubnets({
+          'interface': [
+            {
+              'interface': 'lan',
+              'l3_device': 'br-lan',
+              'ipv4-address': [
+                {'address': '10.0.0.1', 'mask': 16},
+              ],
+            },
+            {
+              'interface': 'cams',
+              'l3_device': 'br-lan',
+              'ipv4-address': [
+                {'address': '10.0.5.1', 'mask': 24},
+              ],
+            },
+          ],
+        });
+        expect(
+          ClientConfigPlanner.networkForClient(
+            subnets: wide,
+            addresses: const ['10.0.5.20'],
+            wirelessNetworks: const ['lan'],
+          )?.name,
+          'cams',
+        );
+      });
+
+      // An internet-facing interface on the same device is not where a
+      // Wi-Fi client sits, and naming it would put a block rule in the wrong
+      // zone.
+      test('an upstream interface on the bridge is not a candidate', () {
+        final withUplink = ClientConfigPlanner.interfaceSubnets({
+          'interface': [
+            ...shared['interface'] as List,
+            {
+              'interface': 'uplink',
+              'l3_device': 'br-lan',
+              'ipv4-address': [
+                {'address': '100.64.0.2', 'mask': 24},
+              ],
+            },
+          ],
+        }, hints: const UpstreamHints(named: {'uplink'}, masq: {}));
+        expect(
+          ClientConfigPlanner.networkForClient(
+            subnets: withUplink,
+            addresses: const ['100.64.0.9'],
+            wirelessNetworks: const ['lan'],
+          )?.name,
+          'lan',
+        );
+      });
+
+      // fw4 filters by device, so an alias in no zone of its own is still
+      // covered by its bridge's zone; blocking must stay available.
+      test('an alias in no zone takes its bridge zone', () {
+        final located = ClientConfigPlanner.networkForClient(
+          subnets: subnets,
+          addresses: const ['192.168.50.238'],
+          wirelessNetworks: const ['lan'],
+        );
+        expect(ClientConfigPlanner.zoneForNetwork(_firewall, 'lan50'), isNull);
+        expect(
+          ClientConfigPlanner.zoneForClient(_firewall, located, subnets),
+          'lan',
+        );
+      });
+
+      // With more than one subnet to check against, the router's address on
+      // each is off limits - including one that sits inside another,
+      // narrower subnet whose own router address differs.
+      test('no candidate subnet gives away a router address', () {
+        final overlapping = ClientConfigPlanner.interfaceSubnets({
+          'interface': [
+            {
+              'interface': 'lan',
+              'l3_device': 'br-lan',
+              'ipv4-address': [
+                {'address': '10.0.5.254', 'mask': 16},
+              ],
+            },
+            {
+              'interface': 'cams',
+              'l3_device': 'br-lan',
+              'ipv4-address': [
+                {'address': '10.0.5.1', 'mask': 24},
+              ],
+            },
+          ],
+        });
+        for (final router in ['10.0.5.254', '10.0.5.1']) {
+          expect(
+            ClientConfigPlanner.checkReservationIp(
+              router,
+              subnets: overlapping,
+              alreadyReserved: const {},
+            ),
+            IpCheckResult.notAssignable,
+            reason: router,
+          );
+        }
+        expect(
+          ClientConfigPlanner.checkReservationIp(
+            '10.0.5.20',
+            subnets: overlapping,
+            alreadyReserved: const {},
+          ),
+          IpCheckResult.ok,
+        );
+
+        // The wider subnet's dynamic pool still warns, though the address
+        // lands in the narrower one, which has no pool. `lan`'s pool is
+        // offsets 1380-1479 from 10.0.0.0: 10.0.5.100-10.0.5.199.
+        const pools = {'lan': DhcpPool(start: 1380, limit: 100)};
+        expect(
+          ClientConfigPlanner.checkReservationIp(
+            '10.0.5.120',
+            subnets: overlapping,
+            alreadyReserved: const {},
+            pools: pools,
+          ),
+          IpCheckResult.insidePool,
+        );
+        expect(
+          ClientConfigPlanner.checkReservationIp(
+            '10.0.5.20',
+            subnets: overlapping,
+            alreadyReserved: const {},
+            pools: pools,
+          ),
+          IpCheckResult.ok,
+        );
+      });
+
+      // Either subnet on the bridge can be handed to the client; only a
+      // subnet on another device is refused.
+      test('a reservation may use any LAN subnet on the bridge', () {
+        final lan50 = subnets.firstWhere((s) => s.name == 'lan50');
+        final allowed = ClientConfigPlanner.segmentSubnetsOf([lan50], subnets);
+        expect(allowed.map((s) => s.name), containsAll(['lan', 'lan50']));
+        expect(
+          ClientConfigPlanner.checkReservationIp(
+            '192.168.52.40',
+            subnets: allowed,
+            alreadyReserved: const {},
+          ),
+          IpCheckResult.ok,
+        );
+        expect(
+          ClientConfigPlanner.checkReservationIp(
+            '192.168.2.40',
+            subnets: allowed,
+            alreadyReserved: const {},
+          ),
+          IpCheckResult.outsideSubnet,
+        );
+      });
+    });
+
     test('an AP on an interface the dump does not list still names it', () {
       expect(
         ClientConfigPlanner.networkForClient(

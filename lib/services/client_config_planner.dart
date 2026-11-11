@@ -12,6 +12,7 @@ class InterfaceSubnet {
     required this.base,
     required this.prefix,
     this.upstream = false,
+    this.device,
   });
 
   /// The logical interface (`lan`, `guest`, …).
@@ -19,6 +20,11 @@ class InterfaceSubnet {
   final String address;
   final List<int> base;
   final int prefix;
+
+  /// The Linux device it runs on (`br-lan`, `br-lan.20`, …), when the dump
+  /// says. Two logical interfaces on one device share the segment: a
+  /// client on either can be reached through the other's AP.
+  final String? device;
 
   /// True for an interface in an internet-facing firewall zone (or, with no
   /// firewall to ask, one named like one). Clients do not sit there, however
@@ -168,8 +174,22 @@ class ClientConfigPlanner {
       for (final network in wirelessNetworks)
         ...subnets.where((s) => s.name == network),
     ];
+    // The AP's device can carry more than the network its `network` option
+    // names: a second LAN interface on the same `br-lan` (another subnet,
+    // or an old-style alias) serves the same Wi-Fi clients, so an address
+    // there is where the client really is (#90). A network on another
+    // device (a guest bridge) is not reachable from this AP: an address
+    // there is a stale lease, and the AP still wins.
+    //
+    // One pass, in the caller's order of trust, over both: a live lease on
+    // the second subnet must beat an old hint on the AP's own one.
+    final reachable = [
+      ...apSubnets,
+      for (final s in segmentSubnetsOf(apSubnets, subnets))
+        if (!apSubnets.contains(s)) s,
+    ];
     for (final address in addresses) {
-      final hit = subnetContaining(address, apSubnets);
+      final hit = subnetContaining(address, reachable);
       if (hit != null) return ClientNetwork(hit.name, hit);
     }
     if (apSubnets.isNotEmpty) {
@@ -182,6 +202,44 @@ class ClientConfigPlanner {
     }
     for (final network in wirelessNetworks) {
       if (network.isNotEmpty) return ClientNetwork(network, null);
+    }
+    return null;
+  }
+
+  /// Every LAN-side subnet of [all] on the same device as one of [of]: the
+  /// subnets a client on [of] shares a segment with. A subnet with no known
+  /// device shares with nothing but itself.
+  static List<InterfaceSubnet> segmentSubnetsOf(
+    Iterable<InterfaceSubnet> of,
+    Iterable<InterfaceSubnet> all,
+  ) {
+    final devices = {
+      for (final s in of)
+        if (s.device != null) s.device,
+    };
+    return [
+      for (final s in of)
+        if (s.device == null) s,
+      for (final s in all)
+        if (!s.upstream && devices.contains(s.device)) s,
+    ];
+  }
+
+  /// The firewall zone for a client on [located].
+  ///
+  /// The network's own zone, else the zone of another network on the same
+  /// device: an alias such as `lan50` on `br-lan` is often in no zone of its
+  /// own, while fw4 still filters its traffic as `lan`'s, by device.
+  static String? zoneForClient(
+    Map<String, dynamic> firewallValues,
+    ClientNetwork? located,
+    Iterable<InterfaceSubnet> all,
+  ) {
+    final own = zoneForNetwork(firewallValues, located?.name);
+    if (own != null || located?.subnet == null) return own;
+    for (final s in segmentSubnetsOf([located!.subnet!], all)) {
+      final zone = zoneForNetwork(firewallValues, s.name);
+      if (zone != null) return zone;
     }
     return null;
   }
@@ -242,6 +300,11 @@ class ClientConfigPlanner {
           ? name.startsWith('wan')
           : hints.named.contains(name) ||
                 (hints.masq.contains(name) && _hasDefaultRoute(iface['route']));
+      final l3 = iface['l3_device']?.toString();
+      final dev = iface['device']?.toString();
+      final device = (l3 != null && l3.isNotEmpty)
+          ? l3
+          : (dev != null && dev.isNotEmpty ? dev : null);
       for (final addr in addrs) {
         if (addr is! Map) continue;
         final base = parseIpv4(addr['address']?.toString() ?? '');
@@ -257,6 +320,7 @@ class ClientConfigPlanner {
             base: base,
             prefix: prefix,
             upstream: upstream,
+            device: device,
           ),
         );
       }
@@ -332,14 +396,27 @@ class ClientConfigPlanner {
     if (alreadyReserved.contains(ip)) return IpCheckResult.duplicate;
     if (subnets.isEmpty) return IpCheckResult.ok;
 
+    // The router's own address on *any* of the subnets, not only the one
+    // the address lands in: two overlapping subnets on one bridge (a /16
+    // and a /24) put the wider one's router address inside the narrower
+    // one, whose own check would let it through.
+    if (subnets.any((s) => _toInt(s.base) == _toInt(octets))) {
+      return IpCheckResult.notAssignable;
+    }
     final subnet = subnetContaining(ip, subnets);
     if (subnet == null) return IpCheckResult.outsideSubnet;
     if (_isNotAssignable(octets, subnet)) return IpCheckResult.notAssignable;
-    // dnsmasq counts `start` from the network address, not from zero.
-    final pool = pools[subnet.name];
-    final offset = _toInt(octets) - _networkAddress(subnet);
-    if (pool != null && pool.coversOffset(offset)) {
-      return IpCheckResult.insidePool;
+    // Every subnet holding the address, not only the most specific: with
+    // overlapping subnets on one bridge, the wider one's dynamic pool can
+    // cover it while the narrower one has none. dnsmasq counts `start`
+    // from the network address, not from zero.
+    for (final s in subnets) {
+      if (!s.contains(octets)) continue;
+      final pool = pools[s.name];
+      final offset = _toInt(octets) - _networkAddress(s);
+      if (pool != null && pool.coversOffset(offset)) {
+        return IpCheckResult.insidePool;
+      }
     }
     return IpCheckResult.ok;
   }
