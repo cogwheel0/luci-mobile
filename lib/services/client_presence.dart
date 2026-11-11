@@ -143,16 +143,35 @@ class ClientPresence {
   /// For the all-routers list, where each router's leases are merged with
   /// the others' and its presence has to travel with them. Association is
   /// applied after the merge, from every router's stations.
+  ///
+  /// `_online` is there only when the neighbour table was read: its absence
+  /// means presence was never checked, which [Client.fromLease] treats
+  /// differently from checked and unconfirmed.
   Map<String, Object?> annotate(Map<String, dynamic> lease) {
     final mac = lease['macaddr']?.toString() ?? '';
     final ip = lease['ipaddr']?.toString();
     return {
       '_hintName': mac.isEmpty ? null : nameFor(mac),
-      '_online': mac.isEmpty
-          ? null
-          : isOnline(mac: mac, ip: ip, associated: false),
+      if (neighbours != null)
+        '_online': mac.isEmpty
+            ? null
+            : isOnline(mac: mac, ip: ip, associated: false),
     };
   }
+
+  /// Whether a client's connection type may still be guessed from its
+  /// vendor and hostname. Only while presence was never checked, or the
+  /// client is confirmed present: a phone that left sits STALE or FAILED,
+  /// and the vendor guess would keep calling it wired (#5).
+  static bool mayGuessType({
+    required bool presenceChecked,
+    required bool? online,
+  }) => !presenceChecked || online == true;
+
+  /// How long each optional read may hold up the client list. The list is
+  /// complete without them; a router slow to answer one should cost
+  /// seconds, not a full request timeout per read.
+  static const readBudget = Duration(seconds: 5);
 
   /// Whether [hostname] is the placeholder for "no name".
   static bool isUnnamed(String hostname) =>

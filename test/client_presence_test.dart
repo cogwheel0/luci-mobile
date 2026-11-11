@@ -228,4 +228,38 @@ void main() {
       expect(ClientPresence.isUnnamed(client.hostname), isTrue);
     });
   });
+
+  // #5: the vendor guess typed a phone that left as wired. Once presence
+  // has been checked, only a client confirmed present keeps a guessed type.
+  group('guessed connection type', () {
+    // `ifname: eth…` is the heuristic's wired evidence.
+    const wiredLooking = {
+      'macaddr': 'aa:bb:cc:00:00:50',
+      'ipaddr': '192.168.1.50',
+      'ifname': 'eth0',
+    };
+
+    test('kept when presence was never checked', () {
+      expect(
+        Client.fromLease(wiredLooking).connectionType,
+        ConnectionType.wired,
+      );
+      // Without a table, annotate adds no `_online` at all.
+      expect(const ClientPresence().annotate(wiredLooking), {
+        '_hintName': null,
+      });
+    });
+
+    test('kept when the client is confirmed present', () {
+      final c = Client.fromLease({...wiredLooking, '_online': true});
+      expect(c.connectionType, ConnectionType.wired);
+    });
+
+    test('dropped when presence was checked and not confirmed', () {
+      for (final online in [false, null]) {
+        final c = Client.fromLease({...wiredLooking, '_online': online});
+        expect(c.connectionType, ConnectionType.unknown, reason: '$online');
+      }
+    });
+  });
 }

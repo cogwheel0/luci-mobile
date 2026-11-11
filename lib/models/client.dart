@@ -1,4 +1,5 @@
 import 'package:luci_mobile/utils/wifi_utils.dart';
+import 'package:luci_mobile/services/client_presence.dart';
 
 enum ConnectionType { wired, wireless, unknown }
 
@@ -204,7 +205,15 @@ class Client {
       clientId: toStringValue(lease['clientid']),
       activeTime: activetime,
       expiresAt: expiresAtTimestamp, // Store the calculated absolute timestamp
-      connectionType: _determineConnectionType(lease),
+      // Guessed from vendor and hostname only while presence was never
+      // checked or confirmed it: see ClientPresence.mayGuessType.
+      connectionType:
+          ClientPresence.mayGuessType(
+            presenceChecked: lease.containsKey('_online'),
+            online: lease['_online'] is bool ? lease['_online'] as bool : null,
+          )
+          ? _determineConnectionType(lease)
+          : ConnectionType.unknown,
       ipv6Addresses: ipv6Addresses,
       routerId: toStringValue(lease['_routerId']),
       routerLabel: toStringValue(lease['_routerLabel']),

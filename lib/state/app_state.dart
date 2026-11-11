@@ -3432,21 +3432,25 @@ class AppState extends ChangeNotifier {
   ) async {
     var hints = const <String, dynamic>{};
     try {
-      hints = await _apiService!.fetchHostHints(ip, sysauth, useHttps);
+      hints = await _apiService!
+          .fetchHostHints(ip, sysauth, useHttps)
+          .timeout(ClientPresence.readBudget);
     } catch (e) {
       Logger.debug('Host hints unavailable: $e');
     }
     List<Neighbour>? neighbours;
     try {
       final (command, params) = ClientPresence.neighbourCommand;
-      final result = await _apiService!.call(
-        ip,
-        sysauth,
-        useHttps,
-        object: 'file',
-        method: 'exec',
-        params: {'command': command, 'params': params},
-      );
+      final result = await _apiService!
+          .call(
+            ip,
+            sysauth,
+            useHttps,
+            object: 'file',
+            method: 'exec',
+            params: {'command': command, 'params': params},
+          )
+          .timeout(ClientPresence.readBudget);
       final body = result is List && result.length > 1 ? result[1] : null;
       // rpcd leaves `stdout` out when the command printed nothing: an
       // empty table, which says no one is there, not that it is unknown.
@@ -3473,12 +3477,21 @@ class AppState extends ChangeNotifier {
       final name = ClientPresence.isUnnamed(client.hostname)
           ? presence.nameFor(client.macAddress)
           : null;
+      final isAssociated = associated.contains(entry.key);
       final online = presence.isOnline(
         mac: client.macAddress,
         ip: client.ipAddress == 'N/A' ? null : client.ipAddress,
-        associated: associated.contains(entry.key),
+        associated: isAssociated,
       );
-      clients[entry.key] = client.copyWith(hostname: name, isOnline: online);
+      final guessOk = ClientPresence.mayGuessType(
+        presenceChecked: presence.neighbours != null,
+        online: online,
+      );
+      clients[entry.key] = client.copyWith(
+        hostname: name,
+        isOnline: online,
+        connectionType: isAssociated || guessOk ? null : ConnectionType.unknown,
+      );
     }
   }
 
