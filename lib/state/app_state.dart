@@ -181,10 +181,14 @@ class AppState extends ChangeNotifier {
     required IAuthService authService,
     IGlInetApiService? glInetApiService,
     RouterService? routerService,
+    // Without one, throughput history is always empty and a test of it
+    // proves nothing.
+    ThroughputService? throughputService,
   }) : _apiService = apiService,
        _authService = authService,
        _glInetService = glInetApiService,
-       _routerService = routerService;
+       _routerService = routerService,
+       _throughputService = throughputService;
 
   static AppState get instance {
     return _instance ??= AppState._();

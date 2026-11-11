@@ -9,6 +9,7 @@ import 'package:luci_mobile/services/interfaces/auth_service_interface.dart';
 import 'package:luci_mobile/services/mock_api_service.dart';
 import 'package:luci_mobile/services/mock_auth_service.dart';
 import 'package:luci_mobile/services/router_service.dart';
+import 'package:luci_mobile/services/throughput_service.dart';
 import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/utils/http_client_manager.dart';
 
@@ -234,7 +235,15 @@ void main() {
       final api = _Router(
         timesOut: {'luci-rpc.getNetworkDevices', 'luci-rpc.getDHCPLeases'},
       );
-      final state = stateFor(api);
+      // A real service: without one the history below is empty whatever
+      // the fetch does.
+      final state = AppState.forTesting(
+        apiService: api,
+        authService: MockAuthService(),
+        routerService: routers,
+        throughputService: ThroughputService(),
+      );
+      addTearDown(state.dispose);
 
       await state.fetchDashboardData();
 
@@ -247,6 +256,21 @@ void main() {
       // No counters, no sample: a zero would be drawn as real throughput.
       expect(state.rxHistory, isEmpty);
       expect(state.txHistory, isEmpty);
+    });
+
+    // The guard above must not stop real counters from being sampled.
+    test('samples throughput when the counters arrive', () async {
+      final state = AppState.forTesting(
+        apiService: _Router(),
+        authService: MockAuthService(),
+        routerService: routers,
+        throughputService: ThroughputService(),
+      );
+      addTearDown(state.dispose);
+
+      await state.fetchDashboardData();
+
+      expect(state.rxHistory, isNotEmpty);
     });
 
     test('reports an ordinary timeout without asking again', () async {
