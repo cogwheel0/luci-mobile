@@ -8,6 +8,7 @@ import 'package:luci_mobile/models/router.dart' as model;
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/utils/url_parser.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/widgets/autofill_form.dart';
 
 class ManageRoutersScreen extends ConsumerStatefulWidget {
   const ManageRoutersScreen({super.key});
@@ -277,8 +278,8 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                 minWidth: 320,
                                                 minHeight: 380,
                                               ),
-                                              child: Form(
-                                                key: formKey,
+                                              child: AutofillForm(
+                                                formKey: formKey,
                                                 child: SingleChildScrollView(
                                                   child: Padding(
                                                     padding:
@@ -327,8 +328,6 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                           },
                                                           autofillHints: const [
                                                             AutofillHints.url,
-                                                            AutofillHints
-                                                                .username,
                                                           ],
                                                         ),
                                                         const SizedBox(
@@ -659,6 +658,8 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                                                                           });
                                                                           return;
                                                                         }
+                                                                        // While the dialog is still shown: the OS saves from it.
+                                                                        AutofillForm.saveCredentials();
                                                                         Navigator.pop(
                                                                           context,
                                                                         );
