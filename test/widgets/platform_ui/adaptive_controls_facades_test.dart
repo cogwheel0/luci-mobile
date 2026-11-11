@@ -1,5 +1,6 @@
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoActivityIndicator;
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -57,15 +58,26 @@ void main() {
             ),
           ),
         );
-        final button = tester.widget<ElevatedButton>(
-          find.byType(ElevatedButton),
+        // Material 3's own filled button, coloured by the theme.
+        expect(find.byType(FilledButton), findsOneWidget);
+        final label = tester.renderObject<RenderParagraph>(
+          find.text('Take control'),
         );
-        expect(button.style!.backgroundColor!.resolve({}), colors.primary);
-        expect(
-          tester.widget<Text>(find.text('Take control')).style!.color,
-          colors.onPrimary,
+        final icon = tester.widget<RichText>(
+          find.descendant(
+            of: find.byIcon(Icons.touch_app_outlined),
+            matching: find.byType(RichText),
+          ),
         );
-        expect(find.byIcon(Icons.touch_app_outlined), findsOneWidget);
+        expect(label.text.style!.color, colors.onPrimary);
+        expect(icon.text.style!.color, colors.onPrimary);
+        final box = tester.widget<Material>(
+          find.descendant(
+            of: find.byType(FilledButton),
+            matching: find.byType(Material),
+          ),
+        );
+        expect(box.color, colors.primary);
       },
     );
   }

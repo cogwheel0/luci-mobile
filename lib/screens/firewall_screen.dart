@@ -648,26 +648,24 @@ class _ForwardSheetState extends State<_ForwardSheet> {
             Row(
               children: [
                 if (widget.existing != null)
-                  TextButton(
+                  AdaptiveButton(
                     onPressed: () => Navigator.of(context).pop(
                       FirewallPlanner.planDeletePortForward(widget.existing!),
                     ),
-                    child: Text(
-                      l10n.remove,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
+                    label: l10n.remove,
+                    style: AdaptiveButtonStyle.plain,
+                    color: Theme.of(context).colorScheme.error,
                   ),
                 const Spacer(),
-                TextButton(
+                AdaptiveButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: Text(l10n.cancel),
+                  label: l10n.cancel,
+                  style: AdaptiveButtonStyle.plain,
                 ),
                 const SizedBox(width: LuciSpacing.sm),
-                FilledButton(
+                AdaptiveButton(
                   onPressed: _canSave ? _save : null,
-                  child: Text(l10n.saveAction),
+                  label: l10n.saveAction,
                 ),
               ],
             ),

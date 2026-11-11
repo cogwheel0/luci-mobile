@@ -209,7 +209,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
           context.l10n.wakeDeviceDescription,
           style: LuciTextStyles.cardSubtitle(context),
         ),
-        trailing: FilledButton.tonal(
+        trailing: AdaptiveButton(
           onPressed:
               availability.available &&
                   _isOwnedBySelectedRouter &&
@@ -217,7 +217,8 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                   !_wakeBusy
               ? () => _wake(mac)
               : null,
-          child: Text(context.l10n.wakeAction),
+          label: context.l10n.wakeAction,
+          style: AdaptiveButtonStyle.tinted,
         ),
       ),
     );
@@ -682,7 +683,11 @@ class _MessageCard extends StatelessWidget {
             child: Text(message, style: LuciTextStyles.cardSubtitle(context)),
           ),
           if (action != null)
-            TextButton(onPressed: onAction, child: Text(action!)),
+            AdaptiveButton(
+              onPressed: onAction,
+              label: action!,
+              style: AdaptiveButtonStyle.plain,
+            ),
         ],
       ),
     ),

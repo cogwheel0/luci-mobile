@@ -219,9 +219,9 @@ class _Form extends StatelessWidget {
           const SizedBox(height: LuciSpacing.sm),
         ],
         const SizedBox(height: LuciSpacing.md),
-        FilledButton(
+        AdaptiveButton(
           onPressed: editable && dirty && valid ? onSave : null,
-          child: Text(l10n.save),
+          label: l10n.save,
         ),
       ],
     );
