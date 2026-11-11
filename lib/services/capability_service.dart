@@ -16,8 +16,7 @@ import 'package:luci_mobile/utils/logger.dart';
 /// Every probe is best-effort. A failure yields [RouterCapabilities.probeFailed],
 /// which the UI must render as "couldn't check" — never as "not supported".
 class CapabilityService {
-  CapabilityService(this._api, {DateTime Function() clock = DateTime.now})
-    : _clock = clock;
+  CapabilityService(this._api, {this._clock = DateTime.now});
 
   final IApiService _api;
   final DateTime Function() _clock;

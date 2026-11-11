@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
+
 import '../design/luci_design_system.dart';
 import 'luci_animation_system.dart';
 import '../l10n/luci_localizations.dart';
@@ -411,9 +412,8 @@ class _LuciAnimatedCardState extends State<LuciAnimatedCard>
                         boxShadow: _isHovered
                             ? [
                                 BoxShadow(
-                                  color: Theme.of(
-                                    context,
-                                  ).shadowColor.withValues(alpha: 0.15),
+                                  color: Theme.of(context).shadowColor
+                                      .withValues(alpha: 0.15),
                                   blurRadius: 12,
                                   offset: const Offset(0, 4),
                                 ),

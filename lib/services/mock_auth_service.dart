@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:luci_mobile/services/interfaces/auth_service_interface.dart';
 
 class MockAuthService implements IAuthService {

@@ -1168,9 +1168,8 @@ void main() {
     });
 
     test('the matching subnet is reported with its prefix', () {
-      final guest = ClientConfigPlanner.interfaceSubnets(
-        dump,
-      ).firstWhere((s) => s.name == 'guest');
+      final guest = ClientConfigPlanner.interfaceSubnets(dump)
+          .firstWhere((s) => s.name == 'guest');
       expect(guest.address, '192.168.2.1');
       expect(guest.prefix, 24);
       expect(

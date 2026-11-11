@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:dio/dio.dart';
 import 'package:luci_mobile/models/app_failure.dart';
 import 'package:luci_mobile/services/event_log.dart';
@@ -178,18 +178,14 @@ class AppState extends ChangeNotifier {
 
   @visibleForTesting
   AppState.forTesting({
-    required IApiService apiService,
-    required IAuthService authService,
+    required this._apiService,
+    required this._authService,
     IGlInetApiService? glInetApiService,
-    RouterService? routerService,
+    this._routerService,
     // Without one, throughput history is always empty and a test of it
     // proves nothing.
-    ThroughputService? throughputService,
-  }) : _apiService = apiService,
-       _authService = authService,
-       _glInetService = glInetApiService,
-       _routerService = routerService,
-       _throughputService = throughputService;
+    this._throughputService,
+  }) : _glInetService = glInetApiService;
 
   static AppState get instance {
     return _instance ??= AppState._();
@@ -3243,9 +3239,8 @@ class AppState extends ChangeNotifier {
       // Add wireless stations not in DHCP leases (AP-mode fallback)
       for (final mac in normalizedWireless) {
         if (!clients.containsKey(mac)) {
-          clients[mac] = Client.fromWirelessStation(
-            mac,
-          ).copyWith(isOnline: true);
+          clients[mac] = Client.fromWirelessStation(mac)
+              .copyWith(isOnline: true);
         }
       }
 
@@ -3610,9 +3605,8 @@ class AppState extends ChangeNotifier {
         }
       }
 
-      final cmpType = typeOrder(
-        a.connectionType,
-      ).compareTo(typeOrder(b.connectionType));
+      final cmpType = typeOrder(a.connectionType)
+          .compareTo(typeOrder(b.connectionType));
       if (cmpType != 0) return cmpType;
       return a.hostname.toLowerCase().compareTo(b.hostname.toLowerCase());
     });

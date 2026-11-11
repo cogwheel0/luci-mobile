@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
@@ -59,9 +59,8 @@ class AppPreferencesScreen extends ConsumerWidget {
                     padding: const EdgeInsets.fromLTRB(16, 28, 16, 8),
                     child: Text(
                       context.l10n.theme,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
                   RadioGroup<ThemeMode>(
@@ -91,9 +90,8 @@ class AppPreferencesScreen extends ConsumerWidget {
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                     child: Text(
                       context.l10n.dashboard,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
                   Card(
@@ -114,9 +112,9 @@ class AppPreferencesScreen extends ConsumerWidget {
                         ),
                         child: Icon(
                           Icons.dashboard_customize,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onPrimaryContainer,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onPrimaryContainer,
                           size: 24,
                         ),
                       ),
@@ -175,9 +173,9 @@ class AppPreferencesScreen extends ConsumerWidget {
                         label: Text(context.l10n.exitReviewerMode),
                         style: FilledButton.styleFrom(
                           backgroundColor: Theme.of(context).colorScheme.error,
-                          foregroundColor: Theme.of(
-                            context,
-                          ).colorScheme.onError,
+                          foregroundColor: Theme.of(context)
+                              .colorScheme
+                              .onError,
                         ),
                       ),
                     ),

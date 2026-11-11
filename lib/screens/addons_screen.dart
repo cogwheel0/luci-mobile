@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:luci_mobile/design/luci_design_system.dart';
@@ -99,9 +99,9 @@ class AddonsScreen extends ConsumerWidget {
       subtitle: gate.explain(context) ?? subtitle,
       enabled: gate.available,
       onTap: gate.available
-          ? () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute<void>(builder: (_) => open()))
+          ? () =>
+                Navigator.of(context)
+                    .push(MaterialPageRoute<void>(builder: (_) => open()))
           : null,
     );
   }

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/l10n/failure_text.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
@@ -675,9 +675,8 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
                   Text(
                     value,
                     style: valueColor != null
-                        ? LuciTextStyles.detailValue(
-                            context,
-                          ).copyWith(color: valueColor)
+                        ? LuciTextStyles.detailValue(context)
+                              .copyWith(color: valueColor)
                         : LuciTextStyles.detailValue(context),
                     semanticsLabel: semanticsLabel ?? value,
                   ),

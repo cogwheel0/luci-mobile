@@ -159,9 +159,8 @@ List<Client> _buildMergedClientList(
       }
     }
 
-    final cmpType = typeOrder(
-      a.connectionType,
-    ).compareTo(typeOrder(b.connectionType));
+    final cmpType = typeOrder(a.connectionType)
+        .compareTo(typeOrder(b.connectionType));
     if (cmpType != 0) return cmpType;
     return a.hostname.toLowerCase().compareTo(b.hostname.toLowerCase());
   });

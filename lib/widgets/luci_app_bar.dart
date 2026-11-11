@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
@@ -58,12 +58,10 @@ class LuciAppBar extends StatelessWidget implements PreferredSizeWidget {
       shadowColor: theme.shadowColor,
       surfaceTintColor: backgroundColor ?? theme.colorScheme.surface,
       systemOverlayStyle: Theme.of(context).brightness == Brightness.dark
-          ? Theme.of(context).appBarTheme.systemOverlayStyle?.copyWith(
-              statusBarBrightness: Brightness.dark,
-            )
-          : Theme.of(context).appBarTheme.systemOverlayStyle?.copyWith(
-              statusBarBrightness: Brightness.light,
-            ),
+          ? Theme.of(context).appBarTheme.systemOverlayStyle
+                ?.copyWith(statusBarBrightness: Brightness.dark)
+          : Theme.of(context).appBarTheme.systemOverlayStyle
+                ?.copyWith(statusBarBrightness: Brightness.light),
     );
   }
 

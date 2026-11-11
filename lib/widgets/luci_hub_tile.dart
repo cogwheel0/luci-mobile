@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'package:luci_mobile/design/luci_design_system.dart';
 
@@ -98,9 +98,8 @@ class LuciHubTile extends StatelessWidget {
         subtitle: Text(
           subtitle,
           style: subtitleColor != null
-              ? LuciTextStyles.cardSubtitle(
-                  context,
-                ).copyWith(color: subtitleColor)
+              ? LuciTextStyles.cardSubtitle(context)
+                    .copyWith(color: subtitleColor)
               : LuciTextStyles.cardSubtitle(context),
           semanticsLabel: subtitle,
         ),

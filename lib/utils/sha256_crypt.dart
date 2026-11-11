@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:convert';
+
 import 'package:crypto/crypto.dart' as crypto;
 
 /// Unix SHA-256 crypt implementation compatible with glibc/passlib.

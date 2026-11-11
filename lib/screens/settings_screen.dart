@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/screens/login_screen.dart';
@@ -422,9 +422,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   title: context.l10n.logout,
                   subtitle: context.l10n.logoutDescription,
                   titleColor: Theme.of(context).colorScheme.error,
-                  subtitleColor: Theme.of(
-                    context,
-                  ).colorScheme.error.withValues(alpha: 0.7),
+                  subtitleColor: Theme.of(context).colorScheme.error
+                      .withValues(alpha: 0.7),
                   onTap: () => _showLogoutDialog(context),
                 ),
               ],

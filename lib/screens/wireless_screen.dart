@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:luci_mobile/l10n/failure_text.dart';
@@ -585,10 +585,8 @@ class _RadioSheetState extends State<_RadioSheet> {
           children: [
             Text(
               l10n.radioSettings,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.4,
-              ),
+              style: Theme.of(context).textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.bold, letterSpacing: -0.4),
             ),
             Text(
               widget.radio.label,

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:luci_mobile/l10n/failure_text.dart';
@@ -346,9 +346,8 @@ class _ZonesTab extends StatelessWidget {
           Text(label, style: LuciTextStyles.detailLabel(context)),
           Text(
             value,
-            style: LuciTextStyles.detailValue(
-              context,
-            ).copyWith(color: permissive ? scheme.primary : scheme.error),
+            style: LuciTextStyles.detailValue(context)
+                .copyWith(color: permissive ? scheme.primary : scheme.error),
           ),
         ],
       ),
@@ -536,10 +535,8 @@ class _ForwardSheetState extends State<_ForwardSheet> {
               widget.existing == null
                   ? l10n.addPortForward
                   : l10n.editPortForward,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.4,
-              ),
+              style: Theme.of(context).textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.bold, letterSpacing: -0.4),
             ),
             const SizedBox(height: LuciSpacing.lg),
 

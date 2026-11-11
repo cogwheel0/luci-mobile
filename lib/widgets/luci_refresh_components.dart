@@ -1,7 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
+
 import '../design/luci_design_system.dart';
 import '../l10n/luci_localizations.dart';
 
@@ -208,17 +209,15 @@ class LuciListPullToRefresh extends StatelessWidget {
                   SizedBox(height: LuciSpacing.md),
                   Text(
                     emptyMessage ?? context.l10n.noItemsToDisplay,
-                    style: LuciTextStyles.cardTitle(
-                      context,
-                    ).copyWith(color: Theme.of(context).colorScheme.outline),
+                    style: LuciTextStyles.cardTitle(context)
+                        .copyWith(color: Theme.of(context).colorScheme.outline),
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: LuciSpacing.sm),
                   Text(
                     context.l10n.pullDownToRefresh,
-                    style: LuciTextStyles.cardSubtitle(
-                      context,
-                    ).copyWith(color: Theme.of(context).colorScheme.outline),
+                    style: LuciTextStyles.cardSubtitle(context)
+                        .copyWith(color: Theme.of(context).colorScheme.outline),
                   ),
                 ],
               ),
