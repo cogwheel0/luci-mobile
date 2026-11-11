@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/services.dart';
@@ -117,15 +119,54 @@ void main() {
   });
 
   group('native AdaptiveSwitch', () {
+    void useNativeIOS26() {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 26;
+      PlatformUiCapabilities.debugNativeIOS26Override = true;
+    }
+
+    // CNSwitch resyncs the native switch to its value only when it gets a
+    // new widget, so after each change AdaptiveSwitch must give it one.
+    for (final accepts in [false, true]) {
+      testWidgets('gives CNSwitch a new widget after a change its parent '
+          '${accepts ? 'accepts' : 'declines'}', (tester) async {
+        useNativeIOS26();
+        var value = false;
+        await tester.pumpWidget(
+          _host(
+            StatefulBuilder(
+              builder: (context, setState) => AdaptiveSwitch(
+                value: value,
+                onChanged: (next) {
+                  if (accepts) setState(() => value = next);
+                },
+              ),
+            ),
+          ),
+        );
+
+        final before = tester.widget<CNSwitch>(find.byType(CNSwitch));
+        before.onChanged(true);
+        await tester.pump();
+
+        final after = tester.widget<CNSwitch>(find.byType(CNSwitch));
+        expect(identical(before, after), isFalse);
+        expect(after.value, accepts);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump(const Duration(seconds: 1));
+      }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+    }
+
+    // The native platform view only exists on an Apple host: CNSwitch asks
+    // dart:io which OS it runs on, which no test override changes.
+    final noNativeHost = !Platform.isMacOS;
     for (final accepts in [false, true]) {
       testWidgets(
         accepts
             ? 'keeps a change its parent accepts'
             : 'returns to the value when its parent declines a change',
         (tester) async {
-          PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
-          PlatformUiCapabilities.debugIOSMajorVersionOverride = 26;
-          PlatformUiCapabilities.debugNativeIOS26Override = true;
+          useNativeIOS26();
           final messenger = tester.binding.defaultBinaryMessenger;
           int? viewId;
           messenger.setMockMethodCallHandler(SystemChannels.platform_views, (
@@ -189,6 +230,7 @@ void main() {
           await tester.pump(const Duration(seconds: 1));
         },
         variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+        skip: noNativeHost,
       );
     }
   });
