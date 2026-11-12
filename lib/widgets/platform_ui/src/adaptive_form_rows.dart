@@ -592,7 +592,7 @@ class _AdaptiveFormPickerState<T> extends State<AdaptiveFormPicker<T>> {
   }
 
   Future<void> _choose(BuildContext context) async {
-    final AdaptiveFormPicker(:label, :value, :choices, :onChanged) = widget;
+    final AdaptiveFormPicker(:label, :value, :choices) = widget;
     FocusScope.of(context).unfocus();
     final anchor = _anchor.currentContext ?? context;
     if (AdaptiveAnchoredMenu.canShow(anchor)) {
@@ -607,7 +607,9 @@ class _AdaptiveFormPickerState<T> extends State<AdaptiveFormPicker<T>> {
             ),
         ],
       );
-      if (id != null) onChanged?.call(choices[int.parse(id)].value);
+      // The form may have closed while the menu was open.
+      if (id == null || !mounted) return;
+      widget.onChanged?.call(choices[int.parse(id)].value);
       return;
     }
     final chosen = await showCupertinoModalPopup<AdaptiveFormChoice<T>>(
@@ -628,7 +630,8 @@ class _AdaptiveFormPickerState<T> extends State<AdaptiveFormPicker<T>> {
         ),
       ),
     );
-    if (chosen != null) onChanged?.call(chosen.value);
+    if (chosen == null || !mounted) return;
+    widget.onChanged?.call(chosen.value);
   }
 }
 

@@ -464,5 +464,47 @@ void main() {
         lessThan(value.left),
       );
     });
+
+    testWidgets('a choice made after the picker has gone reaches no one', (
+      tester,
+    ) async {
+      final chosen = <String?>[];
+      var showPicker = true;
+      late StateSetter setHost;
+      await _pump(
+        tester,
+        StatefulBuilder(
+          builder: (context, setState) {
+            setHost = setState;
+            return AdaptiveFormSection(
+              children: [
+                if (showPicker)
+                  AdaptiveFormPicker<String>(
+                    label: 'Protocol',
+                    value: 'tcp',
+                    choices: const [
+                      AdaptiveFormChoice('tcp', 'TCP'),
+                      AdaptiveFormChoice('udp', 'UDP'),
+                    ],
+                    onChanged: chosen.add,
+                  )
+                else
+                  const AdaptiveFormTextField(label: 'Name'),
+              ],
+            );
+          },
+        ),
+      );
+
+      await tester.tap(find.text('Protocol'));
+      await tester.pumpAndSettle();
+      // The form goes, say its sheet closed, while the choices are up.
+      setHost(() => showPicker = false);
+      await tester.pump();
+      await tester.tap(find.widgetWithText(CupertinoActionSheetAction, 'UDP'));
+      await tester.pumpAndSettle();
+
+      expect(chosen, isEmpty);
+    });
   });
 }
