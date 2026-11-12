@@ -1,4 +1,5 @@
 import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoActionSheet;
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/main.dart';
@@ -120,4 +121,59 @@ void main() {
     await tester.pumpAndSettle();
     expect(state.switchedTo, ['lab']);
   });
+
+  testWidgets(
+    'iOS 26: the title opens the system menu under it, and the router '
+    'picked there is switched to',
+    (tester) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 26;
+      PlatformUiCapabilities.debugNativeIOS26Override = true;
+      // The system menu, answering with the row at [pick].
+      final shown = <Map<Object?, Object?>>[];
+      var pick = 0;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('cn_context_menu'),
+        (call) async {
+          if (call.method != 'show') return null;
+          shown.add(call.arguments! as Map<Object?, Object?>);
+          return [pick];
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          const MethodChannel('cn_context_menu'),
+          null,
+        ),
+      );
+      final state = await _pumpDashboard(tester);
+
+      final title = find.byType(AdaptiveTitleMenu<String>);
+      expect(find.byType(CupertinoActionSheet), findsNothing);
+
+      // The router already in use switches nothing.
+      await tester.tap(title);
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoActionSheet), findsNothing);
+      final menu = shown.single['menu']! as Map<Object?, Object?>;
+      expect(menu['labels'], ['OpenWrt', 'lab-ap']);
+      expect(menu['subtitles'], ['192.168.1.1', '10.0.0.2']);
+      expect(menu['checked'], [true, false]);
+      // It grows out of the title's bottom edge.
+      final anchor = tester.getRect(title).bottomCenter;
+      expect(shown.single['x'], anchor.dx);
+      expect(shown.single['y'], anchor.dy);
+      expect(state.switchedTo, isEmpty);
+
+      pick = 1;
+      await tester.tap(title);
+      await tester.pumpAndSettle();
+      expect(shown, hasLength(2));
+      expect(state.switchedTo, ['lab']);
+      await tester.pumpWidget(const SizedBox());
+    },
+    // The menu is the system's through its channel, mocked above: no
+    // native view, so this runs on every host.
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+  );
 }
