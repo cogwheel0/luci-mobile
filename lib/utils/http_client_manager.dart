@@ -10,6 +10,7 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:crypto/crypto.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 import 'logger.dart';
 
@@ -406,123 +407,18 @@ class HttpClientManager {
       // while the dialog is open, the user's approval must be rejected
       // instead of restoring a pin the user just revoked.
       final generation = _pinGeneration;
-      final result = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext dialogContext) => AlertDialog(
-          icon: Icon(
-            Icons.warning_amber_rounded,
-            color: Theme.of(dialogContext).colorScheme.error,
-            size: 32,
-          ),
-          title: Text(dialogContext.l10n.certificateWarning),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  dialogContext.l10n.untrustedCertificateDescription(host),
-                  style: Theme.of(dialogContext).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(dialogContext)
-                        .colorScheme
-                        .surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Theme.of(dialogContext).colorScheme.outline
-                          .withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        dialogContext.l10n.certificateDetails,
-                        style: Theme.of(dialogContext).textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildCertDetail(
-                        dialogContext.l10n.certificateSubject,
-                        presentedCert!.subject,
-                      ),
-                      _buildCertDetail(
-                        dialogContext.l10n.certificateIssuer,
-                        presentedCert!.issuer,
-                      ),
-                      _buildCertDetail(
-                        dialogContext.l10n.certificateValidFrom,
-                        presentedCert!.startValidity.toLocal().toString().split(
-                          '.',
-                        )[0],
-                      ),
-                      _buildCertDetail(
-                        dialogContext.l10n.certificateValidUntil,
-                        presentedCert!.endValidity.toLocal().toString().split(
-                          '.',
-                        )[0],
-                      ),
-                      _buildCertDetail('SHA-256', fingerprint),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(dialogContext).colorScheme.errorContainer
-                        .withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Theme.of(dialogContext).colorScheme.error
-                          .withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        color: Theme.of(dialogContext).colorScheme.error,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          dialogContext.l10n.certificateSafetyWarning,
-                          style: Theme.of(dialogContext).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Theme.of(dialogContext)
-                                    .colorScheme
-                                    .error,
-                              ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: Text(dialogContext.l10n.cancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(dialogContext).colorScheme.error,
-                foregroundColor: Theme.of(dialogContext).colorScheme.onError,
-              ),
-              child: Text(dialogContext.l10n.acceptRisk),
-            ),
-          ],
-        ),
+      final result = await showCertificatePrompt(
+        context,
+        host: host,
+        subject: presentedCert!.subject,
+        issuer: presentedCert!.issuer,
+        validFrom: presentedCert!.startValidity.toLocal().toString().split(
+          '.',
+        )[0],
+        validUntil: presentedCert!.endValidity.toLocal().toString().split(
+          '.',
+        )[0],
+        fingerprint: fingerprint,
       );
 
       if (result == true) {
@@ -562,30 +458,6 @@ class HttpClientManager {
       (_clients['$hostWithPort-$useHttps']?.httpClientAdapter as _GatedAdapter?)
           ?._limit ??
       _GatedAdapter.maxInFlight;
-
-  Widget _buildCertDetail(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              '$label:',
-              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 /// The `error` of a [DioException] whose request ran alongside others and
@@ -704,4 +576,201 @@ class _GatedAdapter implements HttpClientAdapter {
 
   @override
   void close({bool force = false}) => _inner.close(force: force);
+}
+
+/// Asks whether to trust a router's certificate that the device does not:
+/// what it is, and the risk. True when the user accepts it; null or false
+/// otherwise.
+///
+/// iOS shows a sheet: the certificate's details as rows to read and copy,
+/// Cancel in its bar, and Accept Risk as a red row under them. Android keeps
+/// its dialog.
+@visibleForTesting
+Future<bool?> showCertificatePrompt(
+  BuildContext context, {
+  required String host,
+  required String subject,
+  required String issuer,
+  required String validFrom,
+  required String validUntil,
+  required String fingerprint,
+}) {
+  if (PlatformUiCapabilities.isIOS) {
+    return showAdaptiveFormSheet<bool>(
+      context: context,
+      builder: (sheetContext) {
+        final l10n = sheetContext.l10n;
+        // No ✓ in the bar: accepting the risk is spelt out, in red, as
+        // its own row under the details.
+        return AdaptiveFormSheet(
+          title: l10n.certificateWarning,
+          cancelLabel: l10n.cancel,
+          destructiveLabel: l10n.acceptRisk,
+          onDestructive: () => Navigator.of(sheetContext).pop(true),
+          grouped: true,
+          child: AdaptiveFormSection(
+            // The string ends in a colon, ASCII or full-width, for the
+            // dialog's inline heading; a group's header has none.
+            header: l10n.certificateDetails.replaceFirst(
+              RegExp(r'\s*[:：]\s*$'),
+              '',
+            ),
+            footer:
+                '${l10n.untrustedCertificateDescription(host)}\n\n'
+                '${l10n.certificateSafetyWarning}',
+            children: [
+              for (final (label, value) in [
+                (l10n.certificateSubject, subject),
+                (l10n.certificateIssuer, issuer),
+                (l10n.certificateValidFrom, validFrom),
+                (l10n.certificateValidUntil, validUntil),
+                ('SHA-256', fingerprint),
+              ])
+                AdaptiveFormValueRow(
+                  label: label,
+                  value: value,
+                  selectable: true,
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+  return showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext dialogContext) => AlertDialog(
+      icon: Icon(
+        Icons.warning_amber_rounded,
+        color: Theme.of(dialogContext).colorScheme.error,
+        size: 32,
+      ),
+      title: Text(dialogContext.l10n.certificateWarning),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              dialogContext.l10n.untrustedCertificateDescription(host),
+              style: Theme.of(dialogContext).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(dialogContext)
+                    .colorScheme
+                    .surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(dialogContext).colorScheme.outline
+                      .withValues(alpha: 0.2),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    dialogContext.l10n.certificateDetails,
+                    style: Theme.of(dialogContext).textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  _certificateDetail(
+                    dialogContext.l10n.certificateSubject,
+                    subject,
+                  ),
+                  _certificateDetail(
+                    dialogContext.l10n.certificateIssuer,
+                    issuer,
+                  ),
+                  _certificateDetail(
+                    dialogContext.l10n.certificateValidFrom,
+                    validFrom,
+                  ),
+                  _certificateDetail(
+                    dialogContext.l10n.certificateValidUntil,
+                    validUntil,
+                  ),
+                  _certificateDetail('SHA-256', fingerprint),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(dialogContext).colorScheme.errorContainer
+                    .withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(dialogContext).colorScheme.error
+                      .withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Theme.of(dialogContext).colorScheme.error,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      dialogContext.l10n.certificateSafetyWarning,
+                      style: Theme.of(dialogContext).textTheme.bodySmall
+                          ?.copyWith(
+                            color: Theme.of(dialogContext).colorScheme.error,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: Text(dialogContext.l10n.cancel),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+          ),
+          child: Text(dialogContext.l10n.acceptRisk),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _certificateDetail(String label, String value) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(
+            '$label:',
+            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+          ),
+        ),
+      ],
+    ),
+  );
 }

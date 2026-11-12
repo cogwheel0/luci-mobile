@@ -721,3 +721,104 @@ class AdaptiveAlertDialog {
     }
   }
 }
+
+/// A dialog of live progress the app reports while it works, such as a
+/// change being applied: no actions, and no dismissing it by a tap outside.
+///
+/// iOS draws it on an iOS alert's surface, with a spinner over [title] and
+/// [details] centred under it, as iOS shows work in progress; a native alert
+/// cannot hold live content. Android draws a Material dialog with the
+/// spinner beside [title].
+class AdaptiveProgressDialog extends StatelessWidget {
+  const AdaptiveProgressDialog({
+    super.key,
+    required this.title,
+    this.details = const [],
+  });
+
+  /// What is under way, such as "Applying…".
+  final String title;
+
+  /// Lines under [title]: what is left, what to know meanwhile.
+  final List<String> details;
+
+  /// Shows the dialog [builder] builds until it is popped.
+  static Future<T?> show<T>({
+    required BuildContext context,
+    required WidgetBuilder builder,
+  }) {
+    if (PlatformUiCapabilities.isIOS) {
+      return showCupertinoDialog<T>(context: context, builder: builder);
+    }
+    return showDialog<T>(
+      context: context,
+      barrierDismissible: false,
+      builder: builder,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (PlatformUiCapabilities.isIOS) {
+      return CupertinoAlertDialog(
+        title: Column(
+          children: [
+            const CupertinoActivityIndicator(),
+            const SizedBox(height: 12),
+            Text(title),
+          ],
+        ),
+        content: details.isEmpty
+            ? null
+            : Column(
+                children: [
+                  for (final (i, line) in details.indexed) ...[
+                    if (i > 0) const SizedBox(height: 8),
+                    Text(line),
+                  ],
+                ],
+              ),
+      );
+    }
+    final theme = Theme.of(context);
+    return AlertDialog(
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          for (final line in details) ...[
+            const SizedBox(height: 16),
+            Text(
+              line,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

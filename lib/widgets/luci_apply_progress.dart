@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
 
-import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
@@ -56,9 +55,8 @@ class LuciApplyProgressDialog extends StatelessWidget {
     final navigator = Navigator.of(context, rootNavigator: true);
     var dialogOpen = true;
     unawaited(
-      showDialog<void>(
+      AdaptiveProgressDialog.show<void>(
         context: context,
-        barrierDismissible: false,
         builder: (_) => LuciApplyProgressDialog(progress: progress),
       ).then((_) => dialogOpen = false),
     );
@@ -75,52 +73,22 @@ class LuciApplyProgressDialog extends StatelessWidget {
       // Backing out mid-apply would leave the rollback unconfirmed and the
       // change silently reverted a minute later.
       canPop: false,
-      child: AlertDialog(
-        content: ListenableBuilder(
-          listenable: progress,
-          builder: (context, _) {
-            final seconds = progress.remaining.inSeconds;
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: AdaptiveProgressIndicator(strokeWidth: 2.5),
-                    ),
-                    const SizedBox(width: LuciSpacing.md),
-                    Expanded(
-                      child: Text(
-                        _title(context, progress.phase),
-                        style: LuciTextStyles.cardTitle(context),
-                      ),
-                    ),
-                  ],
-                ),
-                if (progress.phase == ApplyPhase.awaitingConfirm &&
-                    seconds > 0) ...[
-                  const SizedBox(height: LuciSpacing.md),
-                  Text(
-                    context.l10n.revertsInSeconds(seconds),
-                    style: LuciTextStyles.cardSubtitle(context),
-                  ),
-                ],
-                // Said while it is going in, because afterwards there is
-                // nothing to be done about it.
-                if (!progress.rollbackProtected) ...[
-                  const SizedBox(height: LuciSpacing.md),
-                  Text(
-                    context.l10n.applyingWithoutRollback,
-                    style: LuciTextStyles.cardSubtitle(context),
-                  ),
-                ],
-              ],
-            );
-          },
-        ),
+      child: ListenableBuilder(
+        listenable: progress,
+        builder: (context, _) {
+          final seconds = progress.remaining.inSeconds;
+          return AdaptiveProgressDialog(
+            title: _title(context, progress.phase),
+            details: [
+              if (progress.phase == ApplyPhase.awaitingConfirm && seconds > 0)
+                context.l10n.revertsInSeconds(seconds),
+              // Said while it is going in, because afterwards there is
+              // nothing to be done about it.
+              if (!progress.rollbackProtected)
+                context.l10n.applyingWithoutRollback,
+            ],
+          );
+        },
       ),
     );
   }
