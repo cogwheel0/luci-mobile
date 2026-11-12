@@ -224,27 +224,36 @@ class _ServiceRow extends StatelessWidget {
           ? tint
           : CupertinoColors.tertiaryLabel.resolveFrom(context),
       buttonStyle: PopupButtonStyle.plain,
+      // Sections, not a divider: a menu with sections keeps its order when
+      // it opens upward, so the boot setting stays last.
       items: [
-        AdaptivePopupMenuItem(
-          label: l10n.serviceStart,
-          value: 'start',
-          icon: 'play.fill',
+        AdaptivePopupMenuSection<String>(
+          items: [
+            AdaptivePopupMenuItem(
+              label: l10n.serviceStart,
+              value: 'start',
+              icon: 'play.fill',
+            ),
+            AdaptivePopupMenuItem(
+              label: l10n.serviceRestart,
+              value: 'restart',
+              icon: 'arrow.clockwise',
+            ),
+            AdaptivePopupMenuItem(
+              label: l10n.serviceStop,
+              value: 'stop',
+              icon: 'stop.fill',
+            ),
+          ],
         ),
-        AdaptivePopupMenuItem(
-          label: l10n.serviceRestart,
-          value: 'restart',
-          icon: 'arrow.clockwise',
-        ),
-        AdaptivePopupMenuItem(
-          label: l10n.serviceStop,
-          value: 'stop',
-          icon: 'stop.fill',
-        ),
-        const AdaptivePopupMenuDivider(),
-        AdaptivePopupMenuItem(
-          label: service.enabled ? l10n.serviceDisable : l10n.serviceEnable,
-          value: service.enabled ? 'disable' : 'enable',
-          icon: 'power',
+        AdaptivePopupMenuSection<String>(
+          items: [
+            AdaptivePopupMenuItem(
+              label: service.enabled ? l10n.serviceDisable : l10n.serviceEnable,
+              value: service.enabled ? 'disable' : 'enable',
+              icon: 'power',
+            ),
+          ],
         ),
       ],
       onSelected: (_, item) => onAction(item.value!),

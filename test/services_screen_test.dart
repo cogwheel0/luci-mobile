@@ -1,7 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:cupertino_native_better/cupertino_native_better.dart'
-    show CNPopupMenuDivider;
+    show CNPopupMenuSubmenu;
 import 'package:cupertino_ui/cupertino_ui.dart'
     show
         CupertinoActionSheet,
@@ -167,19 +167,25 @@ void main() {
         find.byType(CNPopupMenuButton),
       );
       expect(menu.buttonIcon?.name, 'ellipsis');
+      // Two sections, so the menu keeps this order when it opens upward.
+      expect(menu.preserveTopToBottomOrder, isTrue);
       expect(
         [
-          for (final item in menu.items)
-            if (item is CNPopupMenuItem) (item.label, item.icon?.name),
+          for (final section in menu.items.cast<CNPopupMenuSubmenu>())
+            [
+              for (final item in section.items.cast<CNPopupMenuItem>())
+                (item.label, item.icon?.name),
+            ],
         ],
         [
-          ('Start', 'play.fill'),
-          ('Restart', 'arrow.clockwise'),
-          ('Stop', 'stop.fill'),
-          ('Disable at boot', 'power'),
+          [
+            ('Start', 'play.fill'),
+            ('Restart', 'arrow.clockwise'),
+            ('Stop', 'stop.fill'),
+          ],
+          [('Disable at boot', 'power')],
         ],
       );
-      expect(menu.items[3], isA<CNPopupMenuDivider>());
       await tester.pumpWidget(const SizedBox());
     },
     variant: TargetPlatformVariant.only(TargetPlatform.iOS),
