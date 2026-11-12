@@ -3,6 +3,7 @@ import 'package:cupertino_ui/cupertino_ui.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/main.dart';
+import 'package:luci_mobile/models/wifi_scan_result.dart';
 import 'package:luci_mobile/screens/wifi_scan_screen.dart';
 import 'package:luci_mobile/services/mock_api_service.dart';
 import 'package:luci_mobile/services/mock_auth_service.dart';
@@ -28,6 +29,37 @@ class _TwoRadios extends AppState {
       'ifname': 'phy0-ap0',
     },
     {'radioName': 'radio1', 'band': '5 GHz', 'ssid': '', 'ifname': 'phy1-ap0'},
+  ];
+
+  /// A secured network, an open one and a hidden one.
+  @override
+  Future<List<WifiScanResult>> scanWirelessNetworks({
+    required String device,
+    BuildContext? context,
+  }) async => [
+    for (final (ssid, signal, encrypted) in [
+      ('Neighbor', -45, true),
+      ('Cafe', -62, false),
+      ('', -80, true),
+    ])
+      WifiScanResult.fromJson({
+        'ssid': ssid,
+        'bssid': 'AA:BB:CC:11:22:${signal.abs()}',
+        'mode': 'Master',
+        'channel': 6,
+        'signal': signal,
+        'quality': 50,
+        'quality_max': 70,
+        'encryption': {
+          'enabled': encrypted,
+          'description': encrypted ? 'WPA2 PSK (CCMP)' : 'None',
+          'wep': false,
+          'wpa': encrypted ? 2 : 0,
+          'auth_suites': encrypted ? ['PSK'] : <String>[],
+          'pair_ciphers': encrypted ? ['CCMP'] : <String>[],
+          'group_ciphers': encrypted ? ['CCMP'] : <String>[],
+        },
+      }),
   ];
 }
 
@@ -89,5 +121,36 @@ void main() {
       find.descendant(of: picker, matching: find.text('radio1 (5 GHz)')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('before iOS 26: the networks found as grouped rows, as iOS '
+      'lists Wi-Fi networks, each opening the connect form', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    await _pumpScanner(tester);
+
+    await tester.tap(find.text('Scan Networks'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Card), findsNothing);
+    expect(find.text('AVAILABLE NETWORKS'), findsOneWidget);
+    expect(find.text('3 found'), findsOneWidget);
+    expect(find.text('HIDDEN NETWORKS'), findsOneWidget);
+    final cafe = find.widgetWithText(AdaptiveListRow, 'Cafe');
+    expect(
+      find.descendant(of: cafe, matching: find.text('Open')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.widgetWithText(AdaptiveListRow, 'Neighbor'),
+        matching: find.text('WPA2'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(cafe);
+    await tester.pumpAndSettle();
+    expect(find.byType(AdaptiveFormSheet), findsOneWidget);
   });
 }

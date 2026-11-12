@@ -35,9 +35,21 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
     final appState = ref.watch(appStateProvider);
     final List<model.Router> routers = appState.routers;
     final String? selectedId = appState.selectedRouter?.id;
+    // iOS lists the routers as one inset group, on the grouped background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
+    void addRouter() => showAdaptiveFormSheet<void>(
+      context: context,
+      builder: (_) => _AddRouterForm(appState: appState, routers: routers),
+    );
     return Scaffold(
-      appBar: LuciAppBar(title: context.l10n.routers, showBack: true),
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      appBar: LuciAppBar(
+        title: context.l10n.routers,
+        showBack: true,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
+      ),
+      backgroundColor: grouped ?? Theme.of(context).colorScheme.surface,
       body: Column(
         children: [
           const SizedBox(height: 16),
@@ -64,183 +76,204 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
                         ),
                       ],
                     )
-                  : ListView(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      children: [
-                        ...List.generate(routers.length, (index) {
-                          final model.Router router = routers[index];
-                          final bool isSelected = router.id == selectedId;
-                          final bool isSwitching =
-                              router.id == _switchingRouterId;
-                          String routerTitle;
-                          if (isSelected && appState.dashboardData != null) {
-                            final boardInfo =
-                                appState.dashboardData?['boardInfo']
-                                    as Map<String, dynamic>?;
-                            final hostname = boardInfo?['hostname']?.toString();
-                            routerTitle =
-                                (hostname != null && hostname.isNotEmpty)
-                                ? hostname
-                                : (router.lastKnownHostname ??
-                                      router.ipAddress);
-                          } else if (router.lastKnownHostname != null &&
-                              router.lastKnownHostname!.isNotEmpty) {
-                            routerTitle = router.lastKnownHostname!;
-                          } else {
-                            routerTitle = router.ipAddress;
-                          }
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16.0,
-                              vertical: 8.0,
-                            ),
-                            child: _UnifiedRouterCard(
-                              routerTitle: routerTitle,
-                              subtitle: router.hasFallback
-                                  ? '● ${_truncateAddress(router.activeAddress)}\n○ ${_truncateAddress(router.inactiveAddress!)}'
-                                  : '${router.ipAddress} (${router.username})',
-                              isSelected: isSelected,
-                              isSwitching: isSwitching,
-                              onTap: () async {
-                                if (!isSelected && !isSwitching) {
-                                  setState(() {
-                                    _switchingRouterId = router.id;
-                                  });
+                  : _routerList(
+                      context,
+                      onAddRouter: addRouter,
+                      cards: List.generate(routers.length, (index) {
+                        final model.Router router = routers[index];
+                        final bool isSelected = router.id == selectedId;
+                        final bool isSwitching =
+                            router.id == _switchingRouterId;
+                        String routerTitle;
+                        if (isSelected && appState.dashboardData != null) {
+                          final boardInfo =
+                              appState.dashboardData?['boardInfo']
+                                  as Map<String, dynamic>?;
+                          final hostname = boardInfo?['hostname']?.toString();
+                          routerTitle =
+                              (hostname != null && hostname.isNotEmpty)
+                              ? hostname
+                              : (router.lastKnownHostname ?? router.ipAddress);
+                        } else if (router.lastKnownHostname != null &&
+                            router.lastKnownHostname!.isNotEmpty) {
+                          routerTitle = router.lastKnownHostname!;
+                        } else {
+                          routerTitle = router.ipAddress;
+                        }
+                        return _UnifiedRouterCard(
+                          routerTitle: routerTitle,
+                          subtitle: router.hasFallback
+                              ? '● ${_truncateAddress(router.activeAddress)}\n○ ${_truncateAddress(router.inactiveAddress!)}'
+                              : '${router.ipAddress} (${router.username})',
+                          isSelected: isSelected,
+                          isSwitching: isSwitching,
+                          onTap: () async {
+                            if (!isSelected && !isSwitching) {
+                              setState(() {
+                                _switchingRouterId = router.id;
+                              });
 
-                                  try {
+                              try {
+                                await appState.selectRouter(
+                                  router.id,
+                                  context: context,
+                                );
+                                if (!context.mounted) return;
+                                // Pop all the way back to MainScreen
+                                Navigator.of(context)
+                                    .popUntil((route) => route.isFirst);
+                                // Set Dashboard tab as active
+                                WidgetsBinding.instance.addPostFrameCallback((
+                                  _,
+                                ) {
+                                  ref
+                                      .read(appStateProvider)
+                                      .requestTab(LuciTab.dashboard);
+                                });
+                              } finally {
+                                if (mounted) {
+                                  setState(() {
+                                    _switchingRouterId = null;
+                                  });
+                                }
+                              }
+                            }
+                          },
+                          onRemoveFallback: router.hasFallback
+                              ? () async {
+                                  await appState.updateRouter(
+                                    router.copyWith(clearAlternate: true),
+                                  );
+                                  if (isSelected && context.mounted) {
                                     await appState.selectRouter(
                                       router.id,
                                       context: context,
                                     );
-                                    if (!context.mounted) return;
-                                    // Pop all the way back to MainScreen
-                                    Navigator.of(context)
-                                        .popUntil((route) => route.isFirst);
-                                    // Set Dashboard tab as active
-                                    WidgetsBinding.instance
-                                        .addPostFrameCallback((_) {
-                                          ref
-                                              .read(appStateProvider)
-                                              .requestTab(LuciTab.dashboard);
-                                        });
-                                  } finally {
-                                    if (mounted) {
-                                      setState(() {
-                                        _switchingRouterId = null;
-                                      });
-                                    }
                                   }
                                 }
-                              },
-                              onRemoveFallback: router.hasFallback
-                                  ? () async {
-                                      await appState.updateRouter(
-                                        router.copyWith(clearAlternate: true),
-                                      );
-                                      if (isSelected && context.mounted) {
-                                        await appState.selectRouter(
-                                          router.id,
-                                          context: context,
-                                        );
-                                      }
-                                    }
-                                  : null,
-                              onDelete: () async {
-                                String routerLabel;
-                                if (isSelected &&
-                                    appState.dashboardData != null) {
-                                  final boardInfo =
-                                      appState.dashboardData?['boardInfo']
-                                          as Map<String, dynamic>?;
-                                  final hostname = boardInfo?['hostname']
-                                      ?.toString();
-                                  routerLabel =
-                                      (hostname != null && hostname.isNotEmpty)
-                                      ? hostname
-                                      : router.ipAddress;
-                                } else {
-                                  routerLabel = router.ipAddress;
-                                }
-                                final confirm =
-                                    await AdaptiveAlertDialog.confirm(
-                                      context: context,
-                                      title: context.l10n.removeRouter,
-                                      message: context.l10n
-                                          .removeRouterConfirmation(
-                                            routerLabel,
-                                          ),
-                                      cancelLabel: context.l10n.cancel,
-                                      confirmLabel: context.l10n.remove,
-                                      destructive: true,
-                                    );
-                                if (!context.mounted) return;
-                                if (confirm == true) {
-                                  // Deleting the monitored router switches
-                                  // the poll off in storage; the settings
-                                  // notifier follows that write itself, so
-                                  // it no longer matters whether this
-                                  // screen outlives the call.
-                                  await appState.removeRouter(router.id);
-                                  if (!context.mounted) return;
-                                  if (appState.routers.isEmpty) {
-                                    unawaited(
-                                      Navigator.of(context)
-                                          .pushNamedAndRemoveUntil(
-                                            '/login',
-                                            (route) => false,
-                                          ),
-                                    );
-                                  }
-                                }
-                              },
-                            ),
-                          );
-                        }),
-                        const SizedBox(height: 24),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.add, size: 20),
-                              label: Text(context.l10n.addRouter),
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                  horizontal: 24,
-                                ),
-                                textStyle: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                backgroundColor: Theme.of(context)
-                                    .colorScheme
-                                    .primary,
-                                foregroundColor: Theme.of(context)
-                                    .colorScheme
-                                    .onPrimary,
-                                elevation: 2,
+                              : null,
+                          onDelete: () async {
+                            String routerLabel;
+                            if (isSelected && appState.dashboardData != null) {
+                              final boardInfo =
+                                  appState.dashboardData?['boardInfo']
+                                      as Map<String, dynamic>?;
+                              final hostname = boardInfo?['hostname']
+                                  ?.toString();
+                              routerLabel =
+                                  (hostname != null && hostname.isNotEmpty)
+                                  ? hostname
+                                  : router.ipAddress;
+                            } else {
+                              routerLabel = router.ipAddress;
+                            }
+                            final confirm = await AdaptiveAlertDialog.confirm(
+                              context: context,
+                              title: context.l10n.removeRouter,
+                              message: context.l10n.removeRouterConfirmation(
+                                routerLabel,
                               ),
-                              onPressed: () => showAdaptiveFormSheet<void>(
-                                context: context,
-                                builder: (_) => _AddRouterForm(
-                                  appState: appState,
-                                  routers: routers,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                      ],
+                              cancelLabel: context.l10n.cancel,
+                              confirmLabel: context.l10n.remove,
+                              destructive: true,
+                            );
+                            if (!context.mounted) return;
+                            if (confirm == true) {
+                              // Deleting the monitored router switches
+                              // the poll off in storage; the settings
+                              // notifier follows that write itself, so
+                              // it no longer matters whether this
+                              // screen outlives the call.
+                              await appState.removeRouter(router.id);
+                              if (!context.mounted) return;
+                              if (appState.routers.isEmpty) {
+                                unawaited(
+                                  Navigator.of(context).pushNamedAndRemoveUntil(
+                                    '/login',
+                                    (route) => false,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                        );
+                      }),
                     ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  /// The routers and the Add Router action: on iOS, the routers as one
+  /// inset group and Add Router as a blue row in a group of its own, as iOS
+  /// Settings offers "Add Account"; on Android, the cards and the filled
+  /// button.
+  Widget _routerList(
+    BuildContext context, {
+    required List<Widget> cards,
+    required VoidCallback onAddRouter,
+  }) {
+    if (PlatformUiCapabilities.isIOS) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        children: [
+          // The hairlines start at the names, past the router icons.
+          AdaptiveFormSection(separatorIndent: 52, children: cards),
+          AdaptiveFormSection(
+            children: [
+              AdaptiveFormButtonRow(
+                label: context.l10n.addRouter,
+                onPressed: onAddRouter,
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      children: [
+        for (final card in cards)
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
+            child: card,
+          ),
+        const SizedBox(height: 24),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.add, size: 20),
+              label: Text(context.l10n.addRouter),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: 24,
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                elevation: 2,
+              ),
+              onPressed: onAddRouter,
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
     );
   }
 }
@@ -635,10 +668,67 @@ class _UnifiedRouterCard extends StatelessWidget {
     this.onDelete,
   });
 
+  /// Asks before removing the fallback address, then removes it.
+  Future<void> _confirmRemoveFallback(BuildContext context) async {
+    final confirm = await AdaptiveAlertDialog.confirm(
+      context: context,
+      title: context.l10n.removeFallbackAddressTitle,
+      message: context.l10n.removeFallbackAddressConfirmation,
+      cancelLabel: context.l10n.cancel,
+      confirmLabel: context.l10n.remove,
+      destructive: true,
+    );
+    if (confirm == true && context.mounted) onRemoveFallback!();
+  }
+
+  Widget _removeFallbackButton(BuildContext context) => AdaptiveButton.sfSymbol(
+    sfSymbol: const SFSymbol('minus.circle'),
+    materialIcon: Icons.link_off,
+    semanticLabel: context.l10n.removeFallbackAddress,
+    style: AdaptiveButtonStyle.plain,
+    onPressed: () => _confirmRemoveFallback(context),
+  );
+
+  Widget _deleteButton(BuildContext context) => AdaptiveButton.sfSymbol(
+    onPressed: onDelete,
+    sfSymbol: const SFSymbol('trash'),
+    materialIcon: Icons.delete_outline,
+    semanticLabel: context.l10n.remove,
+    style: AdaptiveButtonStyle.plain,
+  );
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    if (PlatformUiCapabilities.isIOS) {
+      // A row of an iOS list: the router in use checked, as iOS checks the
+      // network it is on, and its actions at the end.
+      return AdaptiveListRow(
+        leading: Icon(
+          Icons.router,
+          color: colorScheme.primary,
+          size: 24,
+          semanticLabel: context.l10n.routerIcon,
+        ),
+        title: routerTitle,
+        subtitle: subtitle,
+        selected: isSelected && !isSwitching,
+        onTap: onTap,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isSwitching)
+              const SizedBox.square(
+                dimension: 20,
+                child: AdaptiveProgressIndicator(),
+              ),
+            if (onRemoveFallback != null) _removeFallbackButton(context),
+            if (onDelete != null) _deleteButton(context),
+          ],
+        ),
+      );
+    }
     return Card(
       elevation: isSelected ? 6 : 2,
       margin: EdgeInsets.zero,
@@ -726,34 +816,8 @@ class _UnifiedRouterCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (onRemoveFallback != null)
-                AdaptiveButton.sfSymbol(
-                  sfSymbol: const SFSymbol('minus.circle'),
-                  materialIcon: Icons.link_off,
-                  semanticLabel: context.l10n.removeFallbackAddress,
-                  style: AdaptiveButtonStyle.plain,
-                  onPressed: () async {
-                    final confirm = await AdaptiveAlertDialog.confirm(
-                      context: context,
-                      title: context.l10n.removeFallbackAddressTitle,
-                      message: context.l10n.removeFallbackAddressConfirmation,
-                      cancelLabel: context.l10n.cancel,
-                      confirmLabel: context.l10n.remove,
-                      destructive: true,
-                    );
-                    if (confirm == true && context.mounted) {
-                      onRemoveFallback!();
-                    }
-                  },
-                ),
-              if (onDelete != null)
-                AdaptiveButton.sfSymbol(
-                  onPressed: onDelete,
-                  sfSymbol: const SFSymbol('trash'),
-                  materialIcon: Icons.delete_outline,
-                  semanticLabel: context.l10n.remove,
-                  style: AdaptiveButtonStyle.plain,
-                ),
+              if (onRemoveFallback != null) _removeFallbackButton(context),
+              if (onDelete != null) _deleteButton(context),
             ],
           ),
         ),

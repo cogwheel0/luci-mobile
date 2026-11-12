@@ -51,6 +51,8 @@ void main() {
 
     expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
     expect(find.byType(AdaptiveFormPicker<String>), findsNothing);
+    expect(find.byType(ListTile), findsOneWidget);
+    expect(find.byType(AdaptiveGroupedListView), findsNothing);
   });
 
   testWidgets('before iOS 26: a picker row that shows the chosen period\'s '
@@ -66,6 +68,35 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('10.0.0.11'), findsOneWidget);
+    // The devices as one inset group: each its address, its usage and a
+    // bar under it, and its total on the right.
+    expect(find.byType(ListTile), findsNothing);
+    expect(find.byType(AdaptiveGroupedListView), findsOneWidget);
+    final device = find.widgetWithText(AdaptiveListRow, '10.0.0.11');
+    expect(
+      find.descendant(of: device, matching: find.text('1.5 KB')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: device,
+        matching: find.byType(AdaptiveProgressIndicator),
+      ),
+      findsOneWidget,
+    );
+
+    // Each bar spans the row from the address on, whatever the width of
+    // its total.
+    final bar = find.descendant(
+      of: device,
+      matching: find.byType(AdaptiveProgressIndicator),
+    );
+    expect(
+      tester.getRect(bar).right,
+      tester
+          .getRect(find.descendant(of: device, matching: find.text('1.5 KB')))
+          .right,
+    );
 
     await tester.tap(picker);
     await tester.pumpAndSettle();

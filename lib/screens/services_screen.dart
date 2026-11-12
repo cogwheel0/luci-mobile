@@ -99,9 +99,28 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
     final l10n = context.l10n;
     final gate = ref.watch(featureProvider(RouterFeature.serviceControl));
     final async = ref.watch(servicesProvider);
+    Widget row(ServiceStatus service) => _ServiceRow(
+      service: service,
+      busy: _busyService == service.name,
+      enabled: gate.available && _busyService == null,
+      onAction: (action) async {
+        if (await _confirmIfSelfCritical(service, action)) {
+          await _act(service, action);
+        }
+      },
+    );
 
+    // iOS lists the services as one inset group, on the grouped background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
-      appBar: LuciAppBar(title: l10n.services, showBack: true),
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: l10n.services,
+        showBack: true,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
+      ),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(servicesProvider),
         child: async.when(
@@ -118,20 +137,19 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
               ? LuciMessageState(
                   message: gate.explain(context) ?? l10n.noServices,
                 )
+              : PlatformUiCapabilities.isIOS
+              ? AdaptiveGroupedListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  // The hairlines start at the names, past the icons.
+                  separatorIndent: 52,
+                  itemCount: services.length,
+                  itemBuilder: (context, i) => row(services[i]),
+                )
               : ListView.separated(
                   physics: const AlwaysScrollableScrollPhysics(),
                   itemCount: services.length,
                   separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, i) => _ServiceRow(
-                    service: services[i],
-                    busy: _busyService == services[i].name,
-                    enabled: gate.available && _busyService == null,
-                    onAction: (action) async {
-                      if (await _confirmIfSelfCritical(services[i], action)) {
-                        await _act(services[i], action);
-                      }
-                    },
-                  ),
+                  itemBuilder: (context, i) => row(services[i]),
                 ),
         ),
       ),
@@ -157,56 +175,57 @@ class _ServiceRow extends StatelessWidget {
     final l10n = context.l10n;
     final scheme = Theme.of(context).colorScheme;
 
+    final leading = busy
+        ? const SizedBox(
+            width: 24,
+            height: 24,
+            child: AdaptiveProgressIndicator(strokeWidth: 2.5),
+          )
+        : Icon(switch (service.running) {
+            true => Icons.play_circle,
+            false => Icons.stop_circle_outlined,
+            // A one-shot script has no daemon to be up or down.
+            null => Icons.task_alt,
+          }, color: service.running == true ? scheme.primary : scheme.outline);
+    final status = [
+      // Omitted entirely when the router did not report it: saying
+      // "Stopped" about a boot script that ran fine is simply untrue.
+      ?switch (service.running) {
+        true => l10n.serviceRunning,
+        false => l10n.serviceStopped,
+        null => null,
+      },
+      service.enabled ? l10n.serviceStartsAtBoot : l10n.serviceNotAtBoot,
+    ].join(' · ');
+
+    if (PlatformUiCapabilities.isIOS) {
+      return AdaptiveListRow(
+        leading: leading,
+        title: service.name,
+        subtitle: status,
+        trailing: _iosMenu(context),
+      );
+    }
     return ListTile(
-      leading: busy
-          ? const SizedBox(
-              width: 24,
-              height: 24,
-              child: AdaptiveProgressIndicator(strokeWidth: 2.5),
-            )
-          : Icon(
-              switch (service.running) {
-                true => Icons.play_circle,
-                false => Icons.stop_circle_outlined,
-                // A one-shot script has no daemon to be up or down.
-                null => Icons.task_alt,
-              },
-              color: service.running == true ? scheme.primary : scheme.outline,
-            ),
+      leading: leading,
       title: Text(service.name),
-      subtitle: Text(
-        [
-          // Omitted entirely when the router did not report it: saying
-          // "Stopped" about a boot script that ran fine is simply untrue.
-          ?switch (service.running) {
-            true => l10n.serviceRunning,
-            false => l10n.serviceStopped,
-            null => null,
-          },
-          service.enabled ? l10n.serviceStartsAtBoot : l10n.serviceNotAtBoot,
-        ].join(' · '),
-      ),
-      trailing: PlatformUiCapabilities.isIOS
-          ? _iosMenu(context)
-          : PopupMenuButton<String>(
-              enabled: enabled,
-              onSelected: onAction,
-              itemBuilder: (context) => [
-                PopupMenuItem(value: 'start', child: Text(l10n.serviceStart)),
-                PopupMenuItem(
-                  value: 'restart',
-                  child: Text(l10n.serviceRestart),
-                ),
-                PopupMenuItem(value: 'stop', child: Text(l10n.serviceStop)),
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: service.enabled ? 'disable' : 'enable',
-                  child: Text(
-                    service.enabled ? l10n.serviceDisable : l10n.serviceEnable,
-                  ),
-                ),
-              ],
+      subtitle: Text(status),
+      trailing: PopupMenuButton<String>(
+        enabled: enabled,
+        onSelected: onAction,
+        itemBuilder: (context) => [
+          PopupMenuItem(value: 'start', child: Text(l10n.serviceStart)),
+          PopupMenuItem(value: 'restart', child: Text(l10n.serviceRestart)),
+          PopupMenuItem(value: 'stop', child: Text(l10n.serviceStop)),
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            value: service.enabled ? 'disable' : 'enable',
+            child: Text(
+              service.enabled ? l10n.serviceDisable : l10n.serviceEnable,
             ),
+          ),
+        ],
+      ),
     );
   }
 

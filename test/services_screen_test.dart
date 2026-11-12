@@ -94,6 +94,8 @@ void main() {
 
     expect(find.byType(PopupMenuButton<String>), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.ellipsis), findsNothing);
+    expect(find.byType(ListTile), findsOneWidget);
+    expect(find.byType(AdaptiveGroupedListView), findsNothing);
 
     await tester.tap(find.byType(PopupMenuButton<String>));
     await tester.pumpAndSettle();
@@ -112,6 +114,16 @@ void main() {
     final api = await _pumpServices(tester);
 
     expect(find.byType(PopupMenuButton<String>), findsNothing);
+    // One inset group of rows, on the grouped background.
+    expect(find.byType(ListTile), findsNothing);
+    expect(find.byType(AdaptiveGroupedListView), findsOneWidget);
+    expect(find.widgetWithText(AdaptiveListRow, 'dnsmasq'), findsOneWidget);
+    expect(
+      tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor,
+      CupertinoColors.systemGroupedBackground.resolveFrom(
+        tester.element(find.byType(Scaffold)),
+      ),
+    );
     // Read with its row, as Android's menu button is.
     expect(
       find.bySemanticsLabel(RegExp(r'^dnsmasq\n.*\nMore$')),

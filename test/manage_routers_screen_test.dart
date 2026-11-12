@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:cupertino_ui/cupertino_ui.dart'
-    show CupertinoNavigationBar, CupertinoTextField;
+    show CupertinoIcons, CupertinoNavigationBar, CupertinoTextField;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -44,6 +44,62 @@ void main() {
     await tester.tap(find.text('Remove'));
     await tester.pumpAndSettle();
     expect(state.updatedRouter?.hasFallback, isFalse);
+  });
+
+  group('the list', () {
+    tearDown(PlatformUiCapabilities.resetDebugOverrides);
+
+    Future<void> pumpList(WidgetTester tester) => tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appStateProvider.overrideWith(
+            (ref) => _TestAppState(_existing, inUse: true),
+          ),
+        ],
+        child: const MaterialApp(home: ManageRoutersScreen()),
+      ),
+    );
+
+    testWidgets('Android: the cards and the filled Add Router button', (
+      tester,
+    ) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android;
+      await pumpList(tester);
+
+      expect(find.byType(Card), findsOneWidget);
+      expect(find.text('Active'), findsOneWidget);
+      expect(find.widgetWithText(ElevatedButton, 'Add Router'), findsOne);
+      expect(find.byType(AdaptiveListRow), findsNothing);
+    });
+
+    testWidgets('before iOS 26: the routers as grouped rows, the one in use '
+        'checked, and Add Router as a row of its own', (tester) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+      final semantics = tester.ensureSemantics();
+      await pumpList(tester);
+
+      expect(find.byType(Card), findsNothing);
+      expect(find.byType(ElevatedButton), findsNothing);
+      expect(find.text('Active'), findsNothing);
+      final row = find.widgetWithText(AdaptiveListRow, '192.168.1.1');
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.byIcon(CupertinoIcons.checkmark_alt),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        tester.getSemantics(row),
+        isSemantics(isSelected: true, isButton: true),
+      );
+      expect(
+        find.widgetWithText(AdaptiveFormButtonRow, 'Add Router'),
+        findsOneWidget,
+      );
+      semantics.dispose();
+    });
   });
 
   group('adding a router', () {
@@ -210,17 +266,23 @@ Future<_TestAppState> _openAddRouter(WidgetTester tester) async {
 }
 
 class _TestAppState extends AppState {
-  _TestAppState(this.router)
+  _TestAppState(this.router, {this.inUse = false})
     : super.forTesting(
         apiService: MockApiService(),
         authService: MockAuthService(),
       );
 
   final model.Router router;
+
+  /// Whether [router] is the one the app is connected to.
+  final bool inUse;
   model.Router? updatedRouter;
 
   @override
   List<model.Router> get routers => [router];
+
+  @override
+  model.Router? get selectedRouter => inUse ? router : null;
 
   @override
   Future<void> updateRouter(model.Router router) async =>
