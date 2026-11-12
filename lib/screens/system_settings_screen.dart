@@ -114,8 +114,17 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
     final session = ref.watch(sessionProvider);
     final async = ref.watch(systemSettingsProvider);
 
+    // iOS lays the settings out as grouped rows, on the grouped background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
-      appBar: LuciAppBar(title: l10n.systemSettings, showBack: true),
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: l10n.systemSettings,
+        showBack: true,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
+      ),
       body: async.when(
         loading: () => const Padding(
           padding: EdgeInsets.all(LuciSpacing.md),
@@ -190,12 +199,88 @@ class _Form extends StatelessWidget {
   final VoidCallback onSave;
   final VoidCallback? onChangePassword;
 
+  bool get _canPickZone => editable && settings.timezones.isNotEmpty;
+
+  Future<void> _pickZone(BuildContext context) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _TimezoneSheet(
+        zones: settings.zoneNames,
+        selected: zoneName ?? settings.zoneName,
+      ),
+    );
+    if (picked != null) onZoneChanged(picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final hostnameError = hostname.text.trim().isEmpty || valid
         ? null
         : l10n.invalidHostname;
+
+    if (PlatformUiCapabilities.isIOS) {
+      // As iOS Settings lays out a page: the router's identity, then rows
+      // leading to its time zone and password, with Save below.
+      return ListView(
+        padding: const EdgeInsets.all(LuciSpacing.md),
+        children: [
+          AdaptiveForm(
+            sections: [
+              AdaptiveFormSection(
+                // Why nothing here can be changed, when that is so.
+                footer: gateHint,
+                children: [
+                  AdaptiveFormTextField(
+                    label: l10n.hostname,
+                    controller: hostname,
+                    enabled: editable,
+                    helper: l10n.hostnameHelp,
+                    error: hostnameError,
+                    autocorrect: false,
+                    textInputAction: TextInputAction.next,
+                    onChanged: (_) => onChanged(),
+                  ),
+                  AdaptiveFormTextField(
+                    label: l10n.routerDescription,
+                    controller: description,
+                    enabled: editable,
+                    onChanged: (_) => onChanged(),
+                  ),
+                  AdaptiveFormTextField(
+                    label: l10n.routerNotes,
+                    controller: notes,
+                    enabled: editable,
+                    maxLines: 3,
+                    onChanged: (_) => onChanged(),
+                  ),
+                ],
+              ),
+              AdaptiveFormSection(
+                children: [
+                  AdaptiveFormNavigationRow(
+                    label: l10n.timezone,
+                    value:
+                        zoneName ?? settings.zoneName.ifEmpty(l10n.timezoneUtc),
+                    onTap: _canPickZone ? () => _pickZone(context) : null,
+                  ),
+                  AdaptiveFormNavigationRow(
+                    label: l10n.routerPassword,
+                    onTap: onChangePassword,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          AdaptiveButton(
+            onPressed: editable && dirty && valid ? onSave : null,
+            label: l10n.save,
+          ),
+        ],
+      );
+    }
 
     return ListView(
       padding: const EdgeInsets.all(LuciSpacing.md),
@@ -264,20 +349,7 @@ class _Form extends StatelessWidget {
             ),
             trailing: const Icon(Icons.chevron_right),
             enabled: editable && settings.timezones.isNotEmpty,
-            onTap: editable && settings.timezones.isNotEmpty
-                ? () async {
-                    final picked = await showModalBottomSheet<String>(
-                      context: context,
-                      isScrollControlled: true,
-                      showDragHandle: true,
-                      builder: (_) => _TimezoneSheet(
-                        zones: settings.zoneNames,
-                        selected: zoneName ?? settings.zoneName,
-                      ),
-                    );
-                    if (picked != null) onZoneChanged(picked);
-                  }
-                : null,
+            onTap: _canPickZone ? () => _pickZone(context) : null,
           ),
         ),
         const SizedBox(height: LuciSpacing.md),
