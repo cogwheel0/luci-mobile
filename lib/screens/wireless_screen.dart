@@ -556,51 +556,38 @@ class _RadioSheetState extends State<_RadioSheet> {
       cancelLabel: l10n.cancel,
       confirmLabel: l10n.saveAction,
       onConfirm: _save,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      grouped: true,
+      child: AdaptiveFormSection(
         children: [
-          DropdownButtonFormField<String>(
-            initialValue: _channel,
-            decoration: InputDecoration(labelText: l10n.channel),
-            items: [
+          AdaptiveFormPicker<String>(
+            label: l10n.channel,
+            value: _channel,
+            choices: [
               for (final c in channels)
-                DropdownMenuItem(
-                  value: c,
-                  child: Text(c == 'auto' ? l10n.channelAuto : c),
-                ),
+                AdaptiveFormChoice(c, c == 'auto' ? l10n.channelAuto : c),
             ],
             onChanged: (v) => setState(() => _channel = v ?? _channel),
           ),
-          const SizedBox(height: LuciSpacing.md),
-
-          DropdownButtonFormField<String?>(
-            initialValue: _htmode,
+          AdaptiveFormPicker<String?>(
+            label: l10n.channelWidth,
+            value: _htmode,
             // A null value renders nothing on its own; the hint is what
             // shows for "no width set".
-            hint: Text(l10n.channelAuto),
-            decoration: InputDecoration(labelText: l10n.channelWidth),
-            items: [
+            hint: l10n.channelAuto,
+            choices: [
               // No width at all is the driver's own choice - and the only
               // way back to it once one has been set.
-              DropdownMenuItem<String?>(
-                value: null,
-                child: Text(l10n.channelAuto),
-              ),
-              for (final m in htmodes)
-                DropdownMenuItem<String?>(value: m, child: Text(m)),
+              AdaptiveFormChoice<String?>(null, l10n.channelAuto),
+              for (final m in htmodes) AdaptiveFormChoice<String?>(m, m),
             ],
             onChanged: (v) => setState(() => _htmode = v),
           ),
-          const SizedBox(height: LuciSpacing.md),
-
-          TextField(
+          AdaptiveFormTextField(
+            label: l10n.countryCode,
             controller: _country,
             textCapitalization: TextCapitalization.characters,
             maxLength: 2,
-            decoration: InputDecoration(
-              labelText: l10n.countryCode,
-              helperText: l10n.countryCodeDescription,
-            ),
+            helper: l10n.countryCodeDescription,
           ),
         ],
       ),

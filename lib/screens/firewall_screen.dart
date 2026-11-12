@@ -715,106 +715,88 @@ class _ForwardSheetState extends State<_ForwardSheet> {
       onConfirm: _canSave ? _save : null,
       destructiveLabel: existing == null ? null : l10n.remove,
       onDestructive: existing == null ? null : () => _remove(existing),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: _name,
-            autofocus: widget.existing == null,
-            decoration: InputDecoration(labelText: l10n.forwardName),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: LuciSpacing.md),
-
-          Row(
+      grouped: true,
+      child: AdaptiveForm(
+        sections: [
+          AdaptiveFormSection(
             children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: widget.state.zoneNames.contains(_srcZone)
-                      ? _srcZone
-                      : null,
-                  decoration: InputDecoration(labelText: l10n.sourceZone),
-                  items: [
+              AdaptiveFormTextField(
+                label: l10n.forwardName,
+                controller: _name,
+                autofocus: widget.existing == null,
+                onChanged: (_) => setState(() {}),
+              ),
+              AdaptiveFormPair(
+                first: AdaptiveFormPicker<String>(
+                  label: l10n.sourceZone,
+                  value: _srcZone,
+                  choices: [
                     for (final z in widget.state.zoneNames)
-                      DropdownMenuItem(value: z, child: Text(z)),
+                      AdaptiveFormChoice(z, z),
                   ],
                   onChanged: (v) => setState(() => _srcZone = v ?? _srcZone),
                 ),
-              ),
-              const SizedBox(width: LuciSpacing.md),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: _protocol,
-                  decoration: InputDecoration(labelText: l10n.protocol),
-                  items: [
+                second: AdaptiveFormPicker<String>(
+                  label: l10n.protocol,
+                  value: _protocol,
+                  choices: [
                     for (final p in _protocols)
-                      DropdownMenuItem(value: p, child: Text(_protoLabel(p))),
+                      AdaptiveFormChoice(p, _protoLabel(p)),
                   ],
                   onChanged: (v) => setState(() => _protocol = v ?? _protocol),
                 ),
               ),
+              AdaptiveFormTextField(
+                label: l10n.externalPort,
+                controller: _srcPort,
+                keyboardType: numericAddressKeyboard,
+                error: _srcPortError,
+                onChanged: (_) => setState(() {}),
+              ),
             ],
           ),
-          const SizedBox(height: LuciSpacing.md),
-
-          TextField(
-            controller: _srcPort,
-            keyboardType: numericAddressKeyboard,
-            decoration: InputDecoration(
-              labelText: l10n.externalPort,
-              errorText: _srcPortError,
-            ),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: LuciSpacing.md),
-
-          TextField(
-            controller: _srcIp,
-            // Not a number pad: a subnet needs `/`.
-            keyboardType: TextInputType.text,
-            autocorrect: false,
-            decoration: InputDecoration(
-              labelText: l10n.sourceAddress,
-              hintText: '203.0.113.0/24',
-              helperText: l10n.sourceAddressHint,
-              helperMaxLines: 2,
-              errorText: _srcIpError,
-            ),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: LuciSpacing.md),
-
-          DropdownButtonFormField<String>(
-            initialValue: widget.state.zoneNames.contains(_destZone)
-                ? _destZone
-                : null,
-            decoration: InputDecoration(labelText: l10n.destinationZone),
-            items: [
-              for (final z in widget.state.zoneNames)
-                DropdownMenuItem(value: z, child: Text(z)),
+          AdaptiveFormSection(
+            children: [
+              AdaptiveFormTextField(
+                label: l10n.sourceAddress,
+                controller: _srcIp,
+                // Not a number pad: a subnet needs `/`.
+                keyboardType: TextInputType.text,
+                autocorrect: false,
+                placeholder: '203.0.113.0/24',
+                helper: l10n.sourceAddressHint,
+                helperMaxLines: 2,
+                error: _srcIpError,
+                onChanged: (_) => setState(() {}),
+              ),
             ],
-            onChanged: (v) => setState(() => _destZone = v ?? _destZone),
           ),
-          const SizedBox(height: LuciSpacing.md),
-          TextField(
-            controller: _destIp,
-            keyboardType: numericAddressKeyboard,
-            decoration: InputDecoration(
-              labelText: l10n.internalAddress,
-              errorText: _destIpError,
-            ),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: LuciSpacing.md),
-
-          TextField(
-            controller: _destPort,
-            keyboardType: numericAddressKeyboard,
-            decoration: InputDecoration(
-              labelText: l10n.internalPort,
-              errorText: _destPortError,
-            ),
-            onChanged: (_) => setState(() {}),
+          AdaptiveFormSection(
+            children: [
+              AdaptiveFormPicker<String>(
+                label: l10n.destinationZone,
+                value: _destZone,
+                choices: [
+                  for (final z in widget.state.zoneNames)
+                    AdaptiveFormChoice(z, z),
+                ],
+                onChanged: (v) => setState(() => _destZone = v ?? _destZone),
+              ),
+              AdaptiveFormTextField(
+                label: l10n.internalAddress,
+                controller: _destIp,
+                keyboardType: numericAddressKeyboard,
+                error: _destIpError,
+                onChanged: (_) => setState(() {}),
+              ),
+              AdaptiveFormTextField(
+                label: l10n.internalPort,
+                controller: _destPort,
+                keyboardType: numericAddressKeyboard,
+                error: _destPortError,
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
           ),
         ],
       ),

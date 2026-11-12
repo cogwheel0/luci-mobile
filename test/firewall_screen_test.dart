@@ -2,7 +2,8 @@ import 'package:cupertino_ui/cupertino_ui.dart'
     show
         CupertinoDialogAction,
         CupertinoNavigationBar,
-        CupertinoNavigationBarBackButton;
+        CupertinoNavigationBarBackButton,
+        CupertinoTextField;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/models/firewall_config.dart';
@@ -170,7 +171,7 @@ void main() {
 
     await tester.tap(find.text('Web server'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(AdaptiveButton, 'Remove'));
+    await tester.tap(find.widgetWithText(AdaptiveFormButtonRow, 'Remove'));
     await tester.pumpAndSettle();
     expect(applied, isEmpty, reason: 'not before it is confirmed');
     await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Remove'));
@@ -188,8 +189,14 @@ void main() {
     PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
     await _openForward(tester);
 
+    // The keyboard the iOS row's own text field asks for.
     TextInputType? keyboard(String label) => tester
-        .widget<TextField>(find.widgetWithText(TextField, label))
+        .widget<CupertinoTextField>(
+          find.descendant(
+            of: find.widgetWithText(AdaptiveFormTextField, label),
+            matching: find.byType(CupertinoTextField),
+          ),
+        )
         .keyboardType;
     for (final label in [
       'External port',

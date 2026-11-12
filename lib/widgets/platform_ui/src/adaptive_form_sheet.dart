@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'adaptive_controls.dart';
+import 'adaptive_form_rows.dart';
 import 'platform_ui_capabilities.dart';
 
 /// How a form opened with [showAdaptiveFormSheet] shows on Android. iOS
@@ -96,6 +97,7 @@ class AdaptiveFormSheet extends StatelessWidget {
     this.destructiveLabel,
     this.onDestructive,
     this.busy = false,
+    this.grouped = false,
   }) : assert(
          (destructiveLabel == null) == (onDestructive == null),
          'A destructive action needs both a label and a callback.',
@@ -125,6 +127,12 @@ class AdaptiveFormSheet extends StatelessWidget {
   /// progress, and cancelling and the destructive action are disabled.
   final bool busy;
 
+  /// Whether [child] is made of [AdaptiveFormSection]s. On iOS the sheet
+  /// then takes the grouped background iOS Settings puts behind them, and
+  /// the destructive action is a red row of its own group, as "Forget This
+  /// Network" is. Android is the same either way.
+  final bool grouped;
+
   void _cancel(BuildContext context) => Navigator.of(context).pop();
 
   @override
@@ -142,14 +150,17 @@ class AdaptiveFormSheet extends StatelessWidget {
     }
     final theme = Theme.of(context);
     final destructive = onDestructive;
+    final background = grouped
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : theme.colorScheme.surface;
     return PopScope(
       canPop: !busy,
       child: CupertinoPageScaffold(
-        backgroundColor: theme.colorScheme.surface,
+        backgroundColor: background,
         navigationBar: CupertinoNavigationBar(
           automaticallyImplyLeading: false,
           automaticallyImplyMiddle: false,
-          backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.94),
+          backgroundColor: background.withValues(alpha: 0.94),
           leading: _cancelButton(context),
           middle: _cupertinoTitle(context),
           trailing: _confirmButton(context, confirm),
@@ -168,7 +179,17 @@ class AdaptiveFormSheet extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               children: [
                 child,
-                if (destructive != null) ...[
+                if (destructive != null && grouped)
+                  AdaptiveFormSection(
+                    children: [
+                      AdaptiveFormButtonRow(
+                        label: destructiveLabel!,
+                        destructive: true,
+                        onPressed: busy ? null : destructive,
+                      ),
+                    ],
+                  )
+                else if (destructive != null) ...[
                   const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,

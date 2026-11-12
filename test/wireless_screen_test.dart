@@ -1,4 +1,5 @@
-import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoDialogAction;
+import 'package:cupertino_ui/cupertino_ui.dart'
+    show CupertinoActionSheetAction, CupertinoDialogAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/models/router_capabilities.dart';
@@ -39,6 +40,15 @@ class _RecordingMutations extends WirelessMutations {
 /// Shows the wireless networks and opens [_network]. Completes with the
 /// list of what the screen goes on to apply.
 Future<List<List<UciOperation>>> _openNetwork(WidgetTester tester) async {
+  final applied = await _pumpWireless(tester);
+  await tester.tap(find.text('Home'));
+  await tester.pumpAndSettle();
+  return applied;
+}
+
+/// Shows the wireless networks. Completes with the list of what the screen
+/// goes on to apply.
+Future<List<List<UciOperation>>> _pumpWireless(WidgetTester tester) async {
   final applied = <List<UciOperation>>[];
   // Tall enough for the whole form, and wide enough for the test font.
   tester.view
@@ -50,7 +60,13 @@ Future<List<List<UciOperation>>> _openNetwork(WidgetTester tester) async {
       overrides: [
         wirelessConfigProvider.overrideWith(
           (ref) async => const [
-            WirelessRadio(section: 'radio0', band: '2g', networks: [_network]),
+            WirelessRadio(
+              section: 'radio0',
+              band: '2g',
+              channel: '6',
+              country: 'US',
+              networks: [_network],
+            ),
           ],
         ),
         featureProvider(RouterFeature.wirelessStations)
@@ -62,8 +78,6 @@ Future<List<List<UciOperation>>> _openNetwork(WidgetTester tester) async {
       child: const MaterialApp(home: WirelessScreen()),
     ),
   );
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('Home'));
   await tester.pumpAndSettle();
   return applied;
 }
@@ -139,6 +153,68 @@ void main() {
 
     final [ops] = applied;
     expect((ops.single as UciRemove).section, 'default_radio0');
+    await _finish(tester);
+  });
+
+  testWidgets('Android: radio settings are Material dropdowns and a field', (
+    tester,
+  ) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android;
+    await _pumpWireless(tester);
+    await tester.tap(
+      find.byWidgetPredicate(
+        (w) => w is AdaptiveButton && w.semanticLabel == 'Radio settings',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(DropdownButtonFormField<String>), findsOneWidget);
+    expect(find.byType(DropdownButtonFormField<String?>), findsOneWidget);
+    final country = tester.widget<TextField>(find.byType(TextField));
+    expect(country.decoration!.labelText, 'Country code');
+    expect(country.maxLength, 2);
+  });
+
+  testWidgets('before iOS 26: radio settings are grouped rows, the width '
+      'reading Automatic when none is set', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    final applied = await _pumpWireless(tester);
+    await tester.tap(
+      find.byWidgetPredicate(
+        (w) => w is AdaptiveButton && w.semanticLabel == 'Radio settings',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+    String rowValue(String label) => tester
+        .widgetList<Text>(
+          find.descendant(
+            of: find.ancestor(
+              of: find.text(label),
+              matching: find.byWidgetPredicate((w) => w is AdaptiveFormPicker),
+            ),
+            matching: find.byType(Text),
+          ),
+        )
+        .map((t) => t.data)
+        .join(' | ');
+    expect(rowValue('Channel'), 'Channel | 6');
+    expect(rowValue('Channel width'), 'Channel width | Automatic');
+
+    // Picking a channel and saving writes it.
+    await tester.tap(find.text('Channel'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(CupertinoActionSheetAction, '11'));
+    await tester.pumpAndSettle();
+    expect(rowValue('Channel'), 'Channel | 11');
+    await tester.tap(find.text('Save').last);
+    await tester.pumpAndSettle();
+    final [ops] = applied;
+    final set = ops.whereType<UciSet>().single;
+    expect(set.values, {'channel': '11'});
     await _finish(tester);
   });
 }
