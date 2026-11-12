@@ -1,4 +1,4 @@
-# luci-mobile's platform UI baseline: 136 entries, 187 occurrences.
+# luci-mobile's platform UI baseline: 133 entries, 170 occurrences.
 # Each entry is a direct Material or Cupertino import or control outside
 # lib/widgets/platform_ui. Counts may only go down: migrate a screen to the
 # platform UI layer and remove or lower its entries.
@@ -197,26 +197,8 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/firewall_screen.dart
-    symbol: "DropdownButtonFormField"
-    count: 3
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/firewall_screen.dart
-    symbol: "DropdownMenuItem"
-    count: 3
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/firewall_screen.dart
     symbol: "FloatingActionButton"
     count: 2
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/firewall_screen.dart
-    symbol: "TextField"
-    count: 5
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -618,13 +600,13 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/screens/wireless_screen.dart
     symbol: "DropdownButtonFormField"
-    count: 3
+    count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/wireless_screen.dart
     symbol: "DropdownMenuItem"
-    count: 4
+    count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -636,7 +618,7 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/screens/wireless_screen.dart
     symbol: "TextField"
-    count: 3
+    count: 2
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
