@@ -297,10 +297,16 @@ class _FirewallSectionPageState extends ConsumerState<_FirewallSectionPage>
     final l10n = context.l10n;
     final state = ref.watch(firewallProvider).value;
     final forwards = widget.section == _FirewallSection.forwards;
+    // iOS only: each part is a page of grouped rows.
+    final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
+      context,
+    );
     return Scaffold(
+      backgroundColor: grouped,
       appBar: LuciAppBar(
         title: widget.section.title(l10n),
         showBack: true,
+        backgroundColor: grouped.withValues(alpha: 0.94),
         actions: [
           // Adding a forward is the navigation bar's +, as on iOS, rather
           // than a floating button.
@@ -339,9 +345,55 @@ class _ForwardsTab extends StatelessWidget {
   final void Function(PortForward) onEdit;
   final VoidCallback onAdd;
 
+  /// What a forward maps: shown rather than making the user open the row.
+  static String _mapping(BuildContext context, PortForward f) =>
+      '${f.protocol.toUpperCase()}  '
+      '${f.sourceZone}:${f.sourcePort ?? "?"}'
+      '  →  ${f.destIp ?? "?"}:${f.effectiveDestPort}'
+      // A restricted forward reads as open without this.
+      '${f.sourceIp == null ? '' : '\n${context.l10n.sourceAddress}: ${f.sourceIp}'}';
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    if (PlatformUiCapabilities.isIOS) {
+      // On the page's grouped background; adding is the navigation bar's +.
+      if (state.forwards.isEmpty) {
+        return LuciMessageState(
+          scrollable: false,
+          icon: Icons.swap_horiz,
+          message: l10n.noPortForwards,
+        );
+      }
+      // A row per forward, opening it to edit, its switch outside the row's
+      // tap so a native switch keeps its own tap.
+      return AdaptiveGroupedListView(
+        separatorIndent: 52,
+        itemCount: state.forwards.length,
+        itemBuilder: (context, i) {
+          final f = state.forwards[i];
+          final name = _forwardName(f);
+          return AdaptiveListRow(
+            leading: Icon(
+              Icons.arrow_forward,
+              color: f.enabled
+                  ? Theme.of(context).colorScheme.primary
+                  : CupertinoColors.tertiaryLabel.resolveFrom(context),
+            ),
+            title: name,
+            subtitle: _mapping(context, f),
+            onTap: busy ? null : () => onEdit(f),
+            actions: [
+              AdaptiveSwitch(
+                value: f.enabled,
+                semanticLabel: name,
+                onChanged: busy ? null : (v) => onToggle(f, v),
+              ),
+            ],
+          );
+        },
+      );
+    }
     return Scaffold(
       body: state.forwards.isEmpty
           ? LuciMessageState(
@@ -365,15 +417,7 @@ class _ForwardsTab extends StatelessWidget {
                         : Theme.of(context).colorScheme.outline,
                   ),
                   title: Text(name),
-                  // The whole point of a forward is the mapping, so show it
-                  // rather than making the user open the row to find out.
-                  subtitle: Text(
-                    '${f.protocol.toUpperCase()}  '
-                    '${f.sourceZone}:${f.sourcePort ?? "?"}'
-                    '  →  ${f.destIp ?? "?"}:${f.effectiveDestPort}'
-                    // A restricted forward reads as open without this.
-                    '${f.sourceIp == null ? '' : '\n${l10n.sourceAddress}: ${f.sourceIp}'}',
-                  ),
+                  subtitle: Text(_mapping(context, f)),
                   trailing: AdaptiveSwitch(
                     value: f.enabled,
                     semanticLabel: name,
@@ -416,46 +460,61 @@ class _RulesTab extends StatelessWidget {
         message: l10n.noTrafficRules,
       );
     }
+    Widget icon(TrafficRule r) {
+      final scheme = Theme.of(context).colorScheme;
+      final blocking = r.target == 'REJECT' || r.target == 'DROP';
+      return Icon(
+        blocking ? Icons.block : Icons.check_circle_outline,
+        color: blocking ? scheme.error : scheme.primary,
+      );
+    }
+
+    String summary(TrafficRule r) => [
+      r.target,
+      if (r.sourceMac != null) r.sourceMac!,
+      if (r.protocol != null) r.protocol!.toUpperCase(),
+      if (r.destPort != null) ':${r.destPort}',
+    ].join('  ');
+
+    List<Widget> actions(TrafficRule r) => [
+      AdaptiveSwitch(
+        value: r.enabled,
+        semanticLabel: r.name ?? r.section,
+        onChanged: busy ? null : (v) => onToggle(r, v),
+      ),
+      // A rule the user wrote is disabled rather than deleted, so the icon
+      // says which will happen.
+      AdaptiveButton.sfSymbol(
+        onPressed: busy ? null : () => onRemove(r),
+        sfSymbol: SFSymbol(r.ownedByApp ? 'trash' : 'pause'),
+        materialIcon: r.ownedByApp ? Icons.delete_outline : Icons.pause,
+        semanticLabel: r.ownedByApp ? l10n.remove : l10n.disableRule,
+        style: AdaptiveButtonStyle.plain,
+      ),
+    ];
+
+    if (PlatformUiCapabilities.isIOS) {
+      return AdaptiveGroupedListView(
+        separatorIndent: 52,
+        itemCount: rules.length,
+        itemBuilder: (context, i) => AdaptiveListRow(
+          leading: icon(rules[i]),
+          title: rules[i].name ?? rules[i].section,
+          subtitle: summary(rules[i]),
+          actions: actions(rules[i]),
+        ),
+      );
+    }
     return ListView.separated(
       itemCount: rules.length,
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
         final r = rules[i];
-        final scheme = Theme.of(context).colorScheme;
-        final blocking = r.target == 'REJECT' || r.target == 'DROP';
         return ListTile(
-          leading: Icon(
-            blocking ? Icons.block : Icons.check_circle_outline,
-            color: blocking ? scheme.error : scheme.primary,
-          ),
+          leading: icon(r),
           title: Text(r.name ?? r.section),
-          subtitle: Text(
-            [
-              r.target,
-              if (r.sourceMac != null) r.sourceMac!,
-              if (r.protocol != null) r.protocol!.toUpperCase(),
-              if (r.destPort != null) ':${r.destPort}',
-            ].join('  '),
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AdaptiveSwitch(
-                value: r.enabled,
-                semanticLabel: r.name ?? r.section,
-                onChanged: busy ? null : (v) => onToggle(r, v),
-              ),
-              // A rule the user wrote is disabled rather than deleted, so
-              // the icon says which will happen.
-              AdaptiveButton.sfSymbol(
-                onPressed: busy ? null : () => onRemove(r),
-                sfSymbol: SFSymbol(r.ownedByApp ? 'trash' : 'pause'),
-                materialIcon: r.ownedByApp ? Icons.delete_outline : Icons.pause,
-                semanticLabel: r.ownedByApp ? l10n.remove : l10n.disableRule,
-                style: AdaptiveButtonStyle.plain,
-              ),
-            ],
-          ),
+          subtitle: Text(summary(r)),
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: actions(r)),
         );
       },
     );
@@ -475,6 +534,33 @@ class _ZonesTab extends StatelessWidget {
         scrollable: false,
         icon: Icons.security,
         message: l10n.noZones,
+      );
+    }
+    if (PlatformUiCapabilities.isIOS) {
+      // A group per zone, as iOS Settings groups a thing's facts: its name
+      // over it, its policies as rows, and its networks under it.
+      final scheme = Theme.of(context).colorScheme;
+      Widget policy(String label, String value) => AdaptiveFormValueRow(
+        label: label,
+        value: value,
+        valueColor: value.toUpperCase() == 'ACCEPT'
+            ? scheme.primary
+            : CupertinoColors.systemRed.resolveFrom(context),
+      );
+      return ListView(
+        padding: const EdgeInsets.all(LuciSpacing.md),
+        children: [
+          for (final z in zones)
+            AdaptiveFormSection(
+              header: z.masq ? '${z.name} · NAT' : z.name,
+              footer: z.networks.isEmpty ? null : z.networks.join(', '),
+              children: [
+                policy(l10n.zoneInput, z.input),
+                policy(l10n.zoneOutput, z.output),
+                policy(l10n.zoneForward, z.forward),
+              ],
+            ),
+        ],
       );
     }
     return ListView(
@@ -564,6 +650,34 @@ class _RoutesTab extends StatelessWidget {
         message: l10n.noStaticRoutes,
       );
     }
+    String summary(StaticRoute r) => [
+      if (r.gateway != null) 'via ${r.gateway}',
+      r.interface,
+      if (r.metric != null) 'metric ${r.metric}',
+    ].join('  ');
+    Widget remove(StaticRoute r) => AdaptiveButton.sfSymbol(
+      onPressed: busy ? null : () => onRemove(r),
+      sfSymbol: const SFSymbol('trash'),
+      materialIcon: Icons.delete_outline,
+      semanticLabel: l10n.remove,
+      style: AdaptiveButtonStyle.plain,
+    );
+
+    if (PlatformUiCapabilities.isIOS) {
+      return AdaptiveGroupedListView(
+        separatorIndent: 52,
+        itemCount: routes.length,
+        itemBuilder: (context, i) => AdaptiveListRow(
+          leading: Icon(
+            Icons.alt_route,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          title: _routeName(routes[i]),
+          subtitle: summary(routes[i]),
+          actions: [remove(routes[i])],
+        ),
+      );
+    }
     return ListView.separated(
       itemCount: routes.length,
       separatorBuilder: (_, _) => const Divider(height: 1),
@@ -572,20 +686,8 @@ class _RoutesTab extends StatelessWidget {
         return ListTile(
           leading: const Icon(Icons.alt_route),
           title: Text(_routeName(r)),
-          subtitle: Text(
-            [
-              if (r.gateway != null) 'via ${r.gateway}',
-              r.interface,
-              if (r.metric != null) 'metric ${r.metric}',
-            ].join('  '),
-          ),
-          trailing: AdaptiveButton.sfSymbol(
-            onPressed: busy ? null : () => onRemove(r),
-            sfSymbol: const SFSymbol('trash'),
-            materialIcon: Icons.delete_outline,
-            semanticLabel: l10n.remove,
-            style: AdaptiveButtonStyle.plain,
-          ),
+          subtitle: Text(summary(r)),
+          trailing: remove(r),
         );
       },
     );

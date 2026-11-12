@@ -1134,10 +1134,15 @@ class AdaptiveFormValueRow extends StatelessWidget {
     required this.label,
     required this.value,
     this.selectable = false,
+    this.valueColor,
   });
 
   final String label;
   final String value;
+
+  /// The value's colour where it carries meaning, such as a policy that
+  /// accepts or rejects; the secondary colour on iOS otherwise.
+  final Color? valueColor;
 
   /// Whether [value] can be selected and copied, such as a version to paste
   /// into a bug report.
@@ -1168,7 +1173,12 @@ class AdaptiveFormValueRow extends StatelessWidget {
                 child: Text(label),
               ),
               const SizedBox(width: 16),
-              Expanded(child: _value(context, null)),
+              Expanded(
+                child: _value(
+                  context,
+                  valueColor == null ? null : TextStyle(color: valueColor),
+                ),
+              ),
             ],
           ),
         ),
@@ -1193,9 +1203,9 @@ class AdaptiveFormValueRow extends StatelessWidget {
                   child: _value(
                     context,
                     _bodyStyle(context).copyWith(
-                      color: CupertinoColors.secondaryLabel.resolveFrom(
-                        context,
-                      ),
+                      color:
+                          valueColor ??
+                          CupertinoColors.secondaryLabel.resolveFrom(context),
                     ),
                   ),
                 ),
