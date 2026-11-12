@@ -102,8 +102,18 @@ class _AddonScreenState extends ConsumerState<AddonScreen> {
     final gate = ref.watch(featureProvider(AddonCatalog.feature(spec.addon)));
     final async = ref.watch(addonProvider(spec));
 
+    // iOS lays an add-on's settings out as grouped rows, on the grouped
+    // background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
-      appBar: LuciAppBar(title: l10n.string(spec.titleKey), showBack: true),
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: l10n.string(spec.titleKey),
+        showBack: true,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
+      ),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(addonProvider(spec)),
         child: async.when(
@@ -251,6 +261,13 @@ class _FieldTile extends StatelessWidget {
     final label = l10n.string(field.labelKey);
     final help = field.helpKey == null ? null : l10n.string(field.helpKey!);
 
+    if (PlatformUiCapabilities.isIOS) {
+      // A group each, so each setting's explanation sits under it, as iOS
+      // Settings explains an option.
+      final row = _iosRow(context, label, help);
+      if (row != null) return AdaptiveFormSection(children: [row]);
+    }
+
     switch (field) {
       case AddonSwitch():
         final value =
@@ -383,6 +400,87 @@ class _FieldTile extends StatelessWidget {
             ],
           ),
         );
+    }
+  }
+
+  /// The field as a grouped row on iOS, or null for one that keeps its own
+  /// layout there (a list of choices to tick).
+  Widget? _iosRow(BuildContext context, String label, String? help) {
+    final l10n = context.l10n;
+    switch (field) {
+      case AddonSwitch():
+        return AdaptiveFormSwitch(
+          label: label,
+          description: help,
+          value: edits[field.option] as bool? ?? section.flag(field.option),
+          onChanged: editable
+              ? (v) {
+                  edits[field.option] = v;
+                  onChanged();
+                }
+              : null,
+        );
+      case final AddonNumber field:
+        final controller = controllerFor(section, field.option);
+        final text = (edits[field.option] as String?) ?? controller.text;
+        return AdaptiveFormTextField(
+          label: label,
+          controller: controller,
+          enabled: editable,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          helper: help,
+          error: AddonPlanner.validNumber(field, text)
+              ? null
+              : l10n.addonOutOfRange(field.min, field.max),
+          suffix: field.suffix == null
+              ? null
+              : Padding(
+                  padding: const EdgeInsetsDirectional.only(start: 6, end: 12),
+                  child: Text(
+                    field.suffix!,
+                    style: TextStyle(
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
+                    ),
+                  ),
+                ),
+          onChanged: (v) {
+            edits[field.option] = v;
+            onChanged();
+          },
+        );
+      case final AddonText field:
+        return AdaptiveFormTextField(
+          label: label,
+          controller: controllerFor(section, field.option),
+          enabled: editable,
+          obscureText: field.obscure,
+          helper: help,
+          onChanged: (v) {
+            edits[field.option] = v;
+            onChanged();
+          },
+        );
+      case final AddonChoice field:
+        final current =
+            (edits[field.option] as String?) ?? section.text(field.option);
+        return AdaptiveFormPicker<String>(
+          label: label,
+          value: current,
+          helper: help,
+          choices: [for (final v in field.values) AdaptiveFormChoice(v, v)],
+          onChanged: editable
+              ? (v) {
+                  if (v == null) return;
+                  edits[field.option] = v;
+                  onChanged();
+                }
+              : null,
+        );
+      case AddonMultiChoice():
+        return null;
     }
   }
 }

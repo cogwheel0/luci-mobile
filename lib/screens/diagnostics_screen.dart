@@ -77,8 +77,18 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    // iOS puts the host to run against in a grouped row, on the grouped
+    // background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
-      appBar: LuciAppBar(title: l10n.diagnostics, showBack: true),
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: l10n.diagnostics,
+        showBack: true,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(LuciSpacing.md),
         children: [
@@ -90,21 +100,44 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
             onValueChanged: (index) => setState(() => _tool = _tools[index]),
           ),
           const SizedBox(height: LuciSpacing.md),
-          TextField(
-            controller: _target,
-            textInputAction: TextInputAction.go,
-            onSubmitted: (_) => _run(),
-            decoration: InputDecoration(
-              labelText: l10n.hostOrAddress,
-              border: const OutlineInputBorder(),
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.play_arrow),
-                tooltip: l10n.runDiagnostic,
-                onPressed: _running ? null : _run,
+          if (PlatformUiCapabilities.isIOS)
+            AdaptiveFormSection(
+              children: [
+                AdaptiveFormTextField(
+                  label: l10n.hostOrAddress,
+                  controller: _target,
+                  placeholder: 'openwrt.org',
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
+                  textInputAction: TextInputAction.go,
+                  onSubmitted: (_) => _run(),
+                  suffix: AdaptiveButton.sfSymbol(
+                    onPressed: _running ? null : _run,
+                    sfSymbol: const SFSymbol('play.fill'),
+                    materialIcon: Icons.play_arrow,
+                    semanticLabel: l10n.runDiagnostic,
+                    style: AdaptiveButtonStyle.plain,
+                  ),
+                ),
+              ],
+            )
+          else ...[
+            TextField(
+              controller: _target,
+              textInputAction: TextInputAction.go,
+              onSubmitted: (_) => _run(),
+              decoration: InputDecoration(
+                labelText: l10n.hostOrAddress,
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.play_arrow),
+                  tooltip: l10n.runDiagnostic,
+                  onPressed: _running ? null : _run,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: LuciSpacing.md),
+            const SizedBox(height: LuciSpacing.md),
+          ],
 
           if (_running)
             const Padding(
