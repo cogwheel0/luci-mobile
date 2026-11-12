@@ -1,4 +1,5 @@
-import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoTextField;
+import 'package:cupertino_ui/cupertino_ui.dart'
+    show CupertinoSearchTextField, CupertinoTextField;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/models/router_capabilities.dart';
@@ -18,7 +19,10 @@ const _settings = SystemSettings(
   timezones: {'UTC': 'UTC', 'Europe/Berlin': 'CET-1CEST,M3.5.0,M10.5.0/3'},
 );
 
-Future<void> _pumpSettings(WidgetTester tester) async {
+Future<void> _pumpSettings(
+  WidgetTester tester, {
+  SystemSettings settings = _settings,
+}) async {
   // Tall enough for the whole page, wide enough for the test font.
   tester.view
     ..physicalSize = const Size(1800, 3600)
@@ -27,7 +31,7 @@ Future<void> _pumpSettings(WidgetTester tester) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        systemSettingsProvider.overrideWith((ref) async => _settings),
+        systemSettingsProvider.overrideWith((ref) async => settings),
         featureProvider(RouterFeature.systemSettings)
             .overrideWithValue(const FeatureAvailability.available()),
         sessionProvider.overrideWithValue(null),
@@ -61,6 +65,18 @@ void main() {
     expect(find.byType(ListTile), findsNWidgets(2));
   });
 
+  testWidgets('Android: the time zone is a searchable bottom sheet', (
+    tester,
+  ) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android;
+    await _pumpSettings(tester);
+
+    await tester.tap(find.text('Time zone'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(AdaptiveFormChoiceList<String>), findsNothing);
+  });
+
   testWidgets('before iOS 26: grouped rows, the time zone and password as '
       'rows that open, and Save once something valid changed', (tester) async {
     PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
@@ -91,5 +107,79 @@ void main() {
     await tester.pump();
     expect(find.text('Use letters, digits and hyphens only'), findsNothing);
     expect(_save(tester).onPressed, isNotNull);
+  });
+
+  testWidgets('before iOS 26: the time zone is a page of its own, searched, '
+      'the current zone checked', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    final semantics = tester.ensureSemantics();
+    await _pumpSettings(tester);
+
+    await tester.tap(find.text('Time zone'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    final list = find.byType(AdaptiveFormChoiceList<String>);
+    expect(list, findsOneWidget);
+    expect(find.byType(CupertinoSearchTextField), findsOneWidget);
+    expect(
+      tester.getSemantics(
+        find.descendant(of: list, matching: find.text('UTC')),
+      ),
+      isSemantics(label: 'UTC', isButton: true, isSelected: true),
+    );
+    expect(
+      tester.getSemantics(
+        find.descendant(of: list, matching: find.text('Europe/Berlin')),
+      ),
+      isSemantics(label: 'Europe/Berlin', isButton: true, isSelected: false),
+    );
+
+    await tester.enterText(find.byType(CupertinoSearchTextField), 'ber');
+    await tester.pump();
+    expect(find.descendant(of: list, matching: find.text('UTC')), findsNothing);
+
+    await tester.tap(find.text('Europe/Berlin'));
+    await tester.pumpAndSettle();
+    expect(list, findsNothing);
+    final zone = find.widgetWithText(AdaptiveFormNavigationRow, 'Time zone');
+    expect(
+      find.descendant(of: zone, matching: find.text('Europe/Berlin')),
+      findsOne,
+    );
+    expect(_save(tester).onPressed, isNotNull);
+    semantics.dispose();
+  });
+
+  testWidgets('before iOS 26: a search starts at its first match, wherever '
+      'the zones were scrolled to', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    await _pumpSettings(
+      tester,
+      settings: SystemSettings(
+        section: 'cfg01e48a',
+        hostname: 'OpenWrt',
+        zoneName: 'UTC',
+        description: '',
+        notes: '',
+        timezones: {
+          for (var i = 10; i < 70; i++) 'America/City$i': 'EST5EDT',
+          for (var i = 10; i < 70; i++) 'Europe/City$i': 'CET-1',
+        },
+      ),
+    );
+
+    await tester.tap(find.text('Time zone'));
+    await tester.pumpAndSettle();
+    final list = find.byType(AdaptiveFormChoiceList<String>);
+    // Well into the Americas, then a search that matches them all.
+    await tester.drag(list, const Offset(0, -2000));
+    await tester.pumpAndSettle();
+    expect(find.text('America/City10'), findsNothing);
+
+    await tester.enterText(find.byType(CupertinoSearchTextField), 'america');
+    await tester.pumpAndSettle();
+    expect(find.text('America/City10'), findsOneWidget);
   });
 }

@@ -1251,3 +1251,101 @@ class AdaptiveFormNavigationRow extends StatelessWidget {
     );
   }
 }
+
+/// A long list of choices as one scrolling inset group, as iOS Settings
+/// lists time zones or languages on a page of their own: each choice a row,
+/// [value] with a check mark in the tint, built as it scrolls into view.
+/// Tapping a row calls [onSelected] with its value. iOS only.
+class AdaptiveFormChoiceList<T> extends StatelessWidget {
+  const AdaptiveFormChoiceList({
+    super.key,
+    required this.choices,
+    required this.value,
+    required this.onSelected,
+    this.padding = const EdgeInsets.fromLTRB(16, 8, 16, 28),
+  });
+
+  final List<AdaptiveFormChoice<T>> choices;
+  final T? value;
+  final ValueChanged<T> onSelected;
+
+  /// Around the group, inside the scroll view.
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = CupertinoColors.secondarySystemGroupedBackground
+        .resolveFrom(context);
+    final separator = CupertinoColors.separator.resolveFrom(context);
+    final tint = CupertinoTheme.of(context).primaryColor;
+    final radius = Radius.circular(adaptiveFormCornerRadius);
+    final last = choices.length - 1;
+    return ListView.builder(
+      padding: padding,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      itemCount: choices.length,
+      itemBuilder: (context, i) {
+        final choice = choices[i];
+        final checked = choice.value == value;
+        return ClipRRect(
+          borderRadius: BorderRadius.vertical(
+            top: i == 0 ? radius : Radius.zero,
+            bottom: i == last ? radius : Radius.zero,
+          ),
+          child: ColoredBox(
+            color: surface,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (i > 0)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(start: 16),
+                    child: Container(height: 0.5, color: separator),
+                  ),
+                Semantics(
+                  container: true,
+                  button: true,
+                  selected: checked,
+                  child: _TappableRow(
+                    onTap: () => onSelected(choice.value),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: _rowHeight),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 11,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                choice.label,
+                                style: _bodyStyle(context).copyWith(
+                                  color: CupertinoColors.label.resolveFrom(
+                                    context,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (checked) ...[
+                              const SizedBox(width: 16),
+                              Icon(
+                                CupertinoIcons.checkmark_alt,
+                                size: 20,
+                                color: tint,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

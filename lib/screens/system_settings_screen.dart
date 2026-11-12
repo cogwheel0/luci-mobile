@@ -202,15 +202,21 @@ class _Form extends StatelessWidget {
   bool get _canPickZone => editable && settings.timezones.isNotEmpty;
 
   Future<void> _pickZone(BuildContext context) async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => _TimezoneSheet(
-        zones: settings.zoneNames,
-        selected: zoneName ?? settings.zoneName,
-      ),
-    );
+    final zones = settings.zoneNames;
+    final selected = zoneName ?? settings.zoneName;
+    // iOS pushes a page of its own, as iOS Settings' time zone list.
+    final picked = PlatformUiCapabilities.isIOS
+        ? await Navigator.of(context).push<String>(
+            MaterialPageRoute(
+              builder: (_) => _TimezonePage(zones: zones, selected: selected),
+            ),
+          )
+        : await showModalBottomSheet<String>(
+            context: context,
+            isScrollControlled: true,
+            showDragHandle: true,
+            builder: (_) => _TimezoneSheet(zones: zones, selected: selected),
+          );
     if (picked != null) onZoneChanged(picked);
   }
 
@@ -445,6 +451,74 @@ class _TimezoneSheetState extends State<_TimezoneSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The time zones on iOS, as a page of grouped rows under a search field,
+/// the current one checked. Pops with the zone tapped.
+class _TimezonePage extends StatefulWidget {
+  const _TimezonePage({required this.zones, required this.selected});
+
+  final List<String> zones;
+  final String selected;
+
+  @override
+  State<_TimezonePage> createState() => _TimezonePageState();
+}
+
+class _TimezonePageState extends State<_TimezonePage> {
+  final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
+      context,
+    );
+    final needle = _search.text.trim().toLowerCase();
+    return Scaffold(
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: l10n.timezone,
+        showBack: true,
+        backgroundColor: grouped.withValues(alpha: 0.94),
+      ),
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: AdaptiveSearchField(
+                controller: _search,
+                placeholder: l10n.searchTimezone,
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            Expanded(
+              child: AdaptiveFormChoiceList<String>(
+                // A new search starts at its first match, wherever the
+                // list was scrolled to before.
+                key: ValueKey(needle),
+                choices: [
+                  for (final zone in widget.zones)
+                    if (needle.isEmpty || zone.toLowerCase().contains(needle))
+                      AdaptiveFormChoice(zone, zone),
+                ],
+                value: widget.selected,
+                onSelected: (zone) => Navigator.of(context).pop(zone),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
