@@ -28,11 +28,15 @@ final _router = model.Router(
 
 /// One router, with a phone on 5 GHz Wi-Fi and a laptop that has left.
 class _TwoClients extends AppState {
-  _TwoClients()
+  _TwoClients({this.phoneLease = 3600})
     : super.forTesting(
         apiService: MockApiService(),
         authService: MockAuthService(),
       );
+
+  /// The phone's lease as the router now reports it, in seconds; 0 for
+  /// one with no end.
+  final int phoneLease;
 
   @override
   List<model.Router> get routers => [_router];
@@ -47,7 +51,7 @@ class _TwoClients extends AppState {
       macAddress: 'AA:BB:CC:00:00:01',
       hostname: 'phone',
       vendor: 'Apple',
-      leaseTime: 3600,
+      leaseTime: phoneLease,
       connectionType: ConnectionType.wireless,
       wifiBand: '5g',
       isOnline: true,
@@ -153,11 +157,14 @@ void main() {
       WidgetTester tester,
       Client phone, {
       Future<ClientDetail> Function()? detail,
+      int routerLease = 3600,
     }) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            appStateProvider.overrideWith((ref) => _TwoClients()),
+            appStateProvider.overrideWith(
+              (ref) => _TwoClients(phoneLease: routerLease),
+            ),
             clientDetailProvider(StationInfo.normalizeMac(phone.macAddress))
                 .overrideWith(
                   (ref) => detail?.call() ?? Future.value(const ClientDetail()),
@@ -235,6 +242,65 @@ void main() {
       await unmount(tester);
     });
 
+    Future<void> pullToRefresh(WidgetTester tester) async {
+      await tester.flingFrom(
+        const Offset(400, 100),
+        const Offset(0, 300),
+        1000,
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    testWidgets('a refresh to a lease with no end shows Unlimited, not the '
+        'old end', (tester) async {
+      await pumpDetails(
+        tester,
+        Client(
+          ipAddress: '192.168.1.20',
+          macAddress: 'AA:BB:CC:00:00:01',
+          hostname: 'phone',
+          leaseTime: 3600,
+          expiresAt: now() + 3600,
+          routerId: 'home',
+        ),
+        routerLease: 0,
+      );
+      expect(lease(tester), isNot('Unlimited'));
+
+      await pullToRefresh(tester);
+      expect(lease(tester), 'Unlimited');
+      await unmount(tester);
+    });
+
+    testWidgets('an open page counts the lease down to Expired by itself', (
+      tester,
+    ) async {
+      await pumpDetails(
+        tester,
+        Client(
+          ipAddress: '192.168.1.20',
+          macAddress: 'AA:BB:CC:00:00:01',
+          hostname: 'phone',
+          leaseTime: 2,
+          expiresAt: now() + 2,
+        ),
+      );
+      // Whatever else the page loads settles first, so nothing but the
+      // lease's own tick redraws it below.
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pump(const Duration(seconds: 10));
+      expect(lease(tester), isNot('Expired'));
+
+      // The lease's end passes in real time; the page's own tick redraws it.
+      await tester.runAsync(() => Future.delayed(const Duration(seconds: 3)));
+      await tester.pump(const Duration(seconds: 31));
+      expect(lease(tester), 'Expired');
+      await unmount(tester);
+    });
+
     testWidgets('a refresh reads the lease again from the router', (
       tester,
     ) async {
@@ -252,15 +318,7 @@ void main() {
       );
       expect(lease(tester), Client.formatDuration(60));
 
-      await tester.flingFrom(
-        const Offset(400, 100),
-        const Offset(0, 300),
-        1000,
-      );
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pump(const Duration(seconds: 1));
+      await pullToRefresh(tester);
       expect(lease(tester), Client.formatDuration(3600));
       await unmount(tester);
     });
