@@ -601,6 +601,80 @@ void main() {
       semantics.dispose();
     });
 
+    testWidgets('a tap on a row\'s action never opens the row, even when '
+        'the action claims no tap itself, as a native view does not', (
+      tester,
+    ) async {
+      var opened = 0;
+      await _pump(
+        tester,
+        AdaptiveListRow(
+          title: 'lab-ap',
+          onTap: () => opened++,
+          actions: const [
+            SizedBox.square(key: ValueKey('remove'), dimension: 44),
+          ],
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('remove')));
+      await tester.pumpAndSettle();
+      expect(opened, 0);
+      await tester.tap(find.text('lab-ap'));
+      await tester.pumpAndSettle();
+      expect(opened, 1);
+    });
+
+    testWidgets('a row that opens something is reached and opened from a '
+        'keyboard', (tester) async {
+      var opened = 0;
+      await _pump(
+        tester,
+        AdaptiveListRow(title: 'eth0', onTap: () => opened++),
+      );
+
+      ColoredBox highlight() => tester.widget<ColoredBox>(
+        find
+            .descendant(
+              of: find.byType(AdaptiveListRow),
+              matching: find.byType(ColoredBox),
+            )
+            .first,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(
+        highlight().color,
+        CupertinoColors.systemFill.resolveFrom(
+          tester.element(find.text('eth0')),
+        ),
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(opened, 1);
+    });
+
+    testWidgets('a group clips its rows to its rounded ends, so a pressed '
+        'row\'s highlight keeps the corners', (tester) async {
+      await _pump(
+        tester,
+        AdaptiveFormSection(
+          children: [AdaptiveListRow(title: 'Neighbor', onTap: () {})],
+        ),
+      );
+
+      final clip = tester.widget<ClipRRect>(
+        find.ancestor(
+          of: find.byType(AdaptiveListRow),
+          matching: find.byType(ClipRRect),
+        ),
+      );
+      expect(
+        clip.borderRadius,
+        BorderRadius.circular(adaptiveFormCornerRadius),
+      );
+    });
+
     testWidgets('a disabled picker opens nothing; a value it does not list '
         'shows the hint', (tester) async {
       await _pump(

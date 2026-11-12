@@ -90,10 +90,15 @@ void main() {
         ),
         findsOneWidget,
       );
+      // Selected, and no button: it is the router already in use.
       expect(
-        tester.getSemantics(row),
-        isSemantics(isSelected: true, isButton: true),
+        tester.getSemantics(
+          find.descendant(of: row, matching: find.text('192.168.1.1')),
+        ),
+        isSemantics(isSelected: true, isButton: false),
       );
+      // Its remove action is a button of its own.
+      expect(find.bySemanticsLabel('Remove'), findsOneWidget);
       expect(
         find.widgetWithText(AdaptiveFormButtonRow, 'Add Router'),
         findsOneWidget,

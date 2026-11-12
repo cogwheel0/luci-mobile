@@ -142,20 +142,24 @@ class AdaptiveFormSection extends StatelessWidget {
                   .resolveFrom(context),
               borderRadius: BorderRadius.circular(adaptiveFormCornerRadius),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final (i, row) in rows.indexed) ...[
-                  if (i > 0)
-                    Padding(
-                      padding: EdgeInsetsDirectional.only(
-                        start: separatorIndent,
+            // A pressed row's highlight keeps to the group's rounded ends.
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(adaptiveFormCornerRadius),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final (i, row) in rows.indexed) ...[
+                    if (i > 0)
+                      Padding(
+                        padding: EdgeInsetsDirectional.only(
+                          start: separatorIndent,
+                        ),
+                        child: Container(height: 0.5, color: separator),
                       ),
-                      child: Container(height: 0.5, color: separator),
-                    ),
-                  row,
+                    row,
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           // Each row reads its own note to VoiceOver, so these are for
@@ -1362,7 +1366,13 @@ class AdaptiveListRow extends StatefulWidget {
     this.onTap,
     this.showChevron = false,
     this.selected = false,
+    this.actions = const [],
   });
+
+  /// Buttons at the row's end, such as removing what the row shows. They
+  /// sit outside the row's own tap target, so a tap on one never also opens
+  /// the row, and VoiceOver and the keyboard reach each on its own.
+  final List<Widget> actions;
 
   final String title;
   final String? subtitle;
@@ -1387,6 +1397,7 @@ class AdaptiveListRow extends StatefulWidget {
 
 class _AdaptiveListRowState extends State<AdaptiveListRow> {
   bool _pressed = false;
+  bool _focused = false;
 
   void _press(bool pressed) {
     if (_pressed != pressed) setState(() => _pressed = pressed);
@@ -1403,12 +1414,13 @@ class _AdaptiveListRowState extends State<AdaptiveListRow> {
       :onTap,
       :showChevron,
       :selected,
+      :actions,
     ) = widget;
     final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
     final row = ConstrainedBox(
       constraints: BoxConstraints(minHeight: _rowHeight),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: EdgeInsets.fromLTRB(16, 10, actions.isEmpty ? 16 : 4, 10),
         child: Row(
           children: [
             if (leading != null) ...[leading, const SizedBox(width: 12)],
@@ -1477,30 +1489,58 @@ class _AdaptiveListRowState extends State<AdaptiveListRow> {
         ),
       ),
     );
+    final Widget content;
     if (onTap == null) {
-      return Semantics(
+      content = Semantics(
         container: true,
         selected: selected ? true : null,
         child: row,
       );
-    }
-    return Semantics(
-      container: true,
-      button: true,
-      selected: selected ? true : null,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        onTapDown: (_) => _press(true),
-        onTapUp: (_) => _press(false),
-        onTapCancel: () => _press(false),
-        child: ColoredBox(
-          color: _pressed
-              ? CupertinoColors.systemGrey4.resolveFrom(context)
-              : const Color(0x00000000),
-          child: row,
+    } else {
+      content = Semantics(
+        container: true,
+        button: true,
+        selected: selected ? true : null,
+        // Reachable and activated from a keyboard, as on iPad or a Mac.
+        child: FocusableActionDetector(
+          actions: {
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                onTap();
+                return null;
+              },
+            ),
+          },
+          onShowFocusHighlight: (focused) {
+            if (_focused != focused) setState(() => _focused = focused);
+          },
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            onTapDown: (_) => _press(true),
+            onTapUp: (_) => _press(false),
+            onTapCancel: () => _press(false),
+            child: row,
+          ),
         ),
-      ),
+      );
+    }
+    final highlight = _pressed
+        ? CupertinoColors.systemGrey4.resolveFrom(context)
+        : _focused
+        ? CupertinoColors.systemFill.resolveFrom(context)
+        : const Color(0x00000000);
+    return ColoredBox(
+      color: highlight,
+      child: actions.isEmpty
+          ? content
+          : Row(
+              children: [
+                Expanded(child: content),
+                ...actions,
+                const SizedBox(width: 8),
+              ],
+            ),
     );
   }
 }

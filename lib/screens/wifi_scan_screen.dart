@@ -578,6 +578,7 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
     final hiddenNetworks = _scanResults.where((r) => r.ssid.isEmpty).toList();
 
     if (PlatformUiCapabilities.isIOS) {
+      final found = context.l10n.networksFound(_scanResults.length);
       Widget row(WifiScanResult network) => _WifiNetworkTile(
         network: network,
         onTap: () => _showConnectDialog(network),
@@ -585,17 +586,20 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
       return ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
         children: [
-          AdaptiveFormSection(
-            // The hairlines start at the names, past the signal icons.
-            separatorIndent: 64,
-            header: context.l10n.availableNetworks,
-            footer: context.l10n.networksFound(_scanResults.length),
-            children: [for (final network in visibleNetworks) row(network)],
-          ),
+          // Only groups with networks in them, the count under the last.
+          if (visibleNetworks.isNotEmpty)
+            AdaptiveFormSection(
+              // The hairlines start at the names, past the signal icons.
+              separatorIndent: 64,
+              header: context.l10n.availableNetworks,
+              footer: hiddenNetworks.isEmpty ? found : null,
+              children: [for (final network in visibleNetworks) row(network)],
+            ),
           if (hiddenNetworks.isNotEmpty)
             AdaptiveFormSection(
               separatorIndent: 64,
               header: context.l10n.hiddenNetworks,
+              footer: found,
               children: [for (final network in hiddenNetworks) row(network)],
             ),
         ],

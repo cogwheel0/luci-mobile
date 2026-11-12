@@ -714,19 +714,21 @@ class _UnifiedRouterCard extends StatelessWidget {
         title: routerTitle,
         subtitle: subtitle,
         selected: isSelected && !isSwitching,
-        onTap: onTap,
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isSwitching)
-              const SizedBox.square(
+        // Only another router switches: the one in use, or one switching,
+        // is no button.
+        onTap: isSelected || isSwitching ? null : onTap,
+        trailing: isSwitching
+            ? const SizedBox.square(
                 dimension: 20,
                 child: AdaptiveProgressIndicator(),
-              ),
-            if (onRemoveFallback != null) _removeFallbackButton(context),
-            if (onDelete != null) _deleteButton(context),
-          ],
-        ),
+              )
+            : null,
+        // Outside the row's own tap target: a tap on Remove removes, and
+        // never also switches to the router.
+        actions: [
+          if (onRemoveFallback != null) _removeFallbackButton(context),
+          if (onDelete != null) _deleteButton(context),
+        ],
       );
     }
     return Card(
