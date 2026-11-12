@@ -36,6 +36,55 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   late AnimationController _logoAnimController;
   late AnimationController _progressAnimController;
   bool _isActivatingReviewerMode = false;
+
+  // On iOS the rows show what is wrong with them, as the Material fields'
+  // validators do on Android.
+  String? _addressError;
+  String? _alternateError;
+  String? _usernameError;
+
+  String? _validateAddress(String? value) {
+    if (value == null || value.isEmpty) {
+      return context.l10n.routerAddressRequired;
+    }
+    if (!UrlParser.parse(value).isValid) {
+      return context.l10n.invalidAddressFormat;
+    }
+    return null;
+  }
+
+  String? _validateAlternate(String? value) {
+    if (value == null || value.isEmpty) return null;
+    final parsed = UrlParser.parse(value);
+    if (!parsed.isValid) return context.l10n.invalidAddressFormat;
+    final primary = UrlParser.parse(_ipController.text);
+    if (primary.isValid && parsed.hostWithPort == primary.hostWithPort) {
+      return context.l10n.mustDifferFromPrimaryAddress;
+    }
+    return null;
+  }
+
+  String? _validateUsername(String? value) =>
+      value == null || value.isEmpty ? context.l10n.usernameRequired : null;
+
+  /// Checks the fields: the Form's validators on Android, the rows' errors
+  /// on iOS.
+  bool _validate() {
+    if (!PlatformUiCapabilities.isIOS) {
+      return _formKey.currentState!.validate();
+    }
+    setState(() {
+      _addressError = _validateAddress(_ipController.text);
+      _alternateError = _showAlternateAddress
+          ? _validateAlternate(_alternateController.text)
+          : null;
+      _usernameError = _validateUsername(_usernameController.text);
+    });
+    return _addressError == null &&
+        _alternateError == null &&
+        _usernameError == null;
+  }
+
   late final Future<PackageInfo> _packageInfoFuture =
       PackageInfo.fromPlatform();
   @override
@@ -205,7 +254,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Future<void> _connect() async {
-    if (_formKey.currentState!.validate()) {
+    if (_validate()) {
       final appState = ref.read(appStateProvider);
       final input = _ipController.text.trim();
       final user = _usernameController.text;
@@ -284,6 +333,128 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     if (failure != null) return appFailureText(context, failure);
     return appState.errorMessage;
   }
+
+  /// The sign-in button, under the fields on either platform.
+  Widget _connectButton(BuildContext context, AppState appState) {
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 100),
+      tween: Tween<double>(begin: 1, end: appState.isLoading ? 0.98 : 1),
+      builder: (context, scale, child) {
+        return Transform.scale(scale: scale, child: child);
+      },
+      child: SizedBox(
+        width: double.infinity,
+        child: AdaptiveButton(
+          onPressed: appState.isLoading ? null : _connect,
+          busy: appState.isLoading,
+          label: appState.isLoading
+              ? context.l10n.connecting
+              : context.l10n.connect,
+          sfSymbol: const SFSymbol('arrow.right.to.line'),
+          materialIcon: Icons.login,
+          size: AdaptiveButtonSize.large,
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          labelStyle: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+          borderRadius: BorderRadius.circular(14),
+          useSmoothRectangleBorder: false,
+        ),
+      ),
+    );
+  }
+
+  /// The router's address, then the sign-in, as iOS groups a form, and the
+  /// sign-in button. A failed sign-in sits under the second group.
+  Widget _iosForm(BuildContext context) => AutofillForm(
+    formKey: _formKey,
+    child: Builder(
+      builder: (context) {
+        final appState = ref.watch(appStateProvider);
+        final l10n = context.l10n;
+        // A row's error goes once it is edited again.
+        void clear(VoidCallback reset) => setState(reset);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AdaptiveForm(
+              sections: [
+                AdaptiveFormSection(
+                  children: [
+                    AdaptiveFormTextField(
+                      label: l10n.routerAddress,
+                      controller: _ipController,
+                      autofocus: true,
+                      placeholder: '192.168.1.1',
+                      helper: l10n.routerAddressExample,
+                      error: _addressError,
+                      keyboardType: TextInputType.url,
+                      autocorrect: false,
+                      autofillHints: const [AutofillHints.url],
+                      textInputAction: TextInputAction.next,
+                      onChanged: (_) => clear(() => _addressError = null),
+                    ),
+                    if (_showAlternateAddress)
+                      AdaptiveFormTextField(
+                        label: l10n.fallbackAddress,
+                        controller: _alternateController,
+                        helper: l10n.fallbackCredentialsHelp,
+                        error: _alternateError,
+                        keyboardType: TextInputType.url,
+                        autocorrect: false,
+                        textInputAction: TextInputAction.next,
+                        onChanged: (_) => clear(() => _alternateError = null),
+                      )
+                    else
+                      AdaptiveFormButtonRow(
+                        label: l10n.addFallbackAddress,
+                        onPressed: () =>
+                            setState(() => _showAlternateAddress = true),
+                      ),
+                  ],
+                ),
+                AdaptiveFormSection(
+                  error: _loginError(context, appState),
+                  children: [
+                    AdaptiveFormTextField(
+                      label: l10n.username,
+                      controller: _usernameController,
+                      helper: l10n.usernameDefaultHelp,
+                      error: _usernameError,
+                      autocorrect: false,
+                      autofillHints: const [AutofillHints.username],
+                      textInputAction: TextInputAction.next,
+                      onChanged: (_) => clear(() => _usernameError = null),
+                    ),
+                    AdaptiveFormTextField(
+                      label: l10n.password,
+                      controller: _passwordController,
+                      obscureText: !_passwordVisible,
+                      autofillHints: const [AutofillHints.password],
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _connect(),
+                      suffix: AdaptiveObscureToggle(
+                        obscured: !_passwordVisible,
+                        semanticLabel: _passwordVisible
+                            ? l10n.hidePassword
+                            : l10n.showPassword,
+                        onPressed: () => setState(
+                          () => _passwordVisible = !_passwordVisible,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            _connectButton(context, appState),
+          ],
+        );
+      },
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -444,349 +615,268 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           ),
                         ),
                         const SizedBox(height: 24),
-                        // Glassmorphism card
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                            child: Card(
-                              elevation: 8,
-                              color: colorScheme.surface.withValues(
-                                alpha: 0.85,
-                              ),
-                              shadowColor: colorScheme.primary.withValues(
-                                alpha: 0.10,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                                side: BorderSide(
-                                  color: colorScheme.outline.withValues(
-                                    alpha: 0.10,
+                        // A frosted card on Android; on iOS the same fields
+                        // as grouped rows, on the gradient.
+                        if (PlatformUiCapabilities.isIOS)
+                          _iosForm(context)
+                        else
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                              child: Card(
+                                elevation: 8,
+                                color: colorScheme.surface.withValues(
+                                  alpha: 0.85,
+                                ),
+                                shadowColor: colorScheme.primary.withValues(
+                                  alpha: 0.10,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                  side: BorderSide(
+                                    color: colorScheme.outline.withValues(
+                                      alpha: 0.10,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 18.0,
-                                  vertical: 16.0,
-                                ),
-                                child: AutofillForm(
-                                  formKey: _formKey,
-                                  child: Builder(
-                                    builder: (context) {
-                                      final appState = ref.watch(
-                                        appStateProvider,
-                                      );
-                                      return Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: <Widget>[
-                                          Tooltip(
-                                            message:
-                                                context.l10n.routerAddressHelp,
-                                            child: TextFormField(
-                                              controller: _ipController,
-                                              autofocus: true,
-                                              autofillHints: const [
-                                                AutofillHints.url,
-                                              ],
-                                              decoration: InputDecoration(
-                                                labelText:
-                                                    context.l10n.routerAddress,
-                                                border:
-                                                    const OutlineInputBorder(),
-                                                prefixIcon: const Icon(
-                                                  Icons.router_outlined,
-                                                ),
-                                                helperText: context
-                                                    .l10n
-                                                    .routerAddressExample,
-                                              ),
-                                              textInputAction:
-                                                  TextInputAction.next,
-                                              validator: (value) {
-                                                if (value == null ||
-                                                    value.isEmpty) {
-                                                  return context
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 18.0,
+                                    vertical: 16.0,
+                                  ),
+                                  child: AutofillForm(
+                                    formKey: _formKey,
+                                    child: Builder(
+                                      builder: (context) {
+                                        final appState = ref.watch(
+                                          appStateProvider,
+                                        );
+                                        return Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: <Widget>[
+                                            Tooltip(
+                                              message: context
+                                                  .l10n
+                                                  .routerAddressHelp,
+                                              child: TextFormField(
+                                                controller: _ipController,
+                                                autofocus: true,
+                                                autofillHints: const [
+                                                  AutofillHints.url,
+                                                ],
+                                                decoration: InputDecoration(
+                                                  labelText: context
                                                       .l10n
-                                                      .routerAddressRequired;
-                                                }
-                                                final parsed = UrlParser.parse(
-                                                  value,
-                                                );
-                                                if (!parsed.isValid) {
-                                                  return context
-                                                      .l10n
-                                                      .invalidAddressFormat;
-                                                }
-                                                return null;
-                                              },
-                                            ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          if (!_showAlternateAddress)
-                                            Align(
-                                              alignment: Alignment.centerLeft,
-                                              child: AdaptiveButton(
-                                                onPressed: () => setState(
-                                                  () => _showAlternateAddress =
-                                                      true,
-                                                ),
-                                                label: context
-                                                    .l10n
-                                                    .addFallbackAddress,
-                                                sfSymbol: const SFSymbol(
-                                                  'plus',
-                                                ),
-                                                materialIcon: Icons.add,
-                                                style:
-                                                    AdaptiveButtonStyle.plain,
-                                              ),
-                                            )
-                                          else ...[
-                                            TextFormField(
-                                              controller: _alternateController,
-                                              decoration: InputDecoration(
-                                                labelText: context
-                                                    .l10n
-                                                    .fallbackAddress,
-                                                border:
-                                                    const OutlineInputBorder(),
-                                                prefixIcon: const Icon(
-                                                  Icons.swap_horiz,
-                                                ),
-                                                helperText: context
-                                                    .l10n
-                                                    .fallbackCredentialsHelp,
-                                                helperMaxLines: 2,
-                                              ),
-                                              textInputAction:
-                                                  TextInputAction.next,
-                                              validator: (value) {
-                                                if (value == null ||
-                                                    value.isEmpty) {
-                                                  return null;
-                                                }
-                                                final parsed = UrlParser.parse(
-                                                  value,
-                                                );
-                                                if (!parsed.isValid) {
-                                                  return context
-                                                      .l10n
-                                                      .invalidAddressFormat;
-                                                }
-                                                final primary = UrlParser.parse(
-                                                  _ipController.text,
-                                                );
-                                                if (primary.isValid &&
-                                                    parsed.hostWithPort ==
-                                                        primary.hostWithPort) {
-                                                  return context
-                                                      .l10n
-                                                      .mustDifferFromPrimaryAddress;
-                                                }
-                                                return null;
-                                              },
-                                            ),
-                                          ],
-                                          const SizedBox(height: 10),
-                                          Tooltip(
-                                            message: context.l10n.usernameHelp,
-                                            child: TextFormField(
-                                              controller: _usernameController,
-                                              autofillHints: const [
-                                                AutofillHints.username,
-                                              ],
-                                              decoration: InputDecoration(
-                                                labelText:
-                                                    context.l10n.username,
-                                                border:
-                                                    const OutlineInputBorder(),
-                                                prefixIcon: const Icon(
-                                                  Icons.person_outline,
-                                                ),
-                                                helperText: context
-                                                    .l10n
-                                                    .usernameDefaultHelp,
-                                              ),
-                                              textInputAction:
-                                                  TextInputAction.next,
-                                              validator: (value) {
-                                                if (value == null ||
-                                                    value.isEmpty) {
-                                                  return context
-                                                      .l10n
-                                                      .usernameRequired;
-                                                }
-                                                return null;
-                                              },
-                                            ),
-                                          ),
-                                          const SizedBox(height: 10),
-                                          Tooltip(
-                                            message: context.l10n.passwordHelp,
-                                            child: TextFormField(
-                                              controller: _passwordController,
-                                              obscureText: !_passwordVisible,
-                                              autofillHints: const [
-                                                AutofillHints.password,
-                                              ],
-                                              decoration: InputDecoration(
-                                                labelText:
-                                                    context.l10n.password,
-                                                border:
-                                                    const OutlineInputBorder(),
-                                                prefixIcon: const Icon(
-                                                  Icons.lock_outline,
-                                                ),
-                                                helperText: context
-                                                    .l10n
-                                                    .routerPasswordHelp,
-                                                suffixIcon: IconButton(
-                                                  icon: Icon(
-                                                    _passwordVisible
-                                                        ? Icons
-                                                              .visibility_outlined
-                                                        : Icons
-                                                              .visibility_off_outlined,
+                                                      .routerAddress,
+                                                  border:
+                                                      const OutlineInputBorder(),
+                                                  prefixIcon: const Icon(
+                                                    Icons.router_outlined,
                                                   ),
+                                                  helperText: context
+                                                      .l10n
+                                                      .routerAddressExample,
+                                                ),
+                                                textInputAction:
+                                                    TextInputAction.next,
+                                                validator: _validateAddress,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            if (!_showAlternateAddress)
+                                              Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: AdaptiveButton(
                                                   onPressed: () => setState(
-                                                    () => _passwordVisible =
-                                                        !_passwordVisible,
+                                                    () =>
+                                                        _showAlternateAddress =
+                                                            true,
                                                   ),
-                                                  tooltip: _passwordVisible
-                                                      ? context
-                                                            .l10n
-                                                            .hidePassword
-                                                      : context
-                                                            .l10n
-                                                            .showPassword,
+                                                  label: context
+                                                      .l10n
+                                                      .addFallbackAddress,
+                                                  sfSymbol: const SFSymbol(
+                                                    'plus',
+                                                  ),
+                                                  materialIcon: Icons.add,
+                                                  style:
+                                                      AdaptiveButtonStyle.plain,
                                                 ),
+                                              )
+                                            else ...[
+                                              TextFormField(
+                                                controller:
+                                                    _alternateController,
+                                                decoration: InputDecoration(
+                                                  labelText: context
+                                                      .l10n
+                                                      .fallbackAddress,
+                                                  border:
+                                                      const OutlineInputBorder(),
+                                                  prefixIcon: const Icon(
+                                                    Icons.swap_horiz,
+                                                  ),
+                                                  helperText: context
+                                                      .l10n
+                                                      .fallbackCredentialsHelp,
+                                                  helperMaxLines: 2,
+                                                ),
+                                                textInputAction:
+                                                    TextInputAction.next,
+                                                validator: _validateAlternate,
                                               ),
-                                              textInputAction:
-                                                  TextInputAction.done,
+                                            ],
+                                            const SizedBox(height: 10),
+                                            Tooltip(
+                                              message:
+                                                  context.l10n.usernameHelp,
+                                              child: TextFormField(
+                                                controller: _usernameController,
+                                                autofillHints: const [
+                                                  AutofillHints.username,
+                                                ],
+                                                decoration: InputDecoration(
+                                                  labelText:
+                                                      context.l10n.username,
+                                                  border:
+                                                      const OutlineInputBorder(),
+                                                  prefixIcon: const Icon(
+                                                    Icons.person_outline,
+                                                  ),
+                                                  helperText: context
+                                                      .l10n
+                                                      .usernameDefaultHelp,
+                                                ),
+                                                textInputAction:
+                                                    TextInputAction.next,
+                                                validator: _validateUsername,
+                                              ),
                                             ),
-                                          ),
-                                          AnimatedSwitcher(
-                                            duration: const Duration(
-                                              milliseconds: 300,
-                                            ),
-                                            child:
-                                                _loginError(
-                                                      context,
-                                                      appState,
-                                                    ) !=
-                                                    null
-                                                ? Padding(
-                                                    key: const ValueKey(
-                                                      'error',
+                                            const SizedBox(height: 10),
+                                            Tooltip(
+                                              message:
+                                                  context.l10n.passwordHelp,
+                                              child: TextFormField(
+                                                controller: _passwordController,
+                                                obscureText: !_passwordVisible,
+                                                autofillHints: const [
+                                                  AutofillHints.password,
+                                                ],
+                                                decoration: InputDecoration(
+                                                  labelText:
+                                                      context.l10n.password,
+                                                  border:
+                                                      const OutlineInputBorder(),
+                                                  prefixIcon: const Icon(
+                                                    Icons.lock_outline,
+                                                  ),
+                                                  helperText: context
+                                                      .l10n
+                                                      .routerPasswordHelp,
+                                                  suffixIcon: IconButton(
+                                                    icon: Icon(
+                                                      _passwordVisible
+                                                          ? Icons
+                                                                .visibility_outlined
+                                                          : Icons
+                                                                .visibility_off_outlined,
                                                     ),
-                                                    padding:
-                                                        const EdgeInsets.only(
-                                                          top: 12.0,
-                                                        ),
-                                                    child: Container(
+                                                    onPressed: () => setState(
+                                                      () => _passwordVisible =
+                                                          !_passwordVisible,
+                                                    ),
+                                                    tooltip: _passwordVisible
+                                                        ? context
+                                                              .l10n
+                                                              .hidePassword
+                                                        : context
+                                                              .l10n
+                                                              .showPassword,
+                                                  ),
+                                                ),
+                                                textInputAction:
+                                                    TextInputAction.done,
+                                              ),
+                                            ),
+                                            AnimatedSwitcher(
+                                              duration: const Duration(
+                                                milliseconds: 300,
+                                              ),
+                                              child:
+                                                  _loginError(
+                                                        context,
+                                                        appState,
+                                                      ) !=
+                                                      null
+                                                  ? Padding(
+                                                      key: const ValueKey(
+                                                        'error',
+                                                      ),
                                                       padding:
-                                                          const EdgeInsets.all(
-                                                            10,
+                                                          const EdgeInsets.only(
+                                                            top: 12.0,
                                                           ),
-                                                      decoration: BoxDecoration(
-                                                        color: colorScheme
-                                                            .errorContainer
-                                                            .withValues(
-                                                              alpha: 1,
+                                                      child: Container(
+                                                        padding:
+                                                            const EdgeInsets.all(
+                                                              10,
                                                             ),
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              8,
+                                                        decoration: BoxDecoration(
+                                                          color: colorScheme
+                                                              .errorContainer
+                                                              .withValues(
+                                                                alpha: 1,
+                                                              ),
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                8,
+                                                              ),
+                                                        ),
+                                                        child: Row(
+                                                          children: [
+                                                            Icon(
+                                                              Icons
+                                                                  .error_outline,
+                                                              color: colorScheme
+                                                                  .onErrorContainer,
                                                             ),
+                                                            const SizedBox(
+                                                              width: 12,
+                                                            ),
+                                                            Expanded(
+                                                              child: Text(
+                                                                _loginError(
+                                                                  context,
+                                                                  appState,
+                                                                )!,
+                                                                style: textTheme
+                                                                    .bodyMedium
+                                                                    ?.copyWith(
+                                                                      color: colorScheme
+                                                                          .onErrorContainer,
+                                                                    ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
                                                       ),
-                                                      child: Row(
-                                                        children: [
-                                                          Icon(
-                                                            Icons.error_outline,
-                                                            color: colorScheme
-                                                                .onErrorContainer,
-                                                          ),
-                                                          const SizedBox(
-                                                            width: 12,
-                                                          ),
-                                                          Expanded(
-                                                            child: Text(
-                                                              _loginError(
-                                                                context,
-                                                                appState,
-                                                              )!,
-                                                              style: textTheme
-                                                                  .bodyMedium
-                                                                  ?.copyWith(
-                                                                    color: colorScheme
-                                                                        .onErrorContainer,
-                                                                  ),
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  )
-                                                : const SizedBox.shrink(),
-                                          ),
-                                          const SizedBox(height: 16),
-                                          TweenAnimationBuilder<double>(
-                                            duration: const Duration(
-                                              milliseconds: 100,
+                                                    )
+                                                  : const SizedBox.shrink(),
                                             ),
-                                            tween: Tween<double>(
-                                              begin: 1,
-                                              end: appState.isLoading
-                                                  ? 0.98
-                                                  : 1,
-                                            ),
-                                            builder: (context, scale, child) {
-                                              return Transform.scale(
-                                                scale: scale,
-                                                child: child,
-                                              );
-                                            },
-                                            child: SizedBox(
-                                              width: double.infinity,
-                                              child: AdaptiveButton(
-                                                onPressed: appState.isLoading
-                                                    ? null
-                                                    : _connect,
-                                                busy: appState.isLoading,
-                                                label: appState.isLoading
-                                                    ? context.l10n.connecting
-                                                    : context.l10n.connect,
-                                                sfSymbol: const SFSymbol(
-                                                  'arrow.right.to.line',
-                                                ),
-                                                materialIcon: Icons.login,
-                                                size: AdaptiveButtonSize.large,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      vertical: 18,
-                                                    ),
-                                                labelStyle: const TextStyle(
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
-                                                useSmoothRectangleBorder: false,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    },
+                                            const SizedBox(height: 16),
+                                            _connectButton(context, appState),
+                                          ],
+                                        );
+                                      },
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
                         const SizedBox(height: 16),
                         Tooltip(
                           message: context.l10n.githubIssuesHelp,
