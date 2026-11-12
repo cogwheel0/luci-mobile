@@ -448,4 +448,26 @@ void main() {
     variant: TargetPlatformVariant.only(TargetPlatform.iOS),
     skip: !Platform.isMacOS,
   );
+
+  testWidgets('before iOS 26, the Run button\'s play.fill is the play icon, '
+      'not the fallback circle', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    addTearDown(PlatformUiCapabilities.resetDebugOverrides);
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Center(
+          child: AdaptiveButton.sfSymbol(
+            onPressed: () {},
+            sfSymbol: const SFSymbol('play.fill'),
+            semanticLabel: 'Run diagnostic',
+            style: AdaptiveButtonStyle.plain,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(CupertinoIcons.play_fill), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.circle_fill), findsNothing);
+  });
 }

@@ -31,6 +31,7 @@ IconData? cupertinoIconForSFSymbol(String symbol) => switch (symbol) {
   'dot.radiowaves.left.and.right' => CupertinoIcons.dot_radiowaves_left_right,
   'square.and.arrow.down' => CupertinoIcons.square_arrow_down,
   'stop.fill' => CupertinoIcons.stop_fill,
+  'play.fill' => CupertinoIcons.play_fill,
   'wifi' => CupertinoIcons.wifi,
   'arrow.right.to.line' => CupertinoIcons.arrow_right_to_line,
   'doc.on.doc' => CupertinoIcons.doc_on_doc,
