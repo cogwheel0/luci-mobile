@@ -5,9 +5,12 @@ import 'package:material_ui/material_ui.dart';
 
 /// A one-field form that confirms with its text, once it has some.
 class _NameForm extends StatefulWidget {
-  const _NameForm({this.busy = false});
+  const _NameForm({this.busy = false, this.removable = false});
 
   final bool busy;
+
+  /// Offers a Remove action that completes with "removed".
+  final bool removable;
 
   @override
   State<_NameForm> createState() => _NameFormState();
@@ -25,9 +28,14 @@ class _NameFormState extends State<_NameForm> {
   @override
   Widget build(BuildContext context) => AdaptiveFormSheet(
     title: 'Rename',
+    subtitle: widget.removable ? 'Living room' : null,
     cancelLabel: 'Cancel',
     confirmLabel: 'Save',
     busy: widget.busy,
+    destructiveLabel: widget.removable ? 'Remove' : null,
+    onDestructive: widget.removable
+        ? () => Navigator.of(context).pop('removed')
+        : null,
     onConfirm: _name.text.isEmpty
         ? null
         : () => Navigator.of(context).pop(_name.text),
@@ -44,6 +52,9 @@ Future<List<String?>> _open(
   WidgetTester tester, {
   required bool cupertino,
   bool busy = false,
+  bool removable = false,
+  AdaptiveFormMaterialPresentation material =
+      const AdaptiveFormMaterialPresentation.dialog(),
 }) async {
   final results = <String?>[];
   final opener = Builder(
@@ -51,7 +62,8 @@ Future<List<String?>> _open(
       onTap: () async => results.add(
         await showAdaptiveFormSheet<String>(
           context: context,
-          builder: (_) => _NameForm(busy: busy),
+          material: material,
+          builder: (_) => _NameForm(busy: busy, removable: removable),
         ),
       ),
       child: const Text('Open'),
@@ -132,6 +144,31 @@ void main() {
       );
     });
 
+    testWidgets('a dialog shows the subtitle under its title and a red '
+        'Remove before Cancel', (tester) async {
+      final results = await _open(tester, cupertino: false, removable: true);
+
+      expect(find.text('Living room'), findsOneWidget);
+      final remove = find.widgetWithText(TextButton, 'Remove');
+      expect(
+        tester.getCenter(remove).dx,
+        lessThan(
+          tester.getCenter(find.widgetWithText(TextButton, 'Cancel')).dx,
+        ),
+      );
+      expect(
+        tester
+            .widget<TextButton>(remove)
+            .style!
+            .foregroundColor!
+            .resolve(const {}),
+        Theme.of(tester.element(remove)).colorScheme.error,
+      );
+      await tester.tap(remove);
+      await tester.pumpAndSettle();
+      expect(results, ['removed']);
+    });
+
     testWidgets('a busy form ignores the backdrop and Back', (tester) async {
       final results = await _open(tester, cupertino: false, busy: true);
 
@@ -142,6 +179,312 @@ void main() {
 
       expect(find.byType(AlertDialog), findsOneWidget);
       expect(results, isEmpty);
+    });
+  });
+
+  group('Material bottom sheet', () {
+    setUp(
+      () =>
+          PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android,
+    );
+
+    const bottomSheet = AdaptiveFormMaterialPresentation.bottomSheet();
+
+    testWidgets('a bottom sheet with its title, subtitle and a row of Remove, '
+        'Cancel and Save', (tester) async {
+      final results = await _open(
+        tester,
+        cupertino: false,
+        removable: true,
+        material: bottomSheet,
+      );
+
+      expect(find.byType(AlertDialog), findsNothing);
+      final sheet = find.byType(BottomSheet);
+      expect(sheet, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('adaptive-form-sheet-drag-handle')),
+        findsOneWidget,
+        reason: 'as the sheets luci-mobile showed had',
+      );
+      expect(find.text('Rename'), findsOneWidget);
+      expect(find.text('Living room'), findsOneWidget);
+      final save = find.widgetWithText(FilledButton, 'Save');
+      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+
+      // Remove leads the row, in the theme's error colour.
+      final remove = find.widgetWithText(TextButton, 'Remove');
+      final cancel = find.widgetWithText(TextButton, 'Cancel');
+      expect(
+        tester.getCenter(remove).dx,
+        lessThan(tester.getCenter(cancel).dx),
+      );
+      final context = tester.element(remove);
+      expect(
+        tester
+            .widget<TextButton>(remove)
+            .style!
+            .foregroundColor!
+            .resolve(const {}),
+        Theme.of(context).colorScheme.error,
+      );
+
+      await tester.enterText(find.byKey(const Key('name')), 'Kitchen TV');
+      await tester.pump();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(results, ['Kitchen TV']);
+      expect(sheet, findsNothing);
+    });
+
+    testWidgets('Remove completes with its own value', (tester) async {
+      final results = await _open(
+        tester,
+        cupertino: false,
+        removable: true,
+        material: bottomSheet,
+      );
+
+      await tester.tap(find.widgetWithText(TextButton, 'Remove'));
+      await tester.pumpAndSettle();
+      expect(results, ['removed']);
+    });
+
+    testWidgets('Cancel and dragging it away complete with null', (
+      tester,
+    ) async {
+      final results = await _open(
+        tester,
+        cupertino: false,
+        material: bottomSheet,
+      );
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      await tester.fling(find.text('Rename'), const Offset(0, 600), 2000);
+      await tester.pumpAndSettle();
+
+      expect(results, [null, null]);
+      expect(find.byType(BottomSheet), findsNothing);
+    });
+
+    testWidgets('busy disables Remove and Cancel and ignores Back', (
+      tester,
+    ) async {
+      final results = await _open(
+        tester,
+        cupertino: false,
+        busy: true,
+        removable: true,
+        material: bottomSheet,
+      );
+
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Remove'))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'Cancel'))
+            .onPressed,
+        isNull,
+      );
+      await tester.binding.handlePopRoute();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(results, isEmpty);
+    });
+
+    testWidgets('a busy sheet cannot be flung away, by its body or its '
+        'handle', (tester) async {
+      final results = await _open(
+        tester,
+        cupertino: false,
+        busy: true,
+        material: bottomSheet,
+      );
+      final handle = find.byKey(
+        const ValueKey('adaptive-form-sheet-drag-handle'),
+      );
+
+      await tester.fling(find.text('Rename'), const Offset(0, 600), 2000);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.fling(handle, const Offset(0, 600), 2000);
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(results, isEmpty);
+    });
+
+    testWidgets('an idle sheet is flung away by its handle, which matches '
+        'the stock one', (tester) async {
+      final results = await _open(
+        tester,
+        cupertino: false,
+        material: bottomSheet,
+      );
+      final handle = find.byKey(
+        const ValueKey('adaptive-form-sheet-drag-handle'),
+      );
+
+      // Material 3's: 32 by 4, centred in a 48 point strip above the form.
+      expect(tester.getSize(handle), const Size(32, 4));
+      final sheetTop = tester.getTopLeft(find.byType(BottomSheet)).dy;
+      expect(tester.getCenter(handle).dy, sheetTop + 24);
+      expect(
+        tester.getCenter(handle).dx,
+        tester.getCenter(find.byType(BottomSheet)).dx,
+      );
+      final decoration =
+          tester.widget<Container>(handle).decoration! as BoxDecoration;
+      expect(
+        decoration.color,
+        Theme.of(tester.element(handle)).colorScheme.onSurfaceVariant,
+      );
+      expect(
+        tester.getTopLeft(find.text('Rename')).dy,
+        greaterThanOrEqualTo(sheetTop + 48),
+      );
+
+      await tester.fling(handle, const Offset(0, 600), 2000);
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(results, [null]);
+    });
+
+    testWidgets('a trackpad drag flings an idle sheet away, and not a busy '
+        'one', (tester) async {
+      final idle = await _open(tester, cupertino: false, material: bottomSheet);
+      await tester.trackpadFling(
+        find.text('Rename'),
+        const Offset(0, 600),
+        2000,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(idle, [null]);
+
+      final busy = await _open(
+        tester,
+        cupertino: false,
+        busy: true,
+        material: bottomSheet,
+      );
+      await tester.trackpadFling(
+        find.text('Rename'),
+        const Offset(0, 600),
+        2000,
+      );
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(busy, isEmpty);
+    });
+
+    testWidgets('a busy sheet\'s handle refuses to dismiss it for '
+        'accessibility services', (tester) async {
+      final results = await _open(
+        tester,
+        cupertino: false,
+        busy: true,
+        material: bottomSheet,
+      );
+
+      final semantics = tester.widget<Semantics>(
+        find
+            .ancestor(
+              of: find.byKey(const ValueKey('adaptive-form-sheet-drag-handle')),
+              matching: find.byType(Semantics),
+            )
+            .first,
+      );
+      semantics.properties.onTap!();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(results, isEmpty);
+    });
+
+    testWidgets('on a narrow screen with large text, the actions stack '
+        'rather than overflow, and Save still works', (tester) async {
+      tester.view
+        ..physicalSize = const Size(320, 640)
+        ..devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      final results = await _open(
+        tester,
+        cupertino: false,
+        removable: true,
+        material: bottomSheet,
+      );
+      expect(tester.takeException(), isNull);
+
+      final save = find.widgetWithText(FilledButton, 'Save');
+      final remove = find.widgetWithText(TextButton, 'Remove');
+      // Stacked: Remove above, Cancel and Save below it, at the end.
+      expect(
+        tester.getTopLeft(save).dy,
+        greaterThan(tester.getBottomLeft(remove).dy),
+      );
+      expect(
+        tester.getTopRight(save).dx,
+        moreOrLessEquals(320 - 24, epsilon: 0.5),
+      );
+
+      await tester.enterText(find.byKey(const Key('name')), 'TV');
+      await tester.pump();
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(results, ['TV']);
+    });
+
+    testWidgets('where they fit, Remove leads and Cancel and Save end the '
+        'row', (tester) async {
+      await _open(
+        tester,
+        cupertino: false,
+        removable: true,
+        material: bottomSheet,
+      );
+
+      final remove = find.widgetWithText(TextButton, 'Remove');
+      final cancel = find.widgetWithText(TextButton, 'Cancel');
+      final save = find.widgetWithText(FilledButton, 'Save');
+      // The sheet's surface, which Material 3 caps at 640 wide.
+      final sheet = find
+          .descendant(
+            of: find.byType(BottomSheet),
+            matching: find.byType(Material),
+          )
+          .first;
+      expect(tester.getTopLeft(remove).dx, tester.getTopLeft(sheet).dx + 24);
+      expect(tester.getTopRight(save).dx, tester.getTopRight(sheet).dx - 24);
+      expect(tester.getTopLeft(save).dx - tester.getTopRight(cancel).dx, 8);
+      expect(tester.getCenter(remove).dy, tester.getCenter(save).dy);
+    });
+
+    testWidgets('a sheet drawing its own handle can turn this one off', (
+      tester,
+    ) async {
+      await _open(
+        tester,
+        cupertino: false,
+        material: const AdaptiveFormMaterialPresentation.bottomSheet(
+          showDragHandle: false,
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('adaptive-form-sheet-drag-handle')),
+        findsNothing,
+      );
     });
   });
 
@@ -217,6 +560,96 @@ void main() {
         ),
       );
       expect(cancel.onPressed, isNull);
+    });
+
+    testWidgets('an idle sheet is dragged away; a busy one holds', (
+      tester,
+    ) async {
+      final idle = await _open(tester, cupertino: true);
+      await tester.fling(
+        find.byKey(const Key('name')),
+        const Offset(0, 500),
+        2000,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoNavigationBar), findsNothing);
+      expect(idle, [null]);
+
+      final busy = await _open(tester, cupertino: true, busy: true);
+      for (final target in [
+        find.byKey(const Key('name')),
+        find.text('Rename'),
+      ]) {
+        await tester.fling(target, const Offset(0, 500), 2000);
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(find.byType(CupertinoNavigationBar), findsOneWidget);
+      expect(busy, isEmpty);
+    });
+
+    testWidgets('the subtitle sits under the title in the navigation bar', (
+      tester,
+    ) async {
+      await _open(tester, cupertino: true, removable: true);
+
+      final bar = find.byType(CupertinoNavigationBar);
+      final title = find.descendant(of: bar, matching: find.text('Rename'));
+      final subtitle = find.descendant(
+        of: bar,
+        matching: find.text('Living room'),
+      );
+      expect(subtitle, findsOneWidget);
+      expect(
+        tester.getCenter(subtitle).dy,
+        greaterThan(tester.getCenter(title).dy),
+      );
+    });
+
+    testWidgets('Remove is a red button under the fields, completing with '
+        'its own value', (tester) async {
+      final results = await _open(tester, cupertino: true, removable: true);
+
+      final bar = find.byType(CupertinoNavigationBar);
+      expect(
+        find.descendant(of: bar, matching: find.text('Remove')),
+        findsNothing,
+      );
+      final remove = find.widgetWithText(AdaptiveButton, 'Remove');
+      expect(
+        tester.getTopLeft(remove).dy,
+        greaterThan(tester.getBottomLeft(find.byKey(const Key('name'))).dy),
+      );
+      final button = tester.widget<AdaptiveButton>(remove);
+      expect(
+        button.color,
+        CupertinoColors.systemRed.resolveFrom(tester.element(remove)),
+      );
+      expect(button.style, AdaptiveButtonStyle.tinted);
+
+      await tester.tap(remove);
+      await tester.pumpAndSettle();
+      expect(results, ['removed']);
+    });
+
+    testWidgets('busy disables Remove', (tester) async {
+      await _open(tester, cupertino: true, busy: true, removable: true);
+
+      expect(
+        tester
+            .widget<AdaptiveButton>(
+              find.widgetWithText(AdaptiveButton, 'Remove'),
+            )
+            .onPressed,
+        isNull,
+      );
+    });
+
+    testWidgets('a form without a destructive action shows no button for '
+        'one', (tester) async {
+      await _open(tester, cupertino: true);
+
+      expect(find.text('Remove'), findsNothing);
+      expect(find.text('Living room'), findsNothing);
     });
   });
 

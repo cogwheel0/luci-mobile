@@ -92,20 +92,18 @@ class _WirelessScreenState extends ConsumerState<WirelessScreen> {
     WirelessRadio radio,
     WirelessNetwork? existing,
   ) async {
-    final ops = await showModalBottomSheet<List<UciOperation>>(
+    final ops = await showAdaptiveFormSheet<List<UciOperation>>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
+      material: const AdaptiveFormMaterialPresentation.bottomSheet(),
       builder: (_) => _NetworkSheet(radio: radio, existing: existing),
     );
     if (ops != null) await _apply(ops);
   }
 
   Future<void> _editRadio(WirelessRadio radio) async {
-    final ops = await showModalBottomSheet<List<UciOperation>>(
+    final ops = await showAdaptiveFormSheet<List<UciOperation>>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
+      material: const AdaptiveFormMaterialPresentation.bottomSheet(),
       builder: (_) => _RadioSheet(radio: radio),
     );
     if (ops != null) await _apply(ops);
@@ -387,128 +385,90 @@ class _NetworkSheetState extends State<_NetworkSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        LuciSpacing.lg,
-        0,
-        LuciSpacing.lg,
-        MediaQuery.viewInsetsOf(context).bottom + LuciSpacing.lg,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.existing == null ? l10n.addNetwork : l10n.editNetwork,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                // Large text reads too loose at default tracking.
-                letterSpacing: -0.4,
-              ),
-            ),
-            Text(
-              widget.radio.label,
-              style: LuciTextStyles.cardSubtitle(context),
-            ),
-            const SizedBox(height: LuciSpacing.lg),
+    final existing = widget.existing;
+    return AdaptiveFormSheet(
+      title: existing == null ? l10n.addNetwork : l10n.editNetwork,
+      subtitle: widget.radio.label,
+      cancelLabel: l10n.cancel,
+      confirmLabel: l10n.saveAction,
+      onConfirm: _isEnterprise || !_canSave ? null : _save,
+      destructiveLabel: existing == null ? null : l10n.remove,
+      onDestructive: existing == null
+          ? null
+          : () =>
+                Navigator.of(context)
+                    .pop(WirelessPlanner.planDeleteNetwork(existing)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_isEnterprise) ...[
+            _Banner(text: l10n.enterpriseNotEditable),
+            const SizedBox(height: LuciSpacing.md),
+          ],
 
-            if (_isEnterprise) ...[
-              _Banner(text: l10n.enterpriseNotEditable),
-              const SizedBox(height: LuciSpacing.md),
+          TextField(
+            controller: _ssid,
+            enabled: !_isEnterprise,
+            autofocus: widget.existing == null,
+            decoration: InputDecoration(
+              labelText: l10n.networkNameSsid,
+              errorText: _ssidError,
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: LuciSpacing.md),
+
+          DropdownButtonFormField<WirelessSecurity>(
+            initialValue: _security,
+            decoration: InputDecoration(labelText: l10n.encryption),
+            items: [
+              for (final s in WirelessSecurity.values)
+                DropdownMenuItem(value: s, child: Text(_securityLabel(s))),
             ],
+            onChanged: _isEnterprise
+                ? null
+                : (v) => setState(() => _security = v ?? _security),
+          ),
 
+          if (_security.needsPassphrase) ...[
+            const SizedBox(height: LuciSpacing.md),
             TextField(
-              controller: _ssid,
+              controller: _key,
               enabled: !_isEnterprise,
-              autofocus: widget.existing == null,
+              obscureText: !_showKey,
               decoration: InputDecoration(
-                labelText: l10n.networkNameSsid,
-                errorText: _ssidError,
+                labelText: l10n.password,
+                errorText: _keyError,
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _showKey ? Icons.visibility_off : Icons.visibility,
+                  ),
+                  onPressed: () => setState(() => _showKey = !_showKey),
+                ),
               ),
               onChanged: (_) => setState(() {}),
             ),
-            const SizedBox(height: LuciSpacing.md),
-
-            DropdownButtonFormField<WirelessSecurity>(
-              initialValue: _security,
-              decoration: InputDecoration(labelText: l10n.encryption),
-              items: [
-                for (final s in WirelessSecurity.values)
-                  DropdownMenuItem(value: s, child: Text(_securityLabel(s))),
-              ],
-              onChanged: _isEnterprise
-                  ? null
-                  : (v) => setState(() => _security = v ?? _security),
-            ),
-
-            if (_security.needsPassphrase) ...[
-              const SizedBox(height: LuciSpacing.md),
-              TextField(
-                controller: _key,
-                enabled: !_isEnterprise,
-                obscureText: !_showKey,
-                decoration: InputDecoration(
-                  labelText: l10n.password,
-                  errorText: _keyError,
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _showKey ? Icons.visibility_off : Icons.visibility,
-                    ),
-                    onPressed: () => setState(() => _showKey = !_showKey),
-                  ),
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-            ],
-
-            AdaptiveSwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(l10n.hiddenSsid),
-              subtitle: Text(l10n.hiddenSsidDescription),
-              value: _hidden,
-              onChanged: _isEnterprise
-                  ? null
-                  : (v) => setState(() => _hidden = v),
-            ),
-            AdaptiveSwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(l10n.clientIsolation),
-              subtitle: Text(l10n.clientIsolationDescription),
-              value: _isolate,
-              onChanged: _isEnterprise
-                  ? null
-                  : (v) => setState(() => _isolate = v),
-            ),
-
-            const SizedBox(height: LuciSpacing.md),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (widget.existing != null)
-                  AdaptiveButton(
-                    onPressed: () => Navigator.of(
-                      context,
-                    ).pop(WirelessPlanner.planDeleteNetwork(widget.existing!)),
-                    label: l10n.remove,
-                    style: AdaptiveButtonStyle.plain,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                const Spacer(),
-                AdaptiveButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  label: l10n.cancel,
-                  style: AdaptiveButtonStyle.plain,
-                ),
-                const SizedBox(width: LuciSpacing.sm),
-                AdaptiveButton(
-                  onPressed: _isEnterprise || !_canSave ? null : _save,
-                  label: l10n.saveAction,
-                ),
-              ],
-            ),
           ],
-        ),
+
+          AdaptiveSwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.hiddenSsid),
+            subtitle: Text(l10n.hiddenSsidDescription),
+            value: _hidden,
+            onChanged: _isEnterprise
+                ? null
+                : (v) => setState(() => _hidden = v),
+          ),
+          AdaptiveSwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.clientIsolation),
+            subtitle: Text(l10n.clientIsolationDescription),
+            value: _isolate,
+            onChanged: _isEnterprise
+                ? null
+                : (v) => setState(() => _isolate = v),
+          ),
+        ],
       ),
     );
   }
@@ -576,115 +536,84 @@ class _RadioSheetState extends State<_RadioSheet> {
     final channels = _channels;
     final htmodes = _htmodes;
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        LuciSpacing.lg,
-        0,
-        LuciSpacing.lg,
-        MediaQuery.viewInsetsOf(context).bottom + LuciSpacing.lg,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.radioSettings,
-              style: Theme.of(context).textTheme.headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.bold, letterSpacing: -0.4),
-            ),
-            Text(
-              widget.radio.label,
-              style: LuciTextStyles.cardSubtitle(context),
-            ),
-            const SizedBox(height: LuciSpacing.lg),
-
-            DropdownButtonFormField<String>(
-              initialValue: _channel,
-              decoration: InputDecoration(labelText: l10n.channel),
-              items: [
-                for (final c in channels)
-                  DropdownMenuItem(
-                    value: c,
-                    child: Text(c == 'auto' ? l10n.channelAuto : c),
-                  ),
-              ],
-              onChanged: (v) => setState(() => _channel = v ?? _channel),
-            ),
-            const SizedBox(height: LuciSpacing.md),
-
-            DropdownButtonFormField<String?>(
-              initialValue: _htmode,
-              // A null value renders nothing on its own; the hint is what
-              // shows for "no width set".
-              hint: Text(l10n.channelAuto),
-              decoration: InputDecoration(labelText: l10n.channelWidth),
-              items: [
-                // No width at all is the driver's own choice - and the only
-                // way back to it once one has been set.
-                DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text(l10n.channelAuto),
+    return AdaptiveFormSheet(
+      title: l10n.radioSettings,
+      subtitle: widget.radio.label,
+      cancelLabel: l10n.cancel,
+      confirmLabel: l10n.saveAction,
+      onConfirm: _save,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DropdownButtonFormField<String>(
+            initialValue: _channel,
+            decoration: InputDecoration(labelText: l10n.channel),
+            items: [
+              for (final c in channels)
+                DropdownMenuItem(
+                  value: c,
+                  child: Text(c == 'auto' ? l10n.channelAuto : c),
                 ),
-                for (final m in htmodes)
-                  DropdownMenuItem<String?>(value: m, child: Text(m)),
-              ],
-              onChanged: (v) => setState(() => _htmode = v),
-            ),
-            const SizedBox(height: LuciSpacing.md),
+            ],
+            onChanged: (v) => setState(() => _channel = v ?? _channel),
+          ),
+          const SizedBox(height: LuciSpacing.md),
 
-            TextField(
-              controller: _country,
-              textCapitalization: TextCapitalization.characters,
-              maxLength: 2,
-              decoration: InputDecoration(
-                labelText: l10n.countryCode,
-                helperText: l10n.countryCodeDescription,
+          DropdownButtonFormField<String?>(
+            initialValue: _htmode,
+            // A null value renders nothing on its own; the hint is what
+            // shows for "no width set".
+            hint: Text(l10n.channelAuto),
+            decoration: InputDecoration(labelText: l10n.channelWidth),
+            items: [
+              // No width at all is the driver's own choice - and the only
+              // way back to it once one has been set.
+              DropdownMenuItem<String?>(
+                value: null,
+                child: Text(l10n.channelAuto),
               ),
-            ),
+              for (final m in htmodes)
+                DropdownMenuItem<String?>(value: m, child: Text(m)),
+            ],
+            onChanged: (v) => setState(() => _htmode = v),
+          ),
+          const SizedBox(height: LuciSpacing.md),
 
-            const SizedBox(height: LuciSpacing.md),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                AdaptiveButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  label: l10n.cancel,
-                  style: AdaptiveButtonStyle.plain,
-                ),
-                const SizedBox(width: LuciSpacing.sm),
-                AdaptiveButton(
-                  onPressed: () {
-                    final radio = widget.radio;
-                    final country = _country.text.trim().toUpperCase();
-                    final htmode = _htmode;
-                    // Each field: unchanged, a new value, or emptied.
-                    OptionEdit edit(String? was, String? now) => now == was
-                        ? const OptionEdit.keep()
-                        : now == null
-                        ? const OptionEdit.clear()
-                        : OptionEdit.set(now);
-                    Navigator.of(context).pop(
-                      WirelessPlanner.planUpdateRadio(
-                        radio: radio,
-                        channel: edit(radio.channel ?? 'auto', _channel),
-                        htmode: edit(radio.htmode, htmode),
-                        // Compared upper-cased on both sides: a router
-                        // storing `us` must not be rewritten to `US` on a
-                        // save where nothing was touched, which reconfigures
-                        // the radio and drops every client on it.
-                        country: edit(
-                          radio.country?.toUpperCase(),
-                          country.isEmpty ? null : country,
-                        ),
-                      ),
-                    );
-                  },
-                  label: l10n.saveAction,
-                ),
-              ],
+          TextField(
+            controller: _country,
+            textCapitalization: TextCapitalization.characters,
+            maxLength: 2,
+            decoration: InputDecoration(
+              labelText: l10n.countryCode,
+              helperText: l10n.countryCodeDescription,
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _save() {
+    final radio = widget.radio;
+    final country = _country.text.trim().toUpperCase();
+    final htmode = _htmode;
+    // Each field: unchanged, a new value, or emptied.
+    OptionEdit edit(String? was, String? now) => now == was
+        ? const OptionEdit.keep()
+        : now == null
+        ? const OptionEdit.clear()
+        : OptionEdit.set(now);
+    Navigator.of(context).pop(
+      WirelessPlanner.planUpdateRadio(
+        radio: radio,
+        channel: edit(radio.channel ?? 'auto', _channel),
+        htmode: edit(radio.htmode, htmode),
+        // Compared upper-cased on both sides: a router storing `us` must
+        // not be rewritten to `US` on a save where nothing was touched,
+        // which reconfigures the radio and drops every client on it.
+        country: edit(
+          radio.country?.toUpperCase(),
+          country.isEmpty ? null : country,
         ),
       ),
     );

@@ -16,6 +16,7 @@ import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/state/client_detail_notifier.dart';
 import 'package:luci_mobile/state/feature_providers.dart';
 import 'package:luci_mobile/utils/format_bytes.dart';
+import 'package:luci_mobile/utils/keyboards.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_feature_gate.dart';
 import 'package:luci_mobile/widgets/luci_apply_progress.dart';
@@ -767,7 +768,7 @@ class _ReservationDialogState extends State<_ReservationDialog> {
       child: TextField(
         controller: _controller,
         autofocus: true,
-        keyboardType: TextInputType.number,
+        keyboardType: numericAddressKeyboard,
         decoration: InputDecoration(
           labelText: context.l10n.ipAddress,
           errorText: _check.isBlocking ? message : null,

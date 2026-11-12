@@ -193,12 +193,15 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
   }
 
   void _showConnectDialog(WifiScanResult network) {
-    showModalBottomSheet(
+    showAdaptiveFormSheet<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      material: const AdaptiveFormMaterialPresentation.bottomSheet(
+        // The sheet draws its own handle.
+        showDragHandle: false,
+        useSafeArea: true,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
       ),
       builder: (context) => _ConnectBottomSheet(
         network: network,
@@ -896,12 +899,11 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
     if (!mounted) return;
 
     if (success) {
+      // This sheet closes before the report shows.
+      final report = AdaptiveSnackBar.reporter(context);
+      final message = context.l10n.connectingToNetwork(ssid);
       Navigator.of(context).pop();
-      AdaptiveSnackBar.show(
-        context,
-        message: context.l10n.connectingToNetwork(ssid),
-        type: AdaptiveSnackBarType.success,
-      );
+      report.show(message: message, type: AdaptiveSnackBarType.success);
     } else {
       setState(() {
         _isConnecting = false;
@@ -912,10 +914,32 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final network = widget.network;
+    final title = network.ssid.isNotEmpty
+        ? network.ssid
+        : context.l10n.hiddenNetwork;
+    final summary =
+        '${_encryptionLabel(context, network.encryption)} • ${network.band} • ${context.l10n.channelShort(network.channel.toString())}';
+
+    if (PlatformUiCapabilities.isIOS) {
+      // As iOS asks for a network's password: Cancel and Connect in the
+      // sheet's navigation bar, over the network's details.
+      return AdaptiveFormSheet(
+        title: title,
+        subtitle: summary,
+        cancelLabel: context.l10n.cancel,
+        confirmLabel: context.l10n.connect,
+        onConfirm: _connect,
+        busy: _isConnecting,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: _form(context),
+        ),
+      );
+    }
+
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final network = widget.network;
-
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -968,16 +992,14 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          network.ssid.isNotEmpty
-                              ? network.ssid
-                              : context.l10n.hiddenNetwork,
+                          title,
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${_encryptionLabel(context, network.encryption)} • ${network.band} • ${context.l10n.channelShort(network.channel.toString())}',
+                          summary,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),
@@ -990,217 +1012,7 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
 
               const SizedBox(height: LuciSpacing.lg),
 
-              // Network details
-              _buildInfoRow(
-                context,
-                context.l10n.bssid,
-                network.bssid,
-                Icons.router_outlined,
-              ),
-              _buildInfoRow(
-                context,
-                context.l10n.signal,
-                '${network.signal} dBm (${_signalStrength(context, network.signal)})',
-                Icons.signal_cellular_alt,
-              ),
-              _buildInfoRow(
-                context,
-                context.l10n.encryption,
-                _encryptionDescription(context, network.encryption),
-                Icons.security,
-              ),
-
-              const SizedBox(height: LuciSpacing.lg),
-              Divider(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
-              const SizedBox(height: LuciSpacing.md),
-
-              // Radio selector
-              Text(
-                context.l10n.connectUsingRadio,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: LuciSpacing.sm),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: colorScheme.outline.withValues(alpha: 0.3),
-                  ),
-                  color: colorScheme.surfaceContainerLow,
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedRadio,
-                    isExpanded: true,
-                    icon: Icon(
-                      Icons.arrow_drop_down,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    items: widget.radioDevices.map((device) {
-                      final radioName = device['radioName'] ?? '';
-                      final band = device['band'] ?? '';
-                      final label = band.isNotEmpty
-                          ? '$radioName ($band)'
-                          : radioName;
-                      return DropdownMenuItem<String>(
-                        value: device['radioName'],
-                        child: Text(label, style: theme.textTheme.bodyMedium),
-                      );
-                    }).toList(),
-                    onChanged: _isConnecting
-                        ? null
-                        : (value) {
-                            setState(() {
-                              _selectedRadio = value;
-                            });
-                          },
-                  ),
-                ),
-              ),
-
-              // Hidden network SSID field
-              if (_isHidden) ...[
-                const SizedBox(height: LuciSpacing.md),
-                Text(
-                  context.l10n.networkNameSsid,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: LuciSpacing.sm),
-                TextField(
-                  controller: _hiddenSsidController,
-                  enabled: !_isConnecting,
-                  decoration: InputDecoration(
-                    hintText: context.l10n.enterHiddenNetworkName,
-                    prefixIcon: const Icon(Icons.wifi_find),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: colorScheme.outline.withValues(alpha: 0.3),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-
-              // Password field (only for encrypted networks)
-              if (network.encryption.requiresPassword) ...[
-                const SizedBox(height: LuciSpacing.md),
-                Text(
-                  context.l10n.passwordLabel,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: LuciSpacing.sm),
-                TextField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  enabled: !_isConnecting,
-                  decoration: InputDecoration(
-                    hintText: context.l10n.enterNetworkPassword,
-                    prefixIcon: const Icon(Icons.key),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: colorScheme.outline.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: colorScheme.primary,
-                        width: 2,
-                      ),
-                    ),
-                    filled: true,
-                    fillColor: colorScheme.surfaceContainerLow,
-                  ),
-                  onSubmitted: (_) => _connect(),
-                ),
-              ],
-
-              // Error message
-              if (_error != null) ...[
-                const SizedBox(height: LuciSpacing.sm),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: colorScheme.errorContainer.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        color: colorScheme.error,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _error!,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.error,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: LuciSpacing.lg),
-
-              // Warning for station mode
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: colorScheme.tertiaryContainer.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      color: colorScheme.tertiary,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        context.l10n.stationModeWarning,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              ..._form(context),
 
               const SizedBox(height: LuciSpacing.lg),
 
@@ -1232,6 +1044,205 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
         ),
       ),
     );
+  }
+
+  /// The network's details and what connecting to it needs.
+  List<Widget> _form(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final network = widget.network;
+    return [
+      // Network details
+      _buildInfoRow(
+        context,
+        context.l10n.bssid,
+        network.bssid,
+        Icons.router_outlined,
+      ),
+      _buildInfoRow(
+        context,
+        context.l10n.signal,
+        '${network.signal} dBm (${_signalStrength(context, network.signal)})',
+        Icons.signal_cellular_alt,
+      ),
+      _buildInfoRow(
+        context,
+        context.l10n.encryption,
+        _encryptionDescription(context, network.encryption),
+        Icons.security,
+      ),
+
+      const SizedBox(height: LuciSpacing.lg),
+      Divider(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+      const SizedBox(height: LuciSpacing.md),
+
+      // Radio selector
+      Text(
+        context.l10n.connectUsingRadio,
+        style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      const SizedBox(height: LuciSpacing.sm),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: colorScheme.outline.withValues(alpha: 0.3)),
+          color: colorScheme.surfaceContainerLow,
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: _selectedRadio,
+            isExpanded: true,
+            icon: Icon(
+              Icons.arrow_drop_down,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            items: widget.radioDevices.map((device) {
+              final radioName = device['radioName'] ?? '';
+              final band = device['band'] ?? '';
+              final label = band.isNotEmpty ? '$radioName ($band)' : radioName;
+              return DropdownMenuItem<String>(
+                value: device['radioName'],
+                child: Text(label, style: theme.textTheme.bodyMedium),
+              );
+            }).toList(),
+            onChanged: _isConnecting
+                ? null
+                : (value) {
+                    setState(() {
+                      _selectedRadio = value;
+                    });
+                  },
+          ),
+        ),
+      ),
+
+      // Hidden network SSID field
+      if (_isHidden) ...[
+        const SizedBox(height: LuciSpacing.md),
+        Text(
+          context.l10n.networkNameSsid,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: LuciSpacing.sm),
+        TextField(
+          controller: _hiddenSsidController,
+          enabled: !_isConnecting,
+          decoration: InputDecoration(
+            hintText: context.l10n.enterHiddenNetworkName,
+            prefixIcon: const Icon(Icons.wifi_find),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: colorScheme.outline.withValues(alpha: 0.3),
+              ),
+            ),
+          ),
+        ),
+      ],
+
+      // Password field (only for encrypted networks)
+      if (network.encryption.requiresPassword) ...[
+        const SizedBox(height: LuciSpacing.md),
+        Text(
+          context.l10n.passwordLabel,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: LuciSpacing.sm),
+        TextField(
+          controller: _passwordController,
+          obscureText: _obscurePassword,
+          enabled: !_isConnecting,
+          decoration: InputDecoration(
+            hintText: context.l10n.enterNetworkPassword,
+            prefixIcon: const Icon(Icons.key),
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscurePassword ? Icons.visibility_off : Icons.visibility,
+              ),
+              onPressed: () {
+                setState(() {
+                  _obscurePassword = !_obscurePassword;
+                });
+              },
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: colorScheme.outline.withValues(alpha: 0.3),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: colorScheme.primary, width: 2),
+            ),
+            filled: true,
+            fillColor: colorScheme.surfaceContainerLow,
+          ),
+          onSubmitted: (_) => _connect(),
+        ),
+      ],
+
+      // Error message
+      if (_error != null) ...[
+        const SizedBox(height: LuciSpacing.sm),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colorScheme.errorContainer.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline, color: colorScheme.error, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _error!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+
+      const SizedBox(height: LuciSpacing.lg),
+
+      // Warning for station mode
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colorScheme.tertiaryContainer.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline, color: colorScheme.tertiary, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                context.l10n.stationModeWarning,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
   }
 
   Widget _buildInfoRow(
