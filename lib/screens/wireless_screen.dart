@@ -33,8 +33,18 @@ class _WirelessScreenState extends ConsumerState<WirelessScreen> {
     final async = ref.watch(wirelessConfigProvider);
     final gate = ref.watch(featureProvider(RouterFeature.wirelessStations));
 
+    // iOS lays the radios out as iOS Settings groups things, on the
+    // grouped background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
-      appBar: LuciAppBar(title: l10n.wirelessNetworks, showBack: true),
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: l10n.wirelessNetworks,
+        showBack: true,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
+      ),
       body: AdaptiveRefreshIndicator(
         onRefresh: () async => ref.invalidate(wirelessConfigProvider),
         child: async.when(
@@ -59,7 +69,9 @@ class _WirelessScreenState extends ConsumerState<WirelessScreen> {
                 )
               : ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.only(bottom: LuciSpacing.xxl),
+                  padding: PlatformUiCapabilities.isIOS
+                      ? const EdgeInsets.all(LuciSpacing.md)
+                      : const EdgeInsets.only(bottom: LuciSpacing.xxl),
                   children: [
                     for (final radio in radios)
                       _RadioCard(
@@ -150,7 +162,58 @@ class _RadioCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final aps = radio.networks.where((n) => n.isAccessPoint).toList();
     final others = radio.networks.where((n) => !n.isAccessPoint).toList();
+    final settings = AdaptiveButton.sfSymbol(
+      onPressed: busy ? null : onRadioSettings,
+      sfSymbol: const SFSymbol('slider.horizontal.3'),
+      materialIcon: Icons.tune,
+      semanticLabel: l10n.radioSettings,
+      style: AdaptiveButtonStyle.plain,
+    );
+    final radioSwitch = AdaptiveSwitch(
+      value: !radio.disabled,
+      semanticLabel: radio.label,
+      onChanged: busy ? null : onToggleRadio,
+    );
+    final radioIcon = Icon(
+      radio.disabled ? Icons.wifi_off : Icons.wifi,
+      color: radio.disabled ? scheme.onSurfaceVariant : scheme.primary,
+    );
 
+    if (PlatformUiCapabilities.isIOS) {
+      // A group per radio: the radio first, its settings and its switch at
+      // its end; then its networks, each opening to edit with its switch
+      // outside the row's tap; then adding one, as a blue row.
+      return AdaptiveFormSection(
+        separatorIndent: 52,
+        children: [
+          AdaptiveListRow(
+            leading: radioIcon,
+            title: radio.label,
+            subtitle: _radioSummary(context, radio),
+            actions: [settings, radioSwitch],
+          ),
+          for (final n in aps)
+            _NetworkRow(
+              network: n,
+              busy: busy,
+              onToggle: (on) => onToggleNetwork(n, on),
+              onEdit: () => onEdit(n),
+            ),
+          // Station-mode entries are how this router joins someone else's
+          // network; editing them here would be a different task.
+          for (final n in others)
+            AdaptiveListRow(
+              leading: const Icon(Icons.link),
+              title: n.ssid ?? l10n.unknown,
+              subtitle: l10n.clientStationMode,
+            ),
+          AdaptiveFormButtonRow(
+            label: l10n.addNetwork,
+            onPressed: busy ? null : onAdd,
+          ),
+        ],
+      );
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         LuciSpacing.md,
@@ -165,12 +228,7 @@ class _RadioCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(
-                  radio.disabled ? Icons.wifi_off : Icons.wifi,
-                  color: radio.disabled
-                      ? scheme.onSurfaceVariant
-                      : scheme.primary,
-                ),
+                radioIcon,
                 const SizedBox(width: LuciSpacing.sm),
                 Expanded(
                   child: Column(
@@ -187,18 +245,8 @@ class _RadioCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                AdaptiveButton.sfSymbol(
-                  onPressed: busy ? null : onRadioSettings,
-                  sfSymbol: const SFSymbol('slider.horizontal.3'),
-                  materialIcon: Icons.tune,
-                  semanticLabel: l10n.radioSettings,
-                  style: AdaptiveButtonStyle.plain,
-                ),
-                AdaptiveSwitch(
-                  value: !radio.disabled,
-                  semanticLabel: radio.label,
-                  onChanged: busy ? null : onToggleRadio,
-                ),
+                settings,
+                radioSwitch,
               ],
             ),
             const Divider(height: LuciSpacing.lg),
@@ -271,21 +319,34 @@ class _NetworkRow extends StatelessWidget {
       if (network.looksLikeGuest) l10n.guestNetwork,
     ];
 
+    final lock = Icon(
+      network.isOpen ? Icons.lock_open : Icons.lock_outline,
+      size: 20,
+      color: network.isOpen ? Theme.of(context).colorScheme.error : null,
+    );
+    final toggle = AdaptiveSwitch(
+      value: !network.disabled,
+      semanticLabel: network.ssid ?? l10n.hiddenNetwork,
+      onChanged: busy ? null : onToggle,
+    );
+    if (PlatformUiCapabilities.isIOS) {
+      // The switch outside the row's tap, so on iOS 26 the native switch
+      // toggles the network instead of the row opening it.
+      return AdaptiveListRow(
+        leading: SizedBox(width: 24, child: Center(child: lock)),
+        title: network.ssid ?? l10n.hiddenNetwork,
+        subtitle: badges.join(' · '),
+        onTap: busy ? null : onEdit,
+        actions: [toggle],
+      );
+    }
     return ListTile(
       contentPadding: EdgeInsets.zero,
       onTap: busy ? null : onEdit,
-      leading: Icon(
-        network.isOpen ? Icons.lock_open : Icons.lock_outline,
-        size: 20,
-        color: network.isOpen ? Theme.of(context).colorScheme.error : null,
-      ),
+      leading: lock,
       title: Text(network.ssid ?? l10n.hiddenNetwork),
       subtitle: Text(badges.join(' · ')),
-      trailing: AdaptiveSwitch(
-        value: !network.disabled,
-        semanticLabel: network.ssid ?? l10n.hiddenNetwork,
-        onChanged: busy ? null : onToggle,
-      ),
+      trailing: toggle,
     );
   }
 }
