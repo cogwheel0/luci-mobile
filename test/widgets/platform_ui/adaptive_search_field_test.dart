@@ -1,5 +1,7 @@
 import 'dart:io' show Platform;
 
+import 'package:cupertino_native_better/cupertino_native_better.dart'
+    show CNSearchBar;
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
@@ -60,6 +62,24 @@ void main() {
 
       expect(find.byType(AdaptiveNativeSearchBar), findsOneWidget);
       expect(find.byType(CupertinoSearchTextField), findsNothing);
+
+      // What the person types, as the native field reports it, reaches the
+      // controller before the callback; so does clearing it.
+      final typed = <(String, String)>[];
+      await _pump(
+        tester,
+        AdaptiveSearchField(
+          controller: controller,
+          placeholder: 'Filter log',
+          onChanged: (text) => typed.add((text, controller.text)),
+        ),
+      );
+      final native = tester.widget<CNSearchBar>(find.byType(CNSearchBar));
+      native.onChanged!('dropbear');
+      expect(controller.text, 'dropbear');
+      native.onChanged!('');
+      expect(controller.text, isEmpty);
+      expect(typed, [('dropbear', 'dropbear'), ('', '')]);
       await tester.pumpWidget(const SizedBox());
     },
     variant: TargetPlatformVariant.only(TargetPlatform.iOS),
