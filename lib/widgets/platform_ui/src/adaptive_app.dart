@@ -1,3 +1,5 @@
+import 'package:cupertino_native_better/cupertino_native_better.dart'
+    show CNTabBarRouteObserver;
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -74,6 +76,15 @@ enum PlatformTarget {
 
 /// Flutter application root with Cupertino on iOS and Material elsewhere.
 class AdaptiveApp extends StatelessWidget {
+  /// Tells cupertino_native_better's native controls when a sheet, dialog
+  /// or popup covers their page, so they step aside while it is up, as the
+  /// package requires of every app using them. Without it, a native control
+  /// on the page under a sheet is composited above the sheet and blanks out
+  /// the part of the sheet that lies over it. One app, one root navigator:
+  /// shared, so a rebuild of the app keeps the same observer.
+  static final NavigatorObserver _nativeControlsObserver =
+      CNTabBarRouteObserver();
+
   const AdaptiveApp.router({
     super.key,
     this.routerConfig,
@@ -352,7 +363,10 @@ class AdaptiveApp extends StatelessWidget {
               initialRoute: initialRoute,
               onGenerateRoute: onGenerateRoute,
               onUnknownRoute: onUnknownRoute,
-              navigatorObservers: navigatorObservers,
+              navigatorObservers: [
+                _nativeControlsObserver,
+                ...navigatorObservers,
+              ],
               builder: effectiveBuilder,
               title: title,
               onGenerateTitle: onGenerateTitle,
