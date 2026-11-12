@@ -268,6 +268,55 @@ class _AddRouterFormState extends State<_AddRouterForm> {
   bool _showAlternate = false;
   String? _error;
 
+  // On iOS the rows show what is wrong with them, as the Material fields'
+  // validators do on Android.
+  String? _addressError;
+  String? _alternateError;
+  String? _userError;
+
+  String? _validateAddress(String? value) {
+    if (value == null || value.isEmpty) {
+      return context.l10n.routerAddressRequired;
+    }
+    if (!UrlParser.parse(value).isValid) {
+      return context.l10n.invalidAddressFormat;
+    }
+    return null;
+  }
+
+  String? _validateAlternate(String? value) {
+    if (value == null || value.isEmpty) return null;
+    final parsed = UrlParser.parse(value);
+    if (!parsed.isValid) return context.l10n.invalidAddressFormat;
+    final primary = UrlParser.parse(_address.text);
+    if (primary.isValid && parsed.hostWithPort == primary.hostWithPort) {
+      return context.l10n.mustDifferFromPrimaryAddress;
+    }
+    return null;
+  }
+
+  // Trimmed, as the username sent to the router is.
+  String? _validateUser(String? value) =>
+      value == null || value.trim().isEmpty ? context.l10n.required : null;
+
+  /// Checks the fields: the Form's validators on Android, the rows' errors
+  /// on iOS.
+  bool _validate() {
+    if (!PlatformUiCapabilities.isIOS) {
+      return _formKey.currentState!.validate();
+    }
+    setState(() {
+      _addressError = _validateAddress(_address.text);
+      _alternateError = _showAlternate
+          ? _validateAlternate(_alternate.text)
+          : null;
+      _userError = _validateUser(_user.text);
+    });
+    return _addressError == null &&
+        _alternateError == null &&
+        _userError == null;
+  }
+
   @override
   void dispose() {
     _address.dispose();
@@ -278,7 +327,10 @@ class _AddRouterFormState extends State<_AddRouterForm> {
   }
 
   Future<void> _connect() async {
-    if (!_formKey.currentState!.validate()) return;
+    // Return in the password field can arrive while a sign-in is under
+    // way; a second one would make the first report a failure.
+    if (_connecting) return;
+    if (!_validate()) return;
 
     final input = _address.text.trim();
     final user = _user.text.trim();
@@ -360,6 +412,84 @@ class _AddRouterFormState extends State<_AddRouterForm> {
     }
   }
 
+  /// The router's address, then the sign-in, as iOS groups a form. What
+  /// went wrong with the sign-in sits under the second group.
+  Widget _iosForm(BuildContext context) {
+    final l10n = context.l10n;
+    // A row's error goes once it is edited again.
+    void clear(VoidCallback reset) => setState(reset);
+    return AdaptiveForm(
+      sections: [
+        AdaptiveFormSection(
+          children: [
+            AdaptiveFormTextField(
+              label: l10n.routerAddress,
+              controller: _address,
+              placeholder: '192.168.1.1',
+              helper: l10n.routerAddressExample,
+              error: _addressError,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              autofillHints: const [AutofillHints.url],
+              textInputAction: TextInputAction.next,
+              // The fallback's "must differ" depends on this field too.
+              onChanged: (_) => clear(() {
+                _addressError = null;
+                _alternateError = null;
+              }),
+            ),
+            if (_showAlternate)
+              AdaptiveFormTextField(
+                label: l10n.fallbackAddress,
+                controller: _alternate,
+                helper: l10n.fallbackCredentialsHelp,
+                error: _alternateError,
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                textInputAction: TextInputAction.next,
+                onChanged: (_) => clear(() => _alternateError = null),
+              )
+            else
+              AdaptiveFormButtonRow(
+                label: l10n.addFallbackAddress,
+                onPressed: _connecting
+                    ? null
+                    : () => setState(() => _showAlternate = true),
+              ),
+          ],
+        ),
+        AdaptiveFormSection(
+          error: _error,
+          children: [
+            AdaptiveFormTextField(
+              label: l10n.username,
+              controller: _user,
+              helper: l10n.usernameDefaultHelp,
+              error: _userError,
+              autocorrect: false,
+              autofillHints: const [AutofillHints.username],
+              textInputAction: TextInputAction.next,
+              onChanged: (_) => clear(() => _userError = null),
+            ),
+            AdaptiveFormTextField(
+              label: l10n.password,
+              controller: _password,
+              obscureText: _obscure,
+              autofillHints: const [AutofillHints.password],
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _connect(),
+              suffix: AdaptiveObscureToggle(
+                obscured: _obscure,
+                semanticLabel: _obscure ? l10n.showPassword : l10n.hidePassword,
+                onPressed: () => setState(() => _obscure = !_obscure),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AdaptiveFormSheet(
@@ -368,135 +498,119 @@ class _AddRouterFormState extends State<_AddRouterForm> {
       confirmLabel: context.l10n.add,
       busy: _connecting,
       onConfirm: _connect,
+      grouped: true,
       child: AutofillForm(
         formKey: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              controller: _address,
-              decoration: InputDecoration(
-                labelText: context.l10n.routerAddress,
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.router_outlined),
-                helperText: context.l10n.routerAddressExample,
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return context.l10n.routerAddressRequired;
-                }
-                final parsed = UrlParser.parse(value);
-                if (!parsed.isValid) {
-                  return context.l10n.invalidAddressFormat;
-                }
-                return null;
-              },
-              autofillHints: const [AutofillHints.url],
-            ),
-            const SizedBox(height: 6),
-            if (!_showAlternate)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: AdaptiveButton(
-                  onPressed: () => setState(() => _showAlternate = true),
-                  label: context.l10n.addFallbackAddress,
-                  sfSymbol: const SFSymbol('plus'),
-                  materialIcon: Icons.add,
-                  style: AdaptiveButtonStyle.plain,
-                ),
-              )
-            else
-              TextFormField(
-                controller: _alternate,
-                decoration: InputDecoration(
-                  labelText: context.l10n.fallbackAddress,
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.swap_horiz),
-                  helperText: context.l10n.fallbackCredentialsHelp,
-                  helperMaxLines: 2,
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return null;
-                  }
-                  final parsed = UrlParser.parse(value);
-                  if (!parsed.isValid) {
-                    return context.l10n.invalidAddressFormat;
-                  }
-                  final primary = UrlParser.parse(_address.text);
-                  if (primary.isValid &&
-                      parsed.hostWithPort == primary.hostWithPort) {
-                    return context.l10n.mustDifferFromPrimaryAddress;
-                  }
-                  return null;
-                },
-              ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _user,
-              decoration: InputDecoration(
-                labelText: context.l10n.username,
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.person_outline),
-                helperText: context.l10n.usernameDefaultHelp,
-              ),
-              validator: (v) =>
-                  v == null || v.isEmpty ? context.l10n.required : null,
-              autofillHints: const [AutofillHints.username],
-            ),
-            const SizedBox(height: 20),
-            TextFormField(
-              controller: _password,
-              decoration: InputDecoration(
-                labelText: context.l10n.password,
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.lock_outline),
-                helperText: context.l10n.routerPasswordHelp,
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscure
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                  ),
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                  tooltip: _obscure
-                      ? context.l10n.hidePassword
-                      : context.l10n.showPassword,
-                ),
-              ),
-              obscureText: _obscure,
-              autofillHints: const [AutofillHints.password],
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.errorContainer
-                      .withValues(alpha: 1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.error_outline,
-                      color: Theme.of(context).colorScheme.onErrorContainer,
+        child: PlatformUiCapabilities.isIOS
+            ? _iosForm(context)
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: _address,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.routerAddress,
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.router_outlined),
+                      helperText: context.l10n.routerAddressExample,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _error!,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onErrorContainer,
+                    validator: _validateAddress,
+                    autofillHints: const [AutofillHints.url],
+                  ),
+                  const SizedBox(height: 6),
+                  if (!_showAlternate)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: AdaptiveButton(
+                        onPressed: () => setState(() => _showAlternate = true),
+                        label: context.l10n.addFallbackAddress,
+                        sfSymbol: const SFSymbol('plus'),
+                        materialIcon: Icons.add,
+                        style: AdaptiveButtonStyle.plain,
+                      ),
+                    )
+                  else
+                    TextFormField(
+                      controller: _alternate,
+                      decoration: InputDecoration(
+                        labelText: context.l10n.fallbackAddress,
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.swap_horiz),
+                        helperText: context.l10n.fallbackCredentialsHelp,
+                        helperMaxLines: 2,
+                      ),
+                      validator: _validateAlternate,
+                    ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: _user,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.username,
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.person_outline),
+                      helperText: context.l10n.usernameDefaultHelp,
+                    ),
+                    validator: _validateUser,
+                    autofillHints: const [AutofillHints.username],
+                  ),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: _password,
+                    decoration: InputDecoration(
+                      labelText: context.l10n.password,
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      helperText: context.l10n.routerPasswordHelp,
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscure
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
                         ),
+                        onPressed: () => setState(() => _obscure = !_obscure),
+                        tooltip: _obscure
+                            ? context.l10n.hidePassword
+                            : context.l10n.showPassword,
+                      ),
+                    ),
+                    obscureText: _obscure,
+                    autofillHints: const [AutofillHints.password],
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.errorContainer
+                            .withValues(alpha: 1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onErrorContainer,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _error!,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onErrorContainer,
+                                  ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
-                ),
+                ],
               ),
-            ],
-          ],
-        ),
       ),
     );
   }
