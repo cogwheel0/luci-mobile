@@ -395,10 +395,10 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsNothing);
       final spinner = find.byType(CupertinoActivityIndicator);
       expect(tester.widget<CupertinoActivityIndicator>(spinner).color, color);
-      expect(
-        tester.getSize(find.byType(AdaptiveProgressIndicator)),
-        const Size.square(24),
-      );
+      // Laid out at its own size, and scaled down to draw in the 24 pt box
+      // rather than squeezed or spilling out of it.
+      expect(tester.getSize(spinner), const Size.square(36));
+      expect(tester.getRect(spinner).size, const Size.square(24));
     });
   });
 }
