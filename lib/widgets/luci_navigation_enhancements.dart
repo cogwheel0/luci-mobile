@@ -4,6 +4,8 @@ import '../design/luci_design_system.dart';
 import 'luci_animation_system.dart';
 import '../l10n/luci_localizations.dart';
 
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
+
 /// Enhanced tab transition system for smooth navigation
 /// Provides consistent, engaging transitions between screens
 class LuciTabTransition extends StatefulWidget {
@@ -287,10 +289,8 @@ class _LuciLoadingOverlayState extends State<LuciLoadingOverlay>
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  colorScheme.primary,
-                                ),
+                              AdaptiveProgressIndicator(
+                                color: colorScheme.primary,
                               ),
                               SizedBox(height: LuciSpacing.md),
                               Text(

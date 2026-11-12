@@ -162,7 +162,7 @@ class _LogScreenState extends ConsumerState<LogScreen> {
 
   Widget _body(BuildContext context, List<LogEntry> visible) {
     final l10n = context.l10n;
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: AdaptiveProgressIndicator());
     if (_error != null) {
       return LuciMessageState(
         scrollable: false,

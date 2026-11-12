@@ -720,11 +720,9 @@ class _UnifiedRouterCard extends StatelessWidget {
                   child: SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(
+                    child: AdaptiveProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        colorScheme.primary,
-                      ),
+                      color: colorScheme.primary,
                     ),
                   ),
                 ),

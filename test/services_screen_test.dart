@@ -1,11 +1,14 @@
 import 'dart:io' show Platform;
 
+import 'dart:async';
+
 import 'package:cupertino_native_better/cupertino_native_better.dart'
     show CNPopupMenuSubmenu;
 import 'package:cupertino_ui/cupertino_ui.dart'
     show
         CupertinoActionSheet,
         CupertinoActionSheetAction,
+        CupertinoActivityIndicator,
         CupertinoButton,
         CupertinoIcons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,6 +27,9 @@ import 'package:material_ui/material_ui.dart';
 class _RecordingApi extends MockApiService {
   final actions = <String>[];
 
+  /// When set, an action waits for it, as one over the network does.
+  Completer<void>? pending;
+
   @override
   Future<bool> rcInit(
     String ipAddress,
@@ -34,6 +40,7 @@ class _RecordingApi extends MockApiService {
     BuildContext? context,
   }) async {
     actions.add('$name $action');
+    await pending?.future;
     return true;
   }
 }
@@ -191,4 +198,24 @@ void main() {
     variant: TargetPlatformVariant.only(TargetPlatform.iOS),
     skip: !Platform.isMacOS,
   );
+
+  testWidgets('before iOS 26: a service acting shows the system activity '
+      'indicator in place of its icon', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    final api = await _pumpServices(tester);
+    final pending = api.pending = Completer<void>();
+
+    await tester.tap(find.byIcon(CupertinoIcons.ellipsis));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(CupertinoActionSheetAction, 'Start'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    pending.complete();
+    await tester.pumpAndSettle();
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    await _settleBanner(tester);
+  });
 }

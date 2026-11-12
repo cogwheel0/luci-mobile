@@ -328,7 +328,7 @@ class LuciLoadingWidget extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return Center(
-      child: CircularProgressIndicator(
+      child: AdaptiveProgressIndicator(
         color: colorScheme.primary,
         strokeWidth: 3,
       ),

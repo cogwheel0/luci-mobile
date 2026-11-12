@@ -477,7 +477,7 @@ class _RouterDashboardSettingsScreenState
           title: context.l10n.dashboardSettings,
           showBack: true,
         ),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: AdaptiveProgressIndicator()),
       );
     }
     if (_errorMessage != null) {

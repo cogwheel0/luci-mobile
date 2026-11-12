@@ -162,7 +162,7 @@ class _ServiceRow extends StatelessWidget {
           ? const SizedBox(
               width: 24,
               height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2.5),
+              child: AdaptiveProgressIndicator(strokeWidth: 2.5),
             )
           : Icon(
               switch (service.running) {

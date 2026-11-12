@@ -467,7 +467,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   @override
   Widget build(BuildContext context) {
     if (_isCheckingAutoLogin) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: Center(child: AdaptiveProgressIndicator()));
     }
 
     final theme = Theme.of(context);

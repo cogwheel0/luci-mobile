@@ -9,6 +9,7 @@ import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/router_event.dart';
 import 'package:luci_mobile/state/event_feed_notifier.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 /// What has changed on the router while the app was watching.
 class EventFeedScreen extends ConsumerWidget {
@@ -35,7 +36,7 @@ class EventFeedScreen extends ConsumerWidget {
         ],
       ),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: AdaptiveProgressIndicator()),
         error: (e, _) => Center(child: Text(e.toString())),
         data: (events) => events.isEmpty
             ? LuciMessageState(
