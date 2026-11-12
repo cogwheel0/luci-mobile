@@ -505,6 +505,9 @@ class _TimezonePageState extends State<_TimezonePage> {
             ),
             Expanded(
               child: AdaptiveFormChoiceList<String>(
+                // A new search starts at its first match, wherever the
+                // list was scrolled to before.
+                key: ValueKey(needle),
                 choices: [
                   for (final zone in widget.zones)
                     if (needle.isEmpty || zone.toLowerCase().contains(needle))

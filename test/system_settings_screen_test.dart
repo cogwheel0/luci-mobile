@@ -19,7 +19,10 @@ const _settings = SystemSettings(
   timezones: {'UTC': 'UTC', 'Europe/Berlin': 'CET-1CEST,M3.5.0,M10.5.0/3'},
 );
 
-Future<void> _pumpSettings(WidgetTester tester) async {
+Future<void> _pumpSettings(
+  WidgetTester tester, {
+  SystemSettings settings = _settings,
+}) async {
   // Tall enough for the whole page, wide enough for the test font.
   tester.view
     ..physicalSize = const Size(1800, 3600)
@@ -28,7 +31,7 @@ Future<void> _pumpSettings(WidgetTester tester) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        systemSettingsProvider.overrideWith((ref) async => _settings),
+        systemSettingsProvider.overrideWith((ref) async => settings),
         featureProvider(RouterFeature.systemSettings)
             .overrideWithValue(const FeatureAvailability.available()),
         sessionProvider.overrideWithValue(null),
@@ -146,5 +149,37 @@ void main() {
     );
     expect(_save(tester).onPressed, isNotNull);
     semantics.dispose();
+  });
+
+  testWidgets('before iOS 26: a search starts at its first match, wherever '
+      'the zones were scrolled to', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    await _pumpSettings(
+      tester,
+      settings: SystemSettings(
+        section: 'cfg01e48a',
+        hostname: 'OpenWrt',
+        zoneName: 'UTC',
+        description: '',
+        notes: '',
+        timezones: {
+          for (var i = 10; i < 70; i++) 'America/City$i': 'EST5EDT',
+          for (var i = 10; i < 70; i++) 'Europe/City$i': 'CET-1',
+        },
+      ),
+    );
+
+    await tester.tap(find.text('Time zone'));
+    await tester.pumpAndSettle();
+    final list = find.byType(AdaptiveFormChoiceList<String>);
+    // Well into the Americas, then a search that matches them all.
+    await tester.drag(list, const Offset(0, -2000));
+    await tester.pumpAndSettle();
+    expect(find.text('America/City10'), findsNothing);
+
+    await tester.enterText(find.byType(CupertinoSearchTextField), 'america');
+    await tester.pumpAndSettle();
+    expect(find.text('America/City10'), findsOneWidget);
   });
 }
