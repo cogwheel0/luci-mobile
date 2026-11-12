@@ -251,7 +251,15 @@ class AdaptiveFormSheet extends StatelessWidget {
             const SizedBox(height: 24),
             child,
             const SizedBox(height: 16),
-            Row(
+            // One row where it fits: Remove leading, Cancel and Save at the
+            // end. On a narrow screen or with large text the actions stack,
+            // ending in Save, rather than overflow and push Save off.
+            OverflowBar(
+              alignment: onDestructive == null
+                  ? MainAxisAlignment.end
+                  : MainAxisAlignment.spaceBetween,
+              overflowSpacing: 8,
+              overflowAlignment: OverflowBarAlignment.end,
               children: [
                 if (onDestructive != null)
                   AdaptiveButton(
@@ -260,17 +268,22 @@ class AdaptiveFormSheet extends StatelessWidget {
                     style: AdaptiveButtonStyle.plain,
                     color: theme.colorScheme.error,
                   ),
-                const Spacer(),
-                AdaptiveButton(
-                  onPressed: busy ? null : () => _cancel(context),
-                  label: cancelLabel,
-                  style: AdaptiveButtonStyle.plain,
-                ),
-                const SizedBox(width: 8),
-                AdaptiveButton(
-                  onPressed: confirm,
-                  busy: busy,
-                  label: confirmLabel,
+                OverflowBar(
+                  spacing: 8,
+                  overflowSpacing: 8,
+                  overflowAlignment: OverflowBarAlignment.end,
+                  children: [
+                    AdaptiveButton(
+                      onPressed: busy ? null : () => _cancel(context),
+                      label: cancelLabel,
+                      style: AdaptiveButtonStyle.plain,
+                    ),
+                    AdaptiveButton(
+                      onPressed: confirm,
+                      busy: busy,
+                      label: confirmLabel,
+                    ),
+                  ],
                 ),
               ],
             ),

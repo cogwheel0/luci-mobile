@@ -380,6 +380,68 @@ void main() {
       expect(results, isEmpty);
     });
 
+    testWidgets('on a narrow screen with large text, the actions stack '
+        'rather than overflow, and Save still works', (tester) async {
+      tester.view
+        ..physicalSize = const Size(320, 640)
+        ..devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      final results = await _open(
+        tester,
+        cupertino: false,
+        removable: true,
+        material: bottomSheet,
+      );
+      expect(tester.takeException(), isNull);
+
+      final save = find.widgetWithText(FilledButton, 'Save');
+      final remove = find.widgetWithText(TextButton, 'Remove');
+      // Stacked: Remove above, Cancel and Save below it, at the end.
+      expect(
+        tester.getTopLeft(save).dy,
+        greaterThan(tester.getBottomLeft(remove).dy),
+      );
+      expect(
+        tester.getTopRight(save).dx,
+        moreOrLessEquals(320 - 24, epsilon: 0.5),
+      );
+
+      await tester.enterText(find.byKey(const Key('name')), 'TV');
+      await tester.pump();
+      await tester.ensureVisible(save);
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(results, ['TV']);
+    });
+
+    testWidgets('where they fit, Remove leads and Cancel and Save end the '
+        'row', (tester) async {
+      await _open(
+        tester,
+        cupertino: false,
+        removable: true,
+        material: bottomSheet,
+      );
+
+      final remove = find.widgetWithText(TextButton, 'Remove');
+      final cancel = find.widgetWithText(TextButton, 'Cancel');
+      final save = find.widgetWithText(FilledButton, 'Save');
+      // The sheet's surface, which Material 3 caps at 640 wide.
+      final sheet = find
+          .descendant(
+            of: find.byType(BottomSheet),
+            matching: find.byType(Material),
+          )
+          .first;
+      expect(tester.getTopLeft(remove).dx, tester.getTopLeft(sheet).dx + 24);
+      expect(tester.getTopRight(save).dx, tester.getTopRight(sheet).dx - 24);
+      expect(tester.getTopLeft(save).dx - tester.getTopRight(cancel).dx, 8);
+      expect(tester.getCenter(remove).dy, tester.getCenter(save).dy);
+    });
+
     testWidgets('a sheet drawing its own handle can turn this one off', (
       tester,
     ) async {
