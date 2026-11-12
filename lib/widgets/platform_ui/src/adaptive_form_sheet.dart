@@ -84,14 +84,16 @@ Future<T?> showAdaptiveFormSheet<T>({
 /// button under the fields there, as iOS puts "Forget This Network".
 ///
 /// Either way the confirm action is disabled while [onConfirm] is null, and
-/// shows progress while [busy].
+/// shows progress while [busy]. A sheet whose only way forward is its
+/// destructive action, such as accepting a risk, leaves [confirmLabel] null
+/// and has no confirm action at all.
 class AdaptiveFormSheet extends StatelessWidget {
   const AdaptiveFormSheet({
     super.key,
     required this.title,
     required this.cancelLabel,
-    required this.confirmLabel,
-    required this.onConfirm,
+    this.confirmLabel,
+    this.onConfirm,
     required this.child,
     this.subtitle,
     this.destructiveLabel,
@@ -101,6 +103,10 @@ class AdaptiveFormSheet extends StatelessWidget {
   }) : assert(
          (destructiveLabel == null) == (onDestructive == null),
          'A destructive action needs both a label and a callback.',
+       ),
+       assert(
+         confirmLabel != null || (onConfirm == null && onDestructive != null),
+         'Without a confirm action, the destructive action is the way on.',
        );
 
   final String title;
@@ -110,7 +116,9 @@ class AdaptiveFormSheet extends StatelessWidget {
   final String? subtitle;
 
   final String cancelLabel;
-  final String confirmLabel;
+
+  /// The confirm action's label; null for none.
+  final String? confirmLabel;
 
   /// Confirms the form, typically popping it with its result.
   final VoidCallback? onConfirm;
@@ -163,7 +171,10 @@ class AdaptiveFormSheet extends StatelessWidget {
           backgroundColor: background.withValues(alpha: 0.94),
           leading: _cancelButton(context),
           middle: _cupertinoTitle(context),
-          trailing: _confirmButton(context, confirm),
+          trailing: switch (confirmLabel) {
+            final label? => _confirmButton(context, label, confirm),
+            null => null,
+          },
         ),
         child: SafeArea(
           // The forms' Material fields need a Material ancestor, which the
@@ -233,15 +244,16 @@ class AdaptiveFormSheet extends StatelessWidget {
           onPressed: busy ? null : () => _cancel(context),
           child: Text(cancelLabel),
         ),
-        FilledButton(
-          onPressed: confirm,
-          child: busy
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(confirmLabel),
-        ),
+        if (confirmLabel case final label?)
+          FilledButton(
+            onPressed: confirm,
+            child: busy
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(label),
+          ),
       ],
     );
   }
@@ -299,11 +311,12 @@ class AdaptiveFormSheet extends StatelessWidget {
                       label: cancelLabel,
                       style: AdaptiveButtonStyle.plain,
                     ),
-                    AdaptiveButton(
-                      onPressed: confirm,
-                      busy: busy,
-                      label: confirmLabel,
-                    ),
+                    if (confirmLabel case final label?)
+                      AdaptiveButton(
+                        onPressed: confirm,
+                        busy: busy,
+                        label: label,
+                      ),
                   ],
                 ),
               ],
@@ -368,10 +381,15 @@ class AdaptiveFormSheet extends StatelessWidget {
     );
   }
 
-  Widget _confirmButton(BuildContext context, VoidCallback? confirm) {
+  /// The confirm action in the bar, labelled [label].
+  Widget _confirmButton(
+    BuildContext context,
+    String label,
+    VoidCallback? confirm,
+  ) {
     if (busy) {
       return Semantics(
-        label: confirmLabel,
+        label: label,
         child: const SizedBox.square(
           dimension: 44,
           child: Center(child: CupertinoActivityIndicator()),
@@ -382,7 +400,7 @@ class AdaptiveFormSheet extends StatelessWidget {
       return AdaptiveButton.sfSymbol(
         onPressed: confirm,
         sfSymbol: const SFSymbol('checkmark'),
-        semanticLabel: confirmLabel,
+        semanticLabel: label,
         style: AdaptiveButtonStyle.prominentGlass,
         minSize: const Size.square(44),
         padding: EdgeInsets.zero,
@@ -393,10 +411,7 @@ class AdaptiveFormSheet extends StatelessWidget {
     return CupertinoButton(
       padding: EdgeInsets.zero,
       onPressed: confirm,
-      child: Text(
-        confirmLabel,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
     );
   }
 }

@@ -5,12 +5,19 @@ import 'package:material_ui/material_ui.dart';
 
 /// A one-field form that confirms with its text, once it has some.
 class _NameForm extends StatefulWidget {
-  const _NameForm({this.busy = false, this.removable = false});
+  const _NameForm({
+    this.busy = false,
+    this.removable = false,
+    this.confirmable = true,
+  });
 
   final bool busy;
 
   /// Offers a Remove action that completes with "removed".
   final bool removable;
+
+  /// Offers Save; without it, Remove is the only way on.
+  final bool confirmable;
 
   @override
   State<_NameForm> createState() => _NameFormState();
@@ -30,13 +37,13 @@ class _NameFormState extends State<_NameForm> {
     title: 'Rename',
     subtitle: widget.removable ? 'Living room' : null,
     cancelLabel: 'Cancel',
-    confirmLabel: 'Save',
+    confirmLabel: widget.confirmable ? 'Save' : null,
     busy: widget.busy,
     destructiveLabel: widget.removable ? 'Remove' : null,
     onDestructive: widget.removable
         ? () => Navigator.of(context).pop('removed')
         : null,
-    onConfirm: _name.text.isEmpty
+    onConfirm: !widget.confirmable || _name.text.isEmpty
         ? null
         : () => Navigator.of(context).pop(_name.text),
     child: TextField(
@@ -53,6 +60,7 @@ Future<List<String?>> _open(
   required bool cupertino,
   bool busy = false,
   bool removable = false,
+  bool confirmable = true,
   AdaptiveFormMaterialPresentation material =
       const AdaptiveFormMaterialPresentation.dialog(),
 }) async {
@@ -63,7 +71,11 @@ Future<List<String?>> _open(
         await showAdaptiveFormSheet<String>(
           context: context,
           material: material,
-          builder: (_) => _NameForm(busy: busy, removable: removable),
+          builder: (_) => _NameForm(
+            busy: busy,
+            removable: removable,
+            confirmable: confirmable,
+          ),
         ),
       ),
       child: const Text('Open'),
@@ -126,6 +138,22 @@ void main() {
       await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
       await tester.pumpAndSettle();
       expect(results, [null]);
+    });
+
+    testWidgets('a dialog without a confirm action has no button for one, '
+        'and Remove leads on', (tester) async {
+      final results = await _open(
+        tester,
+        cupertino: false,
+        removable: true,
+        confirmable: false,
+      );
+
+      expect(find.byType(FilledButton), findsNothing);
+      expect(find.text('Save'), findsNothing);
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+      expect(results, ['removed']);
     });
 
     testWidgets('busy shows progress and disables both actions', (
@@ -676,5 +704,26 @@ void main() {
     barButton('Save').onPressed!();
     await tester.pumpAndSettle();
     expect(results, ['Kitchen TV']);
+  });
+
+  testWidgets('iOS 26: without a confirm action, only the ✕ is in the bar', (
+    tester,
+  ) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 26;
+    PlatformUiCapabilities.debugNativeIOS26Override = true;
+    await _open(tester, cupertino: true, removable: true, confirmable: false);
+
+    final symbols = [
+      for (final button in tester.widgetList<AdaptiveButton>(
+        find.descendant(
+          of: find.byType(CupertinoNavigationBar),
+          matching: find.byType(AdaptiveButton),
+        ),
+      ))
+        button.sfSymbol?.name,
+    ];
+    expect(symbols, ['xmark']);
+    expect(find.text('Remove'), findsOneWidget);
   });
 }
