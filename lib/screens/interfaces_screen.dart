@@ -997,12 +997,15 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
   }
 
   void _showEditWifiSheet(BuildContext context, Map<String, dynamic> iface) {
-    showModalBottomSheet(
+    showAdaptiveFormSheet<void>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      material: const AdaptiveFormMaterialPresentation.bottomSheet(
+        // The sheet draws its own handle.
+        showDragHandle: false,
+        useSafeArea: true,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
       ),
       builder: (ctx) => _WifiEditBottomSheet(iface: iface),
     );
@@ -1988,10 +1991,27 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final mode = widget.iface['mode']?.toString() ?? 'ap';
+    final summary =
+        '${widget.iface['radioName']} • ${context.l10n.modeValue(mode.toUpperCase())}';
+
+    if (PlatformUiCapabilities.isIOS) {
+      return AdaptiveFormSheet(
+        title: context.l10n.editWirelessInterface,
+        subtitle: summary,
+        cancelLabel: context.l10n.cancel,
+        confirmLabel: context.l10n.saveAction,
+        onConfirm: _save,
+        busy: _isSaving,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: _form(context),
+        ),
+      );
+    }
+
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final mode = widget.iface['mode']?.toString() ?? 'ap';
-
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -2045,7 +2065,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
                           ),
                         ),
                         Text(
-                          '${widget.iface['radioName']} • ${context.l10n.modeValue(mode.toUpperCase())}',
+                          summary,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),
@@ -2058,167 +2078,7 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
 
               const SizedBox(height: 24),
 
-              // SSID field
-              _buildLabel(context, context.l10n.ssidNetworkName),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _ssidController,
-                enabled: !_isSaving,
-                decoration: _inputDecoration(
-                  context,
-                  hintText: context.l10n.enterSsid,
-                  prefixIcon: Icons.wifi,
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Encryption selector
-              _buildLabel(context, context.l10n.encryption),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: colorScheme.outline.withValues(alpha: 0.3),
-                  ),
-                  color: colorScheme.surfaceContainerLow,
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedEncryption,
-                    isExpanded: true,
-                    icon: Icon(
-                      Icons.arrow_drop_down,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                    items: _encryptionOptions.map((opt) {
-                      return DropdownMenuItem<String>(
-                        value: opt,
-                        child: Text(
-                          _encryptionLabel(opt),
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: _isSaving
-                        ? null
-                        : (value) {
-                            if (value != null) {
-                              setState(() => _selectedEncryption = value);
-                            }
-                          },
-                  ),
-                ),
-              ),
-
-              // Password field (only for encrypted networks)
-              if (_requiresPassword) ...[
-                const SizedBox(height: 16),
-                _buildLabel(
-                  context,
-                  _changingToEncrypted
-                      ? context.l10n.passwordRequired
-                      : context.l10n.passwordKeepCurrent,
-                ),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  enabled: !_isSaving,
-                  decoration: _inputDecoration(
-                    context,
-                    hintText: context.l10n.enterNewPassword,
-                    prefixIcon: Icons.key,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
-                      onPressed: () {
-                        setState(() => _obscurePassword = !_obscurePassword);
-                      },
-                    ),
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 16),
-
-              // Network binding
-              _buildLabel(context, context.l10n.network),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _networkController,
-                enabled: !_isSaving,
-                decoration: _inputDecoration(
-                  context,
-                  hintText: context.l10n.networkExample,
-                  prefixIcon: Icons.lan_outlined,
-                ),
-              ),
-
-              // Error
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: colorScheme.errorContainer.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.error_outline,
-                        color: colorScheme.error,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _error!,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.error,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 20),
-
-              // Warning
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: colorScheme.tertiaryContainer.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      color: colorScheme.tertiary,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        context.l10n.wifiChangesWarning,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              ..._form(context),
 
               const SizedBox(height: 20),
 
@@ -2250,6 +2110,163 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
         ),
       ),
     );
+  }
+
+  /// The interface's settings, and what saving them will do.
+  List<Widget> _form(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return [
+      // SSID field
+      _buildLabel(context, context.l10n.ssidNetworkName),
+      const SizedBox(height: 6),
+      TextField(
+        controller: _ssidController,
+        enabled: !_isSaving,
+        decoration: _inputDecoration(
+          context,
+          hintText: context.l10n.enterSsid,
+          prefixIcon: Icons.wifi,
+        ),
+      ),
+
+      const SizedBox(height: 16),
+
+      // Encryption selector
+      _buildLabel(context, context.l10n.encryption),
+      const SizedBox(height: 6),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: colorScheme.outline.withValues(alpha: 0.3)),
+          color: colorScheme.surfaceContainerLow,
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: _selectedEncryption,
+            isExpanded: true,
+            icon: Icon(
+              Icons.arrow_drop_down,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            items: _encryptionOptions.map((opt) {
+              return DropdownMenuItem<String>(
+                value: opt,
+                child: Text(
+                  _encryptionLabel(opt),
+                  style: theme.textTheme.bodyMedium,
+                ),
+              );
+            }).toList(),
+            onChanged: _isSaving
+                ? null
+                : (value) {
+                    if (value != null) {
+                      setState(() => _selectedEncryption = value);
+                    }
+                  },
+          ),
+        ),
+      ),
+
+      // Password field (only for encrypted networks)
+      if (_requiresPassword) ...[
+        const SizedBox(height: 16),
+        _buildLabel(
+          context,
+          _changingToEncrypted
+              ? context.l10n.passwordRequired
+              : context.l10n.passwordKeepCurrent,
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _passwordController,
+          obscureText: _obscurePassword,
+          enabled: !_isSaving,
+          decoration: _inputDecoration(
+            context,
+            hintText: context.l10n.enterNewPassword,
+            prefixIcon: Icons.key,
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscurePassword ? Icons.visibility_off : Icons.visibility,
+              ),
+              onPressed: () {
+                setState(() => _obscurePassword = !_obscurePassword);
+              },
+            ),
+          ),
+        ),
+      ],
+
+      const SizedBox(height: 16),
+
+      // Network binding
+      _buildLabel(context, context.l10n.network),
+      const SizedBox(height: 6),
+      TextField(
+        controller: _networkController,
+        enabled: !_isSaving,
+        decoration: _inputDecoration(
+          context,
+          hintText: context.l10n.networkExample,
+          prefixIcon: Icons.lan_outlined,
+        ),
+      ),
+
+      // Error
+      if (_error != null) ...[
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colorScheme.errorContainer.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline, color: colorScheme.error, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _error!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+
+      const SizedBox(height: 20),
+
+      // Warning
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colorScheme.tertiaryContainer.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline, color: colorScheme.tertiary, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                context.l10n.wifiChangesWarning,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
   }
 
   Widget _buildLabel(BuildContext context, String text) {

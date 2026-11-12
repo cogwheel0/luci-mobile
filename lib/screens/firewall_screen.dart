@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:luci_mobile/l10n/failure_text.dart';
 import 'package:luci_mobile/utils/ipv4.dart';
+import 'package:luci_mobile/utils/keyboards.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/firewall_config.dart';
@@ -118,10 +119,9 @@ class _FirewallScreenState extends ConsumerState<FirewallScreen> {
       }
     }
     if (!mounted) return;
-    final ops = await showModalBottomSheet<List<UciOperation>>(
+    final ops = await showAdaptiveFormSheet<List<UciOperation>>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
+      material: const AdaptiveFormMaterialPresentation.bottomSheet(),
       builder: (_) =>
           _ForwardSheet(state: state, existing: existing, taken: taken),
     );
@@ -527,154 +527,120 @@ class _ForwardSheetState extends State<_ForwardSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        LuciSpacing.lg,
-        0,
-        LuciSpacing.lg,
-        MediaQuery.viewInsetsOf(context).bottom + LuciSpacing.lg,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.existing == null
-                  ? l10n.addPortForward
-                  : l10n.editPortForward,
-              style: Theme.of(context).textTheme.headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.bold, letterSpacing: -0.4),
-            ),
-            const SizedBox(height: LuciSpacing.lg),
+    final existing = widget.existing;
+    return AdaptiveFormSheet(
+      title: existing == null ? l10n.addPortForward : l10n.editPortForward,
+      cancelLabel: l10n.cancel,
+      confirmLabel: l10n.saveAction,
+      onConfirm: _canSave ? _save : null,
+      destructiveLabel: existing == null ? null : l10n.remove,
+      onDestructive: existing == null
+          ? null
+          : () =>
+                Navigator.of(context)
+                    .pop(FirewallPlanner.planDeletePortForward(existing)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _name,
+            autofocus: widget.existing == null,
+            decoration: InputDecoration(labelText: l10n.forwardName),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: LuciSpacing.md),
 
-            TextField(
-              controller: _name,
-              autofocus: widget.existing == null,
-              decoration: InputDecoration(labelText: l10n.forwardName),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: LuciSpacing.md),
-
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: widget.state.zoneNames.contains(_srcZone)
-                        ? _srcZone
-                        : null,
-                    decoration: InputDecoration(labelText: l10n.sourceZone),
-                    items: [
-                      for (final z in widget.state.zoneNames)
-                        DropdownMenuItem(value: z, child: Text(z)),
-                    ],
-                    onChanged: (v) => setState(() => _srcZone = v ?? _srcZone),
-                  ),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: widget.state.zoneNames.contains(_srcZone)
+                      ? _srcZone
+                      : null,
+                  decoration: InputDecoration(labelText: l10n.sourceZone),
+                  items: [
+                    for (final z in widget.state.zoneNames)
+                      DropdownMenuItem(value: z, child: Text(z)),
+                  ],
+                  onChanged: (v) => setState(() => _srcZone = v ?? _srcZone),
                 ),
-                const SizedBox(width: LuciSpacing.md),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _protocol,
-                    decoration: InputDecoration(labelText: l10n.protocol),
-                    items: [
-                      for (final p in _protocols)
-                        DropdownMenuItem(value: p, child: Text(_protoLabel(p))),
-                    ],
-                    onChanged: (v) =>
-                        setState(() => _protocol = v ?? _protocol),
-                  ),
+              ),
+              const SizedBox(width: LuciSpacing.md),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: _protocol,
+                  decoration: InputDecoration(labelText: l10n.protocol),
+                  items: [
+                    for (final p in _protocols)
+                      DropdownMenuItem(value: p, child: Text(_protoLabel(p))),
+                  ],
+                  onChanged: (v) => setState(() => _protocol = v ?? _protocol),
                 ),
-              ],
-            ),
-            const SizedBox(height: LuciSpacing.md),
-
-            TextField(
-              controller: _srcPort,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: l10n.externalPort,
-                errorText: _srcPortError,
               ),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: LuciSpacing.md),
+            ],
+          ),
+          const SizedBox(height: LuciSpacing.md),
 
-            TextField(
-              controller: _srcIp,
-              // Not the number pad: a subnet needs `/`.
-              keyboardType: TextInputType.text,
-              autocorrect: false,
-              decoration: InputDecoration(
-                labelText: l10n.sourceAddress,
-                hintText: '203.0.113.0/24',
-                helperText: l10n.sourceAddressHint,
-                helperMaxLines: 2,
-                errorText: _srcIpError,
-              ),
-              onChanged: (_) => setState(() {}),
+          TextField(
+            controller: _srcPort,
+            keyboardType: numericAddressKeyboard,
+            decoration: InputDecoration(
+              labelText: l10n.externalPort,
+              errorText: _srcPortError,
             ),
-            const SizedBox(height: LuciSpacing.md),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: LuciSpacing.md),
 
-            DropdownButtonFormField<String>(
-              initialValue: widget.state.zoneNames.contains(_destZone)
-                  ? _destZone
-                  : null,
-              decoration: InputDecoration(labelText: l10n.destinationZone),
-              items: [
-                for (final z in widget.state.zoneNames)
-                  DropdownMenuItem(value: z, child: Text(z)),
-              ],
-              onChanged: (v) => setState(() => _destZone = v ?? _destZone),
+          TextField(
+            controller: _srcIp,
+            // Not a number pad: a subnet needs `/`.
+            keyboardType: TextInputType.text,
+            autocorrect: false,
+            decoration: InputDecoration(
+              labelText: l10n.sourceAddress,
+              hintText: '203.0.113.0/24',
+              helperText: l10n.sourceAddressHint,
+              helperMaxLines: 2,
+              errorText: _srcIpError,
             ),
-            const SizedBox(height: LuciSpacing.md),
-            TextField(
-              controller: _destIp,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: l10n.internalAddress,
-                errorText: _destIpError,
-              ),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: LuciSpacing.md),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: LuciSpacing.md),
 
-            TextField(
-              controller: _destPort,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: l10n.internalPort,
-                errorText: _destPortError,
-              ),
-              onChanged: (_) => setState(() {}),
+          DropdownButtonFormField<String>(
+            initialValue: widget.state.zoneNames.contains(_destZone)
+                ? _destZone
+                : null,
+            decoration: InputDecoration(labelText: l10n.destinationZone),
+            items: [
+              for (final z in widget.state.zoneNames)
+                DropdownMenuItem(value: z, child: Text(z)),
+            ],
+            onChanged: (v) => setState(() => _destZone = v ?? _destZone),
+          ),
+          const SizedBox(height: LuciSpacing.md),
+          TextField(
+            controller: _destIp,
+            keyboardType: numericAddressKeyboard,
+            decoration: InputDecoration(
+              labelText: l10n.internalAddress,
+              errorText: _destIpError,
             ),
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: LuciSpacing.md),
 
-            const SizedBox(height: LuciSpacing.lg),
-            Row(
-              children: [
-                if (widget.existing != null)
-                  AdaptiveButton(
-                    onPressed: () => Navigator.of(context).pop(
-                      FirewallPlanner.planDeletePortForward(widget.existing!),
-                    ),
-                    label: l10n.remove,
-                    style: AdaptiveButtonStyle.plain,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                const Spacer(),
-                AdaptiveButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  label: l10n.cancel,
-                  style: AdaptiveButtonStyle.plain,
-                ),
-                const SizedBox(width: LuciSpacing.sm),
-                AdaptiveButton(
-                  onPressed: _canSave ? _save : null,
-                  label: l10n.saveAction,
-                ),
-              ],
+          TextField(
+            controller: _destPort,
+            keyboardType: numericAddressKeyboard,
+            decoration: InputDecoration(
+              labelText: l10n.internalPort,
+              errorText: _destPortError,
             ),
-          ],
-        ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
       ),
     );
   }
