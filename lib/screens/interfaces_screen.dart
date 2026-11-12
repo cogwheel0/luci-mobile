@@ -16,6 +16,7 @@ import 'package:luci_mobile/screens/wifi_scan_screen.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/utils/format_bytes.dart';
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
+import 'package:luci_mobile/state/app_state.dart';
 
 class InterfacesScreen extends ConsumerStatefulWidget {
   final String? scrollToInterface;
@@ -39,6 +40,9 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
   final ScrollController _scrollController = ScrollController();
   String? _targetInterface;
   String? _expandedInterface;
+
+  /// Whether the target interface's page is about to open, on iOS.
+  bool _openingTarget = false;
   final Map<String, GlobalKey> _interfaceKeys = {};
 
   /// Safely extract a String from a UCI config value that may be a List or String.
@@ -151,6 +155,18 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
   }
 
   void _scrollToInterface(String interfaceName) {
+    if (PlatformUiCapabilities.isIOS) {
+      // The target's row opens its page as the list builds
+      // (_openTargetOnce). With the data in and no row matching, the
+      // request is done.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _openingTarget || _targetInterface == null) return;
+        if (ref.read(appStateProvider).dashboardData == null) return;
+        setState(() => _targetInterface = null);
+        widget.onScrollComplete?.call();
+      });
+      return;
+    }
     if (!_scrollController.hasClients) return;
 
     // Find the target interface and calculate its position
@@ -419,11 +435,17 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = ref.read(appStateProvider);
+    // iOS lists the interfaces as inset groups, on the grouped background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
 
     return Scaffold(
+      backgroundColor: grouped,
       appBar: LuciAppBar(
         title: context.l10n.interfaces,
         showBack: widget.showBack,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
       ),
       body: SafeArea(
         top: true,
@@ -493,46 +515,52 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                         child: LuciSectionHeader(context.l10n.wired),
                       ),
                       _buildWiredInterfacesList(),
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0,
-                            vertical: 8.0,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                context.l10n.wireless,
-                                style: LuciTextStyles.sectionHeader(context),
-                              ),
-                              AdaptiveButton(
-                                onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const WifiScanScreen(),
-                                    ),
-                                  );
-                                },
-                                label: context.l10n.radio,
-                                sfSymbol: const SFSymbol(
-                                  'antenna.radiowaves.left.and.right',
-                                  size: 16,
+                      // iOS opens the scanner from a row of the group.
+                      if (PlatformUiCapabilities.isIOS)
+                        SliverToBoxAdapter(
+                          child: LuciSectionHeader(context.l10n.wireless),
+                        )
+                      else
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16.0,
+                              vertical: 8.0,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  context.l10n.wireless,
+                                  style: LuciTextStyles.sectionHeader(context),
                                 ),
-                                materialIcon: Icons.cell_tower,
-                                style: AdaptiveButtonStyle.plain,
-                                size: AdaptiveButtonSize.small,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 4,
+                                AdaptiveButton(
+                                  onPressed: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const WifiScanScreen(),
+                                      ),
+                                    );
+                                  },
+                                  label: context.l10n.radio,
+                                  sfSymbol: const SFSymbol(
+                                    'antenna.radiowaves.left.and.right',
+                                    size: 16,
+                                  ),
+                                  materialIcon: Icons.cell_tower,
+                                  style: AdaptiveButtonStyle.plain,
+                                  size: AdaptiveButtonSize.small,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 4,
+                                  ),
+                                  materialVisualDensity: VisualDensity.compact,
                                 ),
-                                materialVisualDensity: VisualDensity.compact,
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
                       _buildWirelessInterfacesList(),
                       SliverToBoxAdapter(
                         child: Padding(
@@ -552,7 +580,42 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
   }
 
   Widget _buildWiredInterfacesList() {
-    final appState = ref.watch(appStateProvider);
+    final interfaces = _wiredInterfacesOf(ref.watch(appStateProvider));
+    if (interfaces.isEmpty) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+    if (PlatformUiCapabilities.isIOS) {
+      return SliverToBoxAdapter(child: _iosWiredGroup(interfaces));
+    }
+    return SliverList(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        final iface = interfaces[index];
+        final isTargetInterface =
+            _targetInterface != null &&
+            iface.name.toLowerCase() == _targetInterface!.toLowerCase();
+
+        final keyStr = _interfaceKey(name: iface.name);
+        final key = _interfaceKeys.putIfAbsent(keyStr, () => GlobalKey());
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: _UnifiedNetworkCard(
+            key: key,
+            name: iface.name.toUpperCase(),
+            subtitle: _buildMinimalInterfaceSubtitle(iface),
+            isUp: iface.isUp,
+            icon: _getInterfaceIcon(iface.protocol),
+            details: _buildWiredDetails(context, iface),
+            initiallyExpanded:
+                isTargetInterface || _expandedInterface == keyStr,
+          ),
+        );
+      }, childCount: interfaces.length),
+    );
+  }
+
+  /// The router's interfaces, with their counters, from [appState]'s
+  /// dashboard data.
+  List<NetworkInterface> _wiredInterfacesOf(AppState appState) {
     final dynamic detailedData = appState.dashboardData?['interfaceDump'];
     final dynamic statsDataSource = appState.dashboardData?['networkDevices'];
     var interfacesList = <NetworkInterface>[];
@@ -607,39 +670,107 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
         }).toList();
       }
     }
+    return interfacesList;
+  }
 
-    final interfaces = interfacesList;
+  Widget _buildWirelessInterfacesList() {
+    final interfaces = _wirelessInterfacesOf(
+      context,
+      ref.watch(appStateProvider),
+    );
     if (interfaces.isEmpty) {
-      return const SliverToBoxAdapter(child: SizedBox.shrink());
+      return PlatformUiCapabilities.isIOS
+          ? SliverToBoxAdapter(child: _iosWirelessGroup(const [], null))
+          : const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+    final target = _targetInterface;
+
+    // Resolve the target to exactly ONE wireless card key, using the same
+    // exact-section-first then normalized-alias order as the scroll
+    // targeting path. Resolving up front guarantees a case-insensitive
+    // target (e.g. "GUEST") cannot expand several case-variant cards at
+    // once - only the card the screen would scroll to expands.
+    String? resolvedTargetKey;
+    if (target != null) {
+      // Pass 1: exact (case-sensitive) section match.
+      for (final iface in interfaces) {
+        final section = (iface['section'] as String?)?.trim() ?? '';
+        if (section.isNotEmpty && section == target.trim()) {
+          resolvedTargetKey = _wirelessKeyOf(iface);
+          break;
+        }
+      }
+      // Pass 2: normalized alias fallback (SSID/device/name/section).
+      final normalizedTarget = _normalizeInterfaceKey(target);
+      if (resolvedTargetKey == null) {
+        for (final iface in interfaces) {
+          if (normalizedTarget == _normalizeInterfaceKey(iface['ssid'] ?? '') ||
+              normalizedTarget ==
+                  _normalizeInterfaceKey(iface['deviceName'] ?? '') ||
+              normalizedTarget ==
+                  _normalizeInterfaceKey(iface['interfaceName'] ?? '') ||
+              normalizedTarget ==
+                  _normalizeInterfaceKey(iface['section'] as String?)) {
+            resolvedTargetKey = _wirelessKeyOf(iface);
+            break;
+          }
+        }
+      }
+    }
+
+    if (PlatformUiCapabilities.isIOS) {
+      return SliverToBoxAdapter(
+        child: _iosWirelessGroup(interfaces, resolvedTargetKey),
+      );
     }
     return SliverList(
       delegate: SliverChildBuilderDelegate((context, index) {
         final iface = interfaces[index];
-        final isTargetInterface =
-            _targetInterface != null &&
-            iface.name.toLowerCase() == _targetInterface!.toLowerCase();
-
-        final keyStr = _interfaceKey(name: iface.name);
+        final deviceName = iface['deviceName'] ?? '';
+        final ssid = iface['ssid'] ?? '';
+        final keyStr = _wirelessKeyOf(iface);
         final key = _interfaceKeys.putIfAbsent(keyStr, () => GlobalKey());
+        final displayName = ssid.toString().isNotEmpty
+            ? ssid.toString()
+            : deviceName.toString();
+
+        // Only the single resolved card expands; see resolution above.
+        final isTargetInterface =
+            resolvedTargetKey != null && keyStr == resolvedTargetKey;
+
+        final shouldExpand = isTargetInterface || _expandedInterface == keyStr;
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           child: _UnifiedNetworkCard(
             key: key,
-            name: iface.name.toUpperCase(),
-            subtitle: _buildMinimalInterfaceSubtitle(iface),
-            isUp: iface.isUp,
-            icon: _getInterfaceIcon(iface.protocol),
-            details: _buildWiredDetails(context, iface),
-            initiallyExpanded:
-                isTargetInterface || _expandedInterface == keyStr,
+            name: displayName,
+            subtitle: iface['subtitle'],
+            isUp: iface['isEnabled'],
+            icon: Icons.wifi,
+            details: _buildWirelessDetails(context, iface),
+            initiallyExpanded: shouldExpand,
           ),
         );
       }, childCount: interfaces.length),
     );
   }
 
-  Widget _buildWirelessInterfacesList() {
-    final appState = ref.watch(appStateProvider);
+  /// The key a wireless interface's card or row goes by.
+  String _wirelessKeyOf(Map<String, dynamic> iface) => _interfaceKeyForWireless(
+    ssid: iface['ssid'] ?? '',
+    radioName: iface['radioName'] ?? '',
+    deviceName: iface['deviceName'] ?? '',
+    name: iface['interfaceName'] ?? '',
+    sectionName: iface['section'] as String?,
+    ifname: iface['ifname'] as String?,
+  );
+
+  /// The wireless interfaces, running or only configured, from
+  /// [appState]'s dashboard data, described in [context]'s language.
+  List<Map<String, dynamic>> _wirelessInterfacesOf(
+    BuildContext context,
+    AppState appState,
+  ) {
     final dashboardData = appState.dashboardData;
     final wirelessData = dashboardData?['wireless'] as Map<String, dynamic>?;
     final uciWirelessConfig = dashboardData?['uciWirelessConfig'];
@@ -787,93 +918,293 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
       }
     });
 
-    final interfaces = interfacesList;
-    if (interfaces.isEmpty) {
-      return const SliverToBoxAdapter(child: SizedBox.shrink());
-    }
-    final target = _targetInterface;
+    return interfacesList;
+  }
 
-    // Resolve the target to exactly ONE wireless card key, using the same
-    // exact-section-first then normalized-alias order as the scroll
-    // targeting path. Resolving up front guarantees a case-insensitive
-    // target (e.g. "GUEST") cannot expand several case-variant cards at
-    // once - only the card the screen would scroll to expands.
-    String? resolvedTargetKey;
+  // ------------------------------------------------------------------ iOS
+
+  /// Opens the page [open] pushes for the interface the screen was asked
+  /// to show, once, after this frame.
+  void _openTargetOnce(VoidCallback open) {
+    if (_openingTarget) return;
+    _openingTarget = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _openingTarget = false;
+      if (!mounted) return;
+      setState(() => _targetInterface = null);
+      open();
+      widget.onScrollComplete?.call();
+    });
+  }
+
+  /// An interface's icon, in the tint while it is up and grey while down.
+  Widget _statusIcon(IconData icon, bool isUp) => Icon(
+    icon,
+    color: isUp
+        ? Theme.of(context).colorScheme.primary
+        : CupertinoColors.tertiaryLabel.resolveFrom(context),
+  );
+
+  /// The wired interfaces as an iOS group, as iOS Settings lists things
+  /// that open a page: a row each, its state, name and address.
+  Widget _iosWiredGroup(List<NetworkInterface> interfaces) {
+    final target = _targetInterface;
     if (target != null) {
-      String? keyOf(Map<String, dynamic> iface) => _interfaceKeyForWireless(
-        ssid: iface['ssid'] ?? '',
-        radioName: iface['radioName'] ?? '',
-        deviceName: iface['deviceName'] ?? '',
-        name: iface['interfaceName'] ?? '',
-        sectionName: iface['section'] as String?,
-        ifname: iface['ifname'] as String?,
-      );
-      // Pass 1: exact (case-sensitive) section match.
       for (final iface in interfaces) {
-        final section = (iface['section'] as String?)?.trim() ?? '';
-        if (section.isNotEmpty && section == target.trim()) {
-          resolvedTargetKey = keyOf(iface);
+        if (iface.name.toLowerCase() == target.toLowerCase()) {
+          _openTargetOnce(() => _openWiredPage(iface.name));
           break;
         }
       }
-      // Pass 2: normalized alias fallback (SSID/device/name/section).
-      final normalizedTarget = _normalizeInterfaceKey(target);
-      if (resolvedTargetKey == null) {
-        for (final iface in interfaces) {
-          if (normalizedTarget == _normalizeInterfaceKey(iface['ssid'] ?? '') ||
-              normalizedTarget ==
-                  _normalizeInterfaceKey(iface['deviceName'] ?? '') ||
-              normalizedTarget ==
-                  _normalizeInterfaceKey(iface['interfaceName'] ?? '') ||
-              normalizedTarget ==
-                  _normalizeInterfaceKey(iface['section'] as String?)) {
-            resolvedTargetKey = keyOf(iface);
-            break;
-          }
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: LuciSpacing.md),
+      child: AdaptiveFormSection(
+        separatorIndent: 52,
+        children: [
+          for (final iface in interfaces)
+            AdaptiveListRow(
+              leading: _statusIcon(
+                _getInterfaceIcon(iface.protocol),
+                iface.isUp,
+              ),
+              title: iface.name.toUpperCase(),
+              subtitle: _buildMinimalInterfaceSubtitle(iface),
+              showChevron: true,
+              onTap: () => _openWiredPage(iface.name),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// The wireless interfaces as an iOS group, a row each opening its page,
+  /// then the Wi-Fi scanner.
+  Widget _iosWirelessGroup(
+    List<Map<String, dynamic>> interfaces,
+    String? targetKey,
+  ) {
+    String titleOf(Map<String, dynamic> iface) =>
+        (iface['ssid'] ?? '').toString().isNotEmpty
+        ? iface['ssid'].toString()
+        : (iface['deviceName'] ?? '').toString();
+    if (targetKey != null) {
+      for (final iface in interfaces) {
+        if (_wirelessKeyOf(iface) == targetKey) {
+          _openTargetOnce(() => _openWirelessPage(targetKey, titleOf(iface)));
+          break;
         }
       }
     }
-
-    return SliverList(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        final iface = interfaces[index];
-        final deviceName = iface['deviceName'] ?? '';
-        final radioName = iface['radioName'] ?? '';
-        final ssid = iface['ssid'] ?? '';
-        final name = iface['interfaceName'] ?? '';
-        // Use the stored values for key generation
-        final keyStr = _interfaceKeyForWireless(
-          ssid: ssid,
-          radioName: radioName,
-          deviceName: deviceName,
-          name: name,
-          sectionName: iface['section'] as String?,
-          ifname: iface['ifname'] as String?,
-        );
-        final key = _interfaceKeys.putIfAbsent(keyStr, () => GlobalKey());
-        final displayName = ssid.toString().isNotEmpty
-            ? ssid.toString()
-            : deviceName.toString();
-
-        // Only the single resolved card expands; see resolution above.
-        final isTargetInterface =
-            resolvedTargetKey != null && keyStr == resolvedTargetKey;
-
-        final shouldExpand = isTargetInterface || _expandedInterface == keyStr;
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: _UnifiedNetworkCard(
-            key: key,
-            name: displayName,
-            subtitle: iface['subtitle'],
-            isUp: iface['isEnabled'],
-            icon: Icons.wifi,
-            details: _buildWirelessDetails(context, iface),
-            initiallyExpanded: shouldExpand,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: LuciSpacing.md),
+      child: AdaptiveFormSection(
+        separatorIndent: 52,
+        children: [
+          for (final iface in interfaces)
+            AdaptiveListRow(
+              leading: _statusIcon(
+                Icons.wifi,
+                iface['isEnabled'] as bool? ?? false,
+              ),
+              title: titleOf(iface),
+              subtitle: iface['subtitle'] as String?,
+              showChevron: true,
+              onTap: () =>
+                  _openWirelessPage(_wirelessKeyOf(iface), titleOf(iface)),
+            ),
+          AdaptiveListRow(
+            leading: Icon(
+              Icons.cell_tower,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            title: context.l10n.wifiScanner,
+            showChevron: true,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (context) => const WifiScanScreen()),
+            ),
           ),
-        );
-      }, childCount: interfaces.length),
+        ],
+      ),
     );
+  }
+
+  void _openWiredPage(String name) => Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => _InterfacePage(
+        title: name.toUpperCase(),
+        sections: (context, appState) {
+          final iface = _wiredInterfacesOf(appState)
+              .where((i) => i.name == name)
+              .firstOrNull;
+          return iface == null
+              ? null
+              : _iosWiredSections(context, appState, iface);
+        },
+      ),
+    ),
+  );
+
+  void _openWirelessPage(String key, String title) => Navigator.of(context)
+      .push(
+        MaterialPageRoute(
+          builder: (_) => _InterfacePage(
+            title: title,
+            sections: (context, appState) {
+              final iface = _wirelessInterfacesOf(
+                context,
+                appState,
+              ).where((i) => _wirelessKeyOf(i) == key).firstOrNull;
+              return iface == null
+                  ? null
+                  : _iosWirelessSections(context, iface);
+            },
+          ),
+        ),
+      );
+
+  /// A wired interface's page on iOS: its addresses as value rows to copy,
+  /// its traffic, and for WireGuard a group per peer.
+  List<Widget> _iosWiredSections(
+    BuildContext context,
+    AppState appState,
+    NetworkInterface i,
+  ) {
+    final l10n = context.l10n;
+    final stats = i.stats;
+    return [
+      AdaptiveFormSection(
+        children: [
+          AdaptiveFormValueRow(label: l10n.device, value: i.device),
+          AdaptiveFormValueRow(label: l10n.uptime, value: i.formattedUptime),
+          if (i.ipAddress != null)
+            AdaptiveFormValueRow(
+              label: l10n.ipAddress,
+              value: i.ipAddress!,
+              selectable: true,
+            ),
+          for (final v6 in i.ipv6Addresses ?? const <String>[])
+            AdaptiveFormValueRow(
+              label: l10n.ipv6Address,
+              value: v6,
+              selectable: true,
+            ),
+          if (i.gateway != null)
+            AdaptiveFormValueRow(
+              label: l10n.gateway,
+              value: i.gateway!,
+              selectable: true,
+            ),
+          if (i.dnsServers.isNotEmpty)
+            AdaptiveFormValueRow(
+              label: l10n.dns,
+              value: i.dnsServers.join(', '),
+              selectable: true,
+            ),
+        ],
+      ),
+      // Counters the router did not report are left out, not shown as no
+      // traffic.
+      if (stats.containsKey('rx_bytes') || stats.containsKey('tx_bytes'))
+        AdaptiveFormSection(
+          header: l10n.trafficSection,
+          children: [
+            if (stats.containsKey('rx_bytes'))
+              AdaptiveFormValueRow(
+                label: l10n.received,
+                value: formatBytes(stats['rx_bytes'] ?? 0, decimals: 2),
+              ),
+            if (stats.containsKey('tx_bytes'))
+              AdaptiveFormValueRow(
+                label: l10n.transmitted,
+                value: formatBytes(stats['tx_bytes'] ?? 0, decimals: 2),
+              ),
+          ],
+        ),
+      if (i.protocol.toLowerCase() == 'wireguard')
+        for (final peer in _wireGuardPeersOf(appState, i.name))
+          _iosPeerSection(context, peer),
+    ];
+  }
+
+  /// A WireGuard peer as a group: its name (or key) over its handshake,
+  /// endpoint, allowed addresses and traffic.
+  Widget _iosPeerSection(BuildContext context, Map<String, dynamic> peer) {
+    final l10n = context.l10n;
+    final p = _peerSummary(context, peer);
+    return AdaptiveFormSection(
+      header: p.name?.isNotEmpty == true ? p.name : p.displayKey,
+      children: [
+        AdaptiveFormValueRow(label: l10n.lastHandshake, value: p.handshake),
+        AdaptiveFormValueRow(
+          label: l10n.endpoint,
+          value: p.endpoint,
+          selectable: true,
+        ),
+        if (p.allowedIps.isNotEmpty)
+          AdaptiveFormValueRow(
+            label: l10n.allowedIps,
+            value: p.allowedIps.join(', '),
+            selectable: true,
+          ),
+        if (p.rx != null)
+          AdaptiveFormValueRow(
+            label: l10n.received,
+            value: formatBytes(p.rx!, decimals: 2),
+          ),
+        if (p.tx != null)
+          AdaptiveFormValueRow(
+            label: l10n.transmitted,
+            value: formatBytes(p.tx!, decimals: 2),
+          ),
+      ],
+    );
+  }
+
+  /// A wireless interface's page on iOS: its details as value rows, then
+  /// its switch and Edit, then Remove in red.
+  List<Widget> _iosWirelessSections(
+    BuildContext context,
+    Map<String, dynamic> iface,
+  ) {
+    final l10n = context.l10n;
+    final details = iface['details'] as Map<String, dynamic>;
+    final uciSection = iface['uciSection'] as String? ?? '';
+    final encDescription = iface['encryptionDescription']?.toString() ?? '';
+    return [
+      AdaptiveFormSection(
+        footer: uciSection.isEmpty ? l10n.limitedInterfaceManagement : null,
+        children: [
+          for (final entry in details.entries)
+            AdaptiveFormValueRow(label: entry.key, value: '${entry.value}'),
+          if (encDescription.isNotEmpty && encDescription != 'N/A')
+            AdaptiveFormValueRow(label: l10n.encryption, value: encDescription),
+        ],
+      ),
+      if (uciSection.isNotEmpty) ...[
+        AdaptiveFormSection(
+          children: [
+            _WifiToggleRow(
+              uciSection: uciSection,
+              isEnabled: iface['isIfaceEnabled'] as bool? ?? true,
+            ),
+            AdaptiveFormButtonRow(
+              label: l10n.edit,
+              onPressed: () => _showEditWifiSheet(context, iface),
+            ),
+          ],
+        ),
+        AdaptiveFormSection(
+          children: [
+            AdaptiveFormButtonRow(
+              label: l10n.remove,
+              destructive: true,
+              onPressed: () => _showDeleteWifiDialog(context, iface),
+            ),
+          ],
+        ),
+      ],
+    ];
   }
 
   Widget _buildWirelessDetails(
@@ -1106,6 +1437,72 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     );
   }
 
+  /// [interfaceName]'s WireGuard peers in [appState]'s dashboard data.
+  static List<Map<String, dynamic>> _wireGuardPeersOf(
+    AppState appState,
+    String interfaceName,
+  ) {
+    final wireguardData =
+        appState.dashboardData?['wireguard'] as Map<String, dynamic>?;
+    final peers = wireguardData?[interfaceName]?['peers'];
+    return peers is Map
+        ? [for (final p in peers.values) p as Map<String, dynamic>]
+        : const [];
+  }
+
+  /// What the peer card and the iOS peer group show about [peer].
+  ({
+    String displayKey,
+    String? name,
+    String handshake,
+    String endpoint,
+    List<String> allowedIps,
+    int? rx,
+    int? tx,
+  })
+  _peerSummary(BuildContext context, Map<String, dynamic> peer) {
+    final publicKey = peer['public_key'] as String? ?? 'Unknown';
+    int lastHandshake = 0;
+    final rawHandshake = peer['last_handshake'] ?? peer['latest_handshake'];
+    if (rawHandshake is int) {
+      lastHandshake = rawHandshake;
+    } else if (rawHandshake is String) {
+      lastHandshake = int.tryParse(rawHandshake) ?? 0;
+    }
+    String handshake() {
+      if (lastHandshake == 0) return context.l10n.never;
+      final difference = DateTime.now().difference(
+        DateTime.fromMillisecondsSinceEpoch(lastHandshake * 1000),
+      );
+      if (difference.inSeconds < 0) return context.l10n.never;
+      if (difference.inDays > 0) {
+        return context.l10n.daysAgo(difference.inDays);
+      } else if (difference.inHours > 0) {
+        return context.l10n.hoursAgo(difference.inHours);
+      } else if (difference.inMinutes > 0) {
+        return context.l10n.minutesAgo(difference.inMinutes);
+      }
+      return context.l10n.secondsAgo(difference.inSeconds);
+    }
+
+    final rawAllowed = peer['allowed_ips'];
+    final rawRx = peer['transfer_rx'];
+    final rawTx = peer['transfer_tx'];
+    return (
+      displayKey: publicKey.length > 16
+          ? '${publicKey.substring(0, 8)}...${publicKey.substring(publicKey.length - 8)}'
+          : publicKey,
+      name: peer['name'] as String?,
+      handshake: handshake(),
+      endpoint: peer['endpoint'] as String? ?? 'N/A',
+      allowedIps: rawAllowed is List
+          ? [for (final ip in rawAllowed) '$ip']
+          : const <String>[],
+      rx: rawRx is num ? rawRx.toInt() : null,
+      tx: rawTx is num ? rawTx.toInt() : null,
+    );
+  }
+
   Widget _buildWireGuardPeersSection(
     BuildContext context,
     String interfaceName,
@@ -1147,29 +1544,13 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
   ) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final publicKey = peer['public_key'] as String? ?? 'Unknown';
-    final endpoint = peer['endpoint'] as String? ?? 'N/A';
-    final peerName = peer['name'] as String?;
-    int lastHandshake = 0;
-    final rawHandshake = peer['last_handshake'] ?? peer['latest_handshake'];
-    if (rawHandshake != null) {
-      if (rawHandshake is int) {
-        lastHandshake = rawHandshake;
-      } else if (rawHandshake is String) {
-        lastHandshake = int.tryParse(rawHandshake) ?? 0;
-      }
-    }
-    final displayKey = publicKey.length > 16
-        ? '${publicKey.substring(0, 8)}...${publicKey.substring(publicKey.length - 8)}'
-        : publicKey;
-    final rawAllowed = peer['allowed_ips'];
-    final allowedIps = rawAllowed is List
-        ? [for (final ip in rawAllowed) '$ip']
-        : const <String>[];
-    final rawRx = peer['transfer_rx'];
-    final rawTx = peer['transfer_tx'];
-    final transferRx = rawRx is num ? rawRx.toInt() : null;
-    final transferTx = rawTx is num ? rawTx.toInt() : null;
+    final summary = _peerSummary(context, peer);
+    final endpoint = summary.endpoint;
+    final peerName = summary.name;
+    final displayKey = summary.displayKey;
+    final allowedIps = summary.allowedIps;
+    final transferRx = summary.rx;
+    final transferTx = summary.tx;
     Widget peerField(String label, String value) => Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -1192,25 +1573,6 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
         ),
       ],
     );
-    String formatHandshakeTime(int timestamp) {
-      if (timestamp == 0) return context.l10n.never;
-      final now = DateTime.now();
-      final handshakeTime = DateTime.fromMillisecondsSinceEpoch(
-        timestamp * 1000,
-      );
-      final difference = now.difference(handshakeTime);
-      if (difference.inSeconds < 0) return context.l10n.never;
-      if (difference.inDays > 0) {
-        return context.l10n.daysAgo(difference.inDays);
-      } else if (difference.inHours > 0) {
-        return context.l10n.hoursAgo(difference.inHours);
-      } else if (difference.inMinutes > 0) {
-        return context.l10n.minutesAgo(difference.inMinutes);
-      } else {
-        return context.l10n.secondsAgo(difference.inSeconds);
-      }
-    }
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Column(
@@ -1266,7 +1628,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      formatHandshakeTime(lastHandshake),
+                      summary.handshake,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w500,
                         fontSize: 14,
@@ -1735,6 +2097,49 @@ class _UnifiedNetworkCardState extends State<_UnifiedNetworkCard>
 // WiFi Enable/Disable Toggle Row
 // ──────────────────────────────────────────────────────────────────
 
+/// An interface's own page on iOS: [sections] built from the latest
+/// dashboard data, so the page follows a refresh, or a message once the
+/// interface is gone from it.
+class _InterfacePage extends ConsumerWidget {
+  const _InterfacePage({required this.title, required this.sections});
+
+  final String title;
+
+  /// The page's groups, or null when the interface is no longer there.
+  final List<Widget>? Function(BuildContext context, AppState appState)
+  sections;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appState = ref.watch(appStateProvider);
+    final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
+      context,
+    );
+    final children = sections(context, appState);
+    return Scaffold(
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: title,
+        showBack: true,
+        backgroundColor: grouped.withValues(alpha: 0.94),
+      ),
+      body: AdaptiveRefreshIndicator(
+        onRefresh: () => ref.read(appStateProvider).fetchDashboardData(),
+        child: children == null
+            ? LuciMessageState(
+                icon: Icons.device_hub_outlined,
+                message: context.l10n.noInterfaceData,
+              )
+            : ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(LuciSpacing.md),
+                children: children,
+              ),
+      ),
+    );
+  }
+}
+
 class _WifiToggleRow extends ConsumerStatefulWidget {
   final String uciSection;
   final bool isEnabled;
@@ -1748,9 +2153,16 @@ class _WifiToggleRow extends ConsumerStatefulWidget {
 class _WifiToggleRowState extends ConsumerState<_WifiToggleRow> {
   bool _isToggling = false;
 
+  /// The state asked for while it is being saved; the iOS switch shows it
+  /// until the router's data says otherwise.
+  bool? _requested;
+
   Future<void> _toggle(bool value) async {
     if (_isToggling) return;
-    setState(() => _isToggling = true);
+    setState(() {
+      _isToggling = true;
+      _requested = value;
+    });
 
     final appState = ref.read(appStateProvider);
     final success = await appState.setWirelessInterfaceEnabled(
@@ -1760,7 +2172,10 @@ class _WifiToggleRowState extends ConsumerState<_WifiToggleRow> {
     );
 
     if (mounted) {
-      setState(() => _isToggling = false);
+      setState(() {
+        _isToggling = false;
+        _requested = null;
+      });
       if (!success) {
         AdaptiveSnackBar.show(
           context,
@@ -1773,6 +2188,16 @@ class _WifiToggleRowState extends ConsumerState<_WifiToggleRow> {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformUiCapabilities.isIOS) {
+      final shown = _requested ?? widget.isEnabled;
+      return AdaptiveFormSwitch(
+        label: shown
+            ? context.l10n.interfaceEnabled
+            : context.l10n.interfaceDisabled,
+        value: shown,
+        onChanged: _isToggling ? null : _toggle,
+      );
+    }
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
