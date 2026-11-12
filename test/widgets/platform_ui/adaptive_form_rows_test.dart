@@ -449,6 +449,67 @@ void main() {
       expect(chosen, ['radio0']);
     });
 
+    testWidgets('a title menu shows its title and a chevron, says what it '
+        'chooses, and switches from an action sheet', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final chosen = <String>[];
+      await _pump(
+        tester,
+        Center(
+          child: AdaptiveTitleMenu<String>(
+            title: 'OpenWrt',
+            menuTitle: 'Select Router',
+            value: 'home',
+            choices: const [
+              AdaptiveFormChoice('home', 'OpenWrt', subtitle: '192.168.1.1'),
+              AdaptiveFormChoice('lab', 'lab-ap', subtitle: '10.0.0.2'),
+            ],
+            onChanged: chosen.add,
+          ),
+        ),
+      );
+
+      expect(find.byIcon(CupertinoIcons.chevron_down), findsOneWidget);
+      expect(
+        tester.getSemantics(find.byType(AdaptiveTitleMenu<String>)),
+        isSemantics(label: 'OpenWrt', hint: 'Select Router', isButton: true),
+      );
+
+      await tester.tap(find.text('OpenWrt'));
+      await tester.pumpAndSettle();
+      final sheet = find.byType(CupertinoActionSheet);
+      expect(
+        find.descendant(of: sheet, matching: find.text('Select Router')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: sheet, matching: find.text('10.0.0.2')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<CupertinoActionSheetAction>(
+              find.ancestor(
+                of: find.descendant(of: sheet, matching: find.text('OpenWrt')),
+                matching: find.byType(CupertinoActionSheetAction),
+              ),
+            )
+            .isDefaultAction,
+        isTrue,
+        reason: 'the current choice stands out',
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(chosen, isEmpty);
+
+      await tester.tap(find.text('OpenWrt'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('lab-ap'));
+      await tester.pumpAndSettle();
+      expect(chosen, ['lab']);
+      semantics.dispose();
+    });
+
     testWidgets('a disabled picker opens nothing; a value it does not list '
         'shows the hint', (tester) async {
       await _pump(
