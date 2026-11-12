@@ -125,6 +125,151 @@ class _RouterDashboardSettingsScreenState
 
   void _onPreferenceChanged() => _scheduleAutoSave();
 
+  /// Throughput for every interface, or for one, the first by default.
+  void _setShowAllThroughput(bool all, List<String> interfaces) {
+    setState(() {
+      _preferences = all
+          ? _preferences.copyWith(
+              showAllThroughput: true,
+              primaryThroughputInterface: null,
+            )
+          : _preferences.copyWith(
+              showAllThroughput: false,
+              primaryThroughputInterface: interfaces.isNotEmpty
+                  ? interfaces.first
+                  : null,
+            );
+    });
+    _onPreferenceChanged();
+  }
+
+  void _setPrimaryThroughput(String? interface) {
+    setState(() {
+      _preferences = _preferences.copyWith(
+        showAllThroughput: false,
+        primaryThroughputInterface: interface,
+      );
+    });
+    _onPreferenceChanged();
+  }
+
+  /// Every wireless network, or a choice of them, all at first.
+  void _setShowAllWireless(bool all) {
+    setState(() {
+      _preferences = _preferences.copyWith(
+        enabledWirelessInterfaces: all
+            ? {}
+            : Set.from(_availableWirelessInterfaces),
+      );
+    });
+    _onPreferenceChanged();
+  }
+
+  void _setWireless(String interface, bool shown) {
+    setState(() {
+      final next = Set<String>.from(_preferences.enabledWirelessInterfaces);
+      shown ? next.add(interface) : next.remove(interface);
+      _preferences = _preferences.copyWith(enabledWirelessInterfaces: next);
+    });
+    _onPreferenceChanged();
+  }
+
+  /// Every wired interface, or a choice of them, all at first.
+  void _setShowAllWired(bool all) {
+    setState(() {
+      _preferences = _preferences.copyWith(
+        enabledWiredInterfaces: all ? {} : Set.from(_availableWiredInterfaces),
+      );
+    });
+    _onPreferenceChanged();
+  }
+
+  void _setWired(String interface, bool shown) {
+    setState(() {
+      final next = Set<String>.from(_preferences.enabledWiredInterfaces);
+      shown ? next.add(interface) : next.remove(interface);
+      _preferences = _preferences.copyWith(enabledWiredInterfaces: next);
+    });
+    _onPreferenceChanged();
+  }
+
+  /// The settings as iOS Settings lays them out: a group per part, its
+  /// description under it, a switch to show everything, and otherwise the
+  /// interfaces as rows to check, one for throughput and any for the rest.
+  List<Widget> _iosSections() {
+    final l10n = context.l10n;
+    final throughput = _availableWiredInterfaces.toList()..sort();
+    final wireless = _availableWirelessInterfaces.toList()..sort();
+    final wired = _availableWiredInterfaces.toList()..sort();
+    return [
+      AdaptiveFormSection(
+        header: l10n.throughputMonitoring,
+        footer: l10n.throughputMonitoringDescription,
+        children: [
+          AdaptiveFormSwitch(
+            label: l10n.showAllInterfaces,
+            value: _preferences.showAllThroughput,
+            onChanged: (all) => _setShowAllThroughput(all, throughput),
+          ),
+          if (!_preferences.showAllThroughput)
+            for (final iface in throughput)
+              AdaptiveListRow(
+                title: iface,
+                selected: _preferences.primaryThroughputInterface == iface,
+                onTap: () => _setPrimaryThroughput(iface),
+              ),
+        ],
+      ),
+      if (wireless.isNotEmpty)
+        AdaptiveFormSection(
+          header: l10n.wirelessNetworks,
+          footer: l10n.wirelessNetworksDescription,
+          children: [
+            AdaptiveFormSwitch(
+              label: l10n.showAllNetworks,
+              value: _preferences.enabledWirelessInterfaces.isEmpty,
+              onChanged: _setShowAllWireless,
+            ),
+            if (_preferences.enabledWirelessInterfaces.isNotEmpty)
+              for (final iface in wireless)
+                AdaptiveListRow(
+                  title: iface,
+                  selected: _preferences.enabledWirelessInterfaces.contains(
+                    iface,
+                  ),
+                  onTap: () => _setWireless(
+                    iface,
+                    !_preferences.enabledWirelessInterfaces.contains(iface),
+                  ),
+                ),
+          ],
+        ),
+      if (wired.isNotEmpty)
+        AdaptiveFormSection(
+          header: l10n.networkInterfaces,
+          footer: l10n.networkInterfacesDescription,
+          children: [
+            AdaptiveFormSwitch(
+              label: l10n.showAllInterfaces,
+              value: _preferences.enabledWiredInterfaces.isEmpty,
+              onChanged: _setShowAllWired,
+            ),
+            if (_preferences.enabledWiredInterfaces.isNotEmpty)
+              for (final iface in wired)
+                AdaptiveListRow(
+                  title: iface.toUpperCase(),
+                  subtitle: _interfaceDescription(iface),
+                  selected: _preferences.enabledWiredInterfaces.contains(iface),
+                  onTap: () => _setWired(
+                    iface,
+                    !_preferences.enabledWiredInterfaces.contains(iface),
+                  ),
+                ),
+          ],
+        ),
+    ];
+  }
+
   Widget _buildSection({
     required String title,
     required String subtitle,
@@ -189,24 +334,7 @@ class _RouterDashboardSettingsScreenState
                       .copyWith(fontWeight: FontWeight.w600),
                 ),
                 value: _preferences.showAllThroughput,
-                onChanged: (value) {
-                  setState(() {
-                    if (value) {
-                      _preferences = _preferences.copyWith(
-                        showAllThroughput: true,
-                        primaryThroughputInterface: null,
-                      );
-                    } else {
-                      _preferences = _preferences.copyWith(
-                        showAllThroughput: false,
-                        primaryThroughputInterface: interfaces.isNotEmpty
-                            ? interfaces.first
-                            : null,
-                      );
-                    }
-                  });
-                  _onPreferenceChanged();
-                },
+                onChanged: (value) => _setShowAllThroughput(value, interfaces),
               ),
             ],
           ),
@@ -215,15 +343,7 @@ class _RouterDashboardSettingsScreenState
           SizedBox(height: LuciSpacing.sm),
           RadioGroup<String>(
             groupValue: _preferences.primaryThroughputInterface,
-            onChanged: (value) {
-              setState(() {
-                _preferences = _preferences.copyWith(
-                  showAllThroughput: false,
-                  primaryThroughputInterface: value,
-                );
-              });
-              _onPreferenceChanged();
-            },
+            onChanged: _setPrimaryThroughput,
             child: Column(
               children: interfaces.map((iface) {
                 return Padding(
@@ -275,22 +395,7 @@ class _RouterDashboardSettingsScreenState
                       .copyWith(fontWeight: FontWeight.w600),
                 ),
                 value: _preferences.enabledWirelessInterfaces.isEmpty,
-                onChanged: (value) {
-                  setState(() {
-                    if (value) {
-                      _preferences = _preferences.copyWith(
-                        enabledWirelessInterfaces: {},
-                      );
-                    } else {
-                      _preferences = _preferences.copyWith(
-                        enabledWirelessInterfaces: Set.from(
-                          _availableWirelessInterfaces,
-                        ),
-                      );
-                    }
-                  });
-                  _onPreferenceChanged();
-                },
+                onChanged: _setShowAllWireless,
               ),
             ],
           ),
@@ -317,22 +422,7 @@ class _RouterDashboardSettingsScreenState
                             .withValues(alpha: 0.5),
                 ),
                 value: isEnabled,
-                onChanged: (value) {
-                  setState(() {
-                    final newSet = Set<String>.from(
-                      _preferences.enabledWirelessInterfaces,
-                    );
-                    if (value) {
-                      newSet.add(interface);
-                    } else {
-                      newSet.remove(interface);
-                    }
-                    _preferences = _preferences.copyWith(
-                      enabledWirelessInterfaces: newSet,
-                    );
-                  });
-                  _onPreferenceChanged();
-                },
+                onChanged: (value) => _setWireless(interface, value),
                 activeColor: Theme.of(context).colorScheme.primary,
                 controlAffinity: ListTileControlAffinity.leading,
                 dense: true,
@@ -367,22 +457,7 @@ class _RouterDashboardSettingsScreenState
                       .copyWith(fontWeight: FontWeight.w600),
                 ),
                 value: _preferences.enabledWiredInterfaces.isEmpty,
-                onChanged: (value) {
-                  setState(() {
-                    if (value) {
-                      _preferences = _preferences.copyWith(
-                        enabledWiredInterfaces: {},
-                      );
-                    } else {
-                      _preferences = _preferences.copyWith(
-                        enabledWiredInterfaces: Set.from(
-                          _availableWiredInterfaces,
-                        ),
-                      );
-                    }
-                  });
-                  _onPreferenceChanged();
-                },
+                onChanged: _setShowAllWired,
               ),
             ],
           ),
@@ -411,22 +486,7 @@ class _RouterDashboardSettingsScreenState
                             .withValues(alpha: 0.5),
                 ),
                 value: isEnabled,
-                onChanged: (value) {
-                  setState(() {
-                    final newSet = Set<String>.from(
-                      _preferences.enabledWiredInterfaces,
-                    );
-                    if (value) {
-                      newSet.add(interface);
-                    } else {
-                      newSet.remove(interface);
-                    }
-                    _preferences = _preferences.copyWith(
-                      enabledWiredInterfaces: newSet,
-                    );
-                  });
-                  _onPreferenceChanged();
-                },
+                onChanged: (value) => _setWired(interface, value),
                 activeColor: Theme.of(context).colorScheme.primary,
                 controlAffinity: ListTileControlAffinity.leading,
                 dense: description != null,
@@ -438,36 +498,25 @@ class _RouterDashboardSettingsScreenState
     );
   }
 
-  Widget? _getInterfaceDescription(String interface) {
+  /// What kind of interface [interface] looks to be, by its name.
+  String? _interfaceDescription(String interface) {
+    final l10n = context.l10n;
     final lower = interface.toLowerCase();
-    if (lower.startsWith('wan')) {
-      return Text(
-        context.l10n.wideAreaNetwork,
-        style: LuciTextStyles.cardSubtitle(context),
-      );
-    } else if (lower.startsWith('lan')) {
-      return Text(
-        context.l10n.localAreaNetwork,
-        style: LuciTextStyles.cardSubtitle(context),
-      );
-    } else if (lower.contains('wireguard') || lower.startsWith('wg')) {
-      return Text(
-        context.l10n.wireGuardVpn,
-        style: LuciTextStyles.cardSubtitle(context),
-      );
-    } else if (lower.contains('openvpn')) {
-      return Text(
-        context.l10n.openVpn,
-        style: LuciTextStyles.cardSubtitle(context),
-      );
-    } else if (lower.contains('pppoe')) {
-      return Text(
-        context.l10n.pppoeConnection,
-        style: LuciTextStyles.cardSubtitle(context),
-      );
+    if (lower.startsWith('wan')) return l10n.wideAreaNetwork;
+    if (lower.startsWith('lan')) return l10n.localAreaNetwork;
+    if (lower.contains('wireguard') || lower.startsWith('wg')) {
+      return l10n.wireGuardVpn;
     }
+    if (lower.contains('openvpn')) return l10n.openVpn;
+    if (lower.contains('pppoe')) return l10n.pppoeConnection;
     return null;
   }
+
+  Widget? _getInterfaceDescription(String interface) =>
+      switch (_interfaceDescription(interface)) {
+        final text? => Text(text, style: LuciTextStyles.cardSubtitle(context)),
+        null => null,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -490,6 +539,23 @@ class _RouterDashboardSettingsScreenState
       );
     }
 
+    if (PlatformUiCapabilities.isIOS) {
+      final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
+        context,
+      );
+      return Scaffold(
+        backgroundColor: grouped,
+        appBar: LuciAppBar(
+          title: context.l10n.dashboardSettings,
+          showBack: true,
+          backgroundColor: grouped.withValues(alpha: 0.94),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.all(LuciSpacing.md),
+          children: _iosSections(),
+        ),
+      );
+    }
     return Scaffold(
       appBar: LuciAppBar(title: context.l10n.dashboardSettings, showBack: true),
       body: ListView(
