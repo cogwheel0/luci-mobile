@@ -1,4 +1,4 @@
-# luci-mobile's platform UI baseline: 114 entries, 146 occurrences.
+# luci-mobile's platform UI baseline: 113 entries, 140 occurrences.
 # Each entry is a direct Material or Cupertino import or control outside
 # lib/widgets/platform_ui. Counts may only go down: migrate a screen to the
 # platform UI layer and remove or lower its entries.
@@ -109,12 +109,6 @@ exceptions:
   - path: lib/screens/dashboard_screen.dart
     package: "package:material_ui/material_ui.dart"
     count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/dashboard_screen.dart
-    symbol: "Card"
-    count: 6
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration

@@ -567,6 +567,9 @@ Widget adaptiveFlutterNavigationIcon(AdaptiveNavigationIcon value) =>
       ),
     };
 
+/// A card: Material's [Card] on Android; on iOS a flat tile in the surface
+/// of grouped rows, without a shadow, for a page on the grouped background,
+/// as Health or Fitness lay out their summaries.
 class AdaptiveCard extends StatelessWidget {
   const AdaptiveCard({
     super.key,
@@ -622,7 +625,9 @@ class AdaptiveCard extends StatelessWidget {
         decoration: BoxDecoration(
           color:
               color ??
-              CupertinoColors.secondarySystemBackground.resolveFrom(context),
+              CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+                context,
+              ),
           borderRadius: borderRadius ?? BorderRadius.circular(12),
         ),
         child: content,

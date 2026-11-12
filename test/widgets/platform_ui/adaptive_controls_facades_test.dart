@@ -468,4 +468,58 @@ void main() {
       expect(spinner.color, isNull);
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
   });
+
+  group('a card', () {
+    Future<void> pumpCard(WidgetTester tester) => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AdaptiveCard(
+            elevation: 2,
+            borderRadius: BorderRadius.circular(18),
+            margin: EdgeInsets.zero,
+            child: const SizedBox(width: 100, height: 60, child: Text('CPU')),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('Android: the Material card, raised and rounded', (
+      tester,
+    ) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android;
+      await pumpCard(tester);
+
+      final card = tester.widget<Card>(find.byType(Card));
+      expect(card.elevation, 2);
+      expect(
+        card.shape,
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      );
+      expect(card.margin, EdgeInsets.zero);
+    });
+
+    testWidgets('iOS: a flat tile in the grouped rows\' surface', (
+      tester,
+    ) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+      await pumpCard(tester);
+
+      expect(find.byType(Card), findsNothing);
+      final tile = tester.widget<Container>(
+        find
+            .ancestor(of: find.text('CPU'), matching: find.byType(Container))
+            .first,
+      );
+      final decoration = tile.decoration! as BoxDecoration;
+      expect(
+        decoration.color,
+        CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+          tester.element(find.text('CPU')),
+        ),
+      );
+      expect(decoration.borderRadius, BorderRadius.circular(18));
+      expect(decoration.boxShadow, isNull);
+    });
+  });
 }
