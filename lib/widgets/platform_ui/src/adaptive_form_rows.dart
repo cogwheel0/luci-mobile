@@ -959,12 +959,20 @@ class AdaptiveFormValueRow extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!PlatformUiCapabilities.isIOS) {
       return MergeSemantics(
-        child: Row(
-          children: [
-            Text(label),
-            const SizedBox(width: 16),
-            Expanded(child: Text(value, textAlign: TextAlign.end)),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) => Row(
+            children: [
+              ConstrainedBox(
+                // A long label wraps rather than overflowing the row.
+                constraints: BoxConstraints(
+                  maxWidth: constraints.maxWidth * 0.5,
+                ),
+                child: Text(label),
+              ),
+              const SizedBox(width: 16),
+              Expanded(child: Text(value, textAlign: TextAlign.end)),
+            ],
+          ),
         ),
       );
     }

@@ -133,6 +133,29 @@ void main() {
           PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android,
     );
 
+    testWidgets('a value row\'s long label wraps on a narrow screen with '
+        'large text, its value still beside it', (tester) async {
+      tester.view
+        ..physicalSize = const Size(320, 640)
+        ..devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await _pump(
+        tester,
+        const AdaptiveFormValueRow(
+          label: 'Verschlüsselungsverfahren des Netzwerks',
+          value: 'WPA2',
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+      final value = tester.getRect(find.text('WPA2'));
+      expect(value.width, greaterThan(0));
+      expect(value.right, lessThanOrEqualTo(320));
+    });
+
     testWidgets('a text field keeps its Material look, its own label and '
         'error on top', (tester) async {
       await _pump(
