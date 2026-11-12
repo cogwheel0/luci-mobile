@@ -1,5 +1,5 @@
 import 'package:cupertino_native_better/cupertino_native_better.dart';
-import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:cupertino_ui/cupertino_ui.dart' hide RefreshCallback;
 import 'package:material_ui/material_ui.dart';
 
 import 'platform_ui_capabilities.dart';
@@ -113,6 +113,75 @@ class AdaptiveProgressIndicator extends StatelessWidget {
       strokeWidth: strokeWidth,
       semanticsLabel: semanticLabel,
       semanticsValue: semanticValue,
+    );
+  }
+}
+
+/// Pull to refresh: the iOS activity indicator on iOS, grey as the system
+/// draws it whatever [color] says, and the Material refresh indicator
+/// elsewhere, as luci-mobile's pages had it.
+///
+/// Both keep Flutter's pull gesture, so any scroll view can take it without
+/// becoming a sliver list.
+class AdaptiveRefreshIndicator extends StatelessWidget {
+  const AdaptiveRefreshIndicator({
+    super.key,
+    required this.onRefresh,
+    required this.child,
+    this.displacement = 40.0,
+    this.edgeOffset = 0.0,
+    this.color,
+    this.backgroundColor,
+    this.strokeWidth = RefreshProgressIndicator.defaultStrokeWidth,
+    this.semanticsLabel,
+    this.semanticsValue,
+    this.triggerMode = RefreshIndicatorTriggerMode.onEdge,
+    this.notificationPredicate = defaultScrollNotificationPredicate,
+  });
+
+  final RefreshCallback onRefresh;
+  final Widget child;
+  final double displacement;
+  final double edgeOffset;
+
+  /// The Material indicator's colour. iOS keeps its system grey.
+  final Color? color;
+
+  /// The Material indicator's disc. iOS draws no disc.
+  final Color? backgroundColor;
+
+  final double strokeWidth;
+  final String? semanticsLabel;
+  final String? semanticsValue;
+  final RefreshIndicatorTriggerMode triggerMode;
+  final ScrollNotificationPredicate notificationPredicate;
+
+  @override
+  Widget build(BuildContext context) {
+    if (PlatformUiCapabilities.isIOS) {
+      return RefreshIndicator.adaptive(
+        onRefresh: onRefresh,
+        displacement: displacement,
+        edgeOffset: edgeOffset,
+        semanticsLabel: semanticsLabel,
+        semanticsValue: semanticsValue,
+        triggerMode: triggerMode,
+        notificationPredicate: notificationPredicate,
+        child: child,
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      displacement: displacement,
+      edgeOffset: edgeOffset,
+      color: color,
+      backgroundColor: backgroundColor,
+      strokeWidth: strokeWidth,
+      semanticsLabel: semanticsLabel,
+      semanticsValue: semanticsValue,
+      triggerMode: triggerMode,
+      notificationPredicate: notificationPredicate,
+      child: child,
     );
   }
 }

@@ -1764,7 +1764,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
     }
 
-    return RefreshIndicator(
+    return AdaptiveRefreshIndicator(
       onRefresh: () => appState.fetchDashboardData(),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -1804,7 +1804,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             );
           } else {
             // Portrait mode: keep the complete dashboard on one screen.
-            return RefreshIndicator(
+            return AdaptiveRefreshIndicator(
               onRefresh: () => appState.fetchDashboardData(),
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),

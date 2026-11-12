@@ -76,7 +76,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
 
     return Scaffold(
       appBar: LuciAppBar(title: displayName, showBack: true),
-      body: RefreshIndicator(
+      body: AdaptiveRefreshIndicator(
         onRefresh: () async => ref.invalidate(clientDetailProvider(mac)),
         child: ListView(
           padding: const EdgeInsets.all(LuciSpacing.md),

@@ -14,6 +14,7 @@ import 'package:luci_mobile/state/feature_providers.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_feature_gate.dart';
 import 'package:luci_mobile/widgets/luci_hub_tile.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 /// The configuration hub: interfaces, wireless, DHCP, firewall and routing.
 ///
@@ -88,7 +89,7 @@ class _NetworkScreenState extends ConsumerState<NetworkScreen> {
 
     return Scaffold(
       appBar: LuciAppBar(title: l10n.network),
-      body: RefreshIndicator(
+      body: AdaptiveRefreshIndicator(
         onRefresh: () => ref.read(appStateProvider).fetchDashboardData(),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),

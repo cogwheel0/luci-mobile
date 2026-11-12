@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoActivityIndicator;
 import 'package:flutter/rendering.dart' show RenderParagraph;
@@ -400,5 +402,70 @@ void main() {
       expect(tester.getSize(spinner), const Size.square(36));
       expect(tester.getRect(spinner).size, const Size.square(24));
     });
+  });
+
+  group('pull to refresh', () {
+    Future<List<String>> pumpAndPull(WidgetTester tester) async {
+      final refreshed = <String>[];
+      final done = Completer<void>();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AdaptiveRefreshIndicator(
+              color: const Color(0xFF3366CC),
+              onRefresh: () {
+                refreshed.add('pulled');
+                return done.future;
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: const [SizedBox(height: 2000, child: Text('top'))],
+              ),
+            ),
+          ),
+        ),
+      );
+      // Down from well inside the list, as a thumb pulls.
+      await tester.flingFrom(
+        const Offset(400, 100),
+        const Offset(0, 300),
+        1000,
+      );
+      await tester.pump();
+      // The scroll settles, then the indicator, which then refreshes.
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      addTearDown(done.complete);
+      return refreshed;
+    }
+
+    testWidgets('Android: the Material indicator, in its colour', (
+      tester,
+    ) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android;
+      final refreshed = await pumpAndPull(tester);
+
+      expect(refreshed, ['pulled']);
+      final indicator = tester.widget<RefreshProgressIndicator>(
+        find.byType(RefreshProgressIndicator),
+      );
+      expect(indicator.valueColor?.value, const Color(0xFF3366CC));
+      expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    });
+
+    testWidgets('iOS: the system activity indicator, in its own grey', (
+      tester,
+    ) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+      final refreshed = await pumpAndPull(tester);
+
+      expect(refreshed, ['pulled']);
+      expect(find.byType(RefreshProgressIndicator), findsNothing);
+      final spinner = tester.widget<CupertinoActivityIndicator>(
+        find.byType(CupertinoActivityIndicator),
+      );
+      expect(spinner.color, isNull);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
   });
 }

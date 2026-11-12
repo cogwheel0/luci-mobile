@@ -116,7 +116,7 @@ class _LuciPullToRefreshState extends State<LuciPullToRefresh>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return RefreshIndicator(
+    return AdaptiveRefreshIndicator(
       onRefresh: _onRefresh,
       displacement: widget.displacement,
       edgeOffset: widget.edgeOffset,

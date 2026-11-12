@@ -114,7 +114,7 @@ class _AddonScreenState extends ConsumerState<AddonScreen> {
         showBack: true,
         backgroundColor: grouped?.withValues(alpha: 0.94),
       ),
-      body: RefreshIndicator(
+      body: AdaptiveRefreshIndicator(
         onRefresh: () async => ref.invalidate(addonProvider(spec)),
         child: async.when(
           loading: () => const Padding(
