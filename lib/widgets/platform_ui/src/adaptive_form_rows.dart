@@ -291,6 +291,8 @@ class AdaptiveFormTextField extends StatefulWidget
     this.autofocus = false,
     this.enabled = true,
     this.maxLength,
+    this.maxLines = 1,
+    this.minLines,
     this.inputFormatters,
     this.autofillHints,
     this.onChanged,
@@ -330,6 +332,11 @@ class AdaptiveFormTextField extends StatefulWidget
   final bool autofocus;
   final bool enabled;
   final int? maxLength;
+
+  /// More than one line, or null for as many as it needs: on iOS the row
+  /// then puts its label above the text, as iOS shows a note.
+  final int? maxLines;
+  final int? minLines;
   final List<TextInputFormatter>? inputFormatters;
   final Iterable<String>? autofillHints;
   final ValueChanged<String>? onChanged;
@@ -360,6 +367,45 @@ class _AdaptiveFormTextFieldState extends State<AdaptiveFormTextField> {
     super.dispose();
   }
 
+  bool get _multiline => widget.maxLines != 1;
+
+  /// The row's own text field: the value at the end of a one-line row, or
+  /// the text under the label of a multi-line one.
+  Widget _field(BuildContext context) {
+    final enabled = widget.enabled;
+    final multiline = _multiline;
+    return CupertinoTextField(
+      controller: widget.controller,
+      focusNode: _focusNode,
+      placeholder: widget.placeholder,
+      keyboardType: widget.keyboardType,
+      textInputAction: widget.textInputAction,
+      textCapitalization: widget.textCapitalization,
+      obscureText: widget.obscureText,
+      autocorrect: widget.autocorrect,
+      enableSuggestions: widget.enableSuggestions,
+      autofocus: widget.autofocus,
+      enabled: enabled,
+      maxLength: widget.maxLength,
+      inputFormatters: widget.inputFormatters,
+      autofillHints: widget.autofillHints,
+      onChanged: widget.onChanged,
+      onSubmitted: widget.onSubmitted,
+      textAlign: multiline ? TextAlign.start : TextAlign.end,
+      decoration: null,
+      padding: multiline
+          ? const EdgeInsets.only(top: 4)
+          : const EdgeInsets.symmetric(vertical: 12),
+      maxLines: widget.maxLines,
+      minLines: widget.minLines,
+      style: _bodyStyle(context).copyWith(
+        color:
+            (enabled ? CupertinoColors.label : CupertinoColors.secondaryLabel)
+                .resolveFrom(context),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!PlatformUiCapabilities.isIOS) {
@@ -375,6 +421,8 @@ class _AdaptiveFormTextFieldState extends State<AdaptiveFormTextField> {
         autofocus: widget.autofocus,
         enabled: widget.enabled,
         maxLength: widget.maxLength,
+        maxLines: widget.maxLines,
+        minLines: widget.minLines,
         inputFormatters: widget.inputFormatters,
         autofillHints: widget.autofillHints,
         onChanged: widget.onChanged,
@@ -391,6 +439,48 @@ class _AdaptiveFormTextFieldState extends State<AdaptiveFormTextField> {
     }
 
     final enabled = widget.enabled;
+    if (_multiline) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        excludeFromSemantics: true,
+        onTap: enabled ? _focusNode.requestFocus : null,
+        child: Padding(
+          padding: EdgeInsetsDirectional.fromSTEB(
+            16,
+            11,
+            widget.suffix == null ? 16 : 4,
+            11,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: MergeSemantics(
+                  child: Semantics(
+                    label: widget.error,
+                    hint: widget.error == null ? widget.helper : null,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _RowLabel(
+                          widget.label,
+                          error: widget.error != null,
+                          enabled: enabled,
+                        ),
+                        _field(context),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              // Beside the label, an element of its own, as in a one-line
+              // row.
+              if (widget.suffix != null) widget.suffix!,
+            ],
+          ),
+        ),
+      );
+    }
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       // Tapping anywhere on the row edits it. VoiceOver reaches the field
@@ -432,36 +522,7 @@ class _AdaptiveFormTextFieldState extends State<AdaptiveFormTextField> {
                             ),
                           ),
                           const SizedBox(width: 16),
-                          Expanded(
-                            child: CupertinoTextField(
-                              controller: widget.controller,
-                              focusNode: _focusNode,
-                              placeholder: widget.placeholder,
-                              keyboardType: widget.keyboardType,
-                              textInputAction: widget.textInputAction,
-                              textCapitalization: widget.textCapitalization,
-                              obscureText: widget.obscureText,
-                              autocorrect: widget.autocorrect,
-                              enableSuggestions: widget.enableSuggestions,
-                              autofocus: widget.autofocus,
-                              enabled: enabled,
-                              maxLength: widget.maxLength,
-                              inputFormatters: widget.inputFormatters,
-                              autofillHints: widget.autofillHints,
-                              onChanged: widget.onChanged,
-                              onSubmitted: widget.onSubmitted,
-                              textAlign: TextAlign.end,
-                              decoration: null,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              style: _bodyStyle(context).copyWith(
-                                color:
-                                    (enabled
-                                            ? CupertinoColors.label
-                                            : CupertinoColors.secondaryLabel)
-                                        .resolveFrom(context),
-                              ),
-                            ),
-                          ),
+                          Expanded(child: _field(context)),
                         ],
                       ),
                     ),
@@ -1003,6 +1064,75 @@ class AdaptiveFormValueRow extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A row that opens more: [label] on the left, the current [value] (if
+/// any) in the secondary colour and a chevron on the right, as iOS Settings
+/// leads to a sub-page or a picker. Null [onTap] dims it. iOS only; Android
+/// pages lay out their own list tiles.
+class AdaptiveFormNavigationRow extends StatelessWidget {
+  const AdaptiveFormNavigationRow({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.value,
+  });
+
+  final String label;
+  final String? value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
+    return Semantics(
+      container: true,
+      button: true,
+      enabled: enabled,
+      label: label,
+      value: value,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: _TappableRow(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: _rowHeight),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            child: LayoutBuilder(
+              builder: (context, constraints) => Row(
+                children: [
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: constraints.maxWidth * 0.5,
+                    ),
+                    child: _RowLabel(label, error: false, enabled: enabled),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      value ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: _bodyStyle(context).copyWith(color: secondary),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    CupertinoIcons.chevron_right,
+                    size: 16,
+                    color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

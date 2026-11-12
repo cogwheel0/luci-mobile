@@ -861,5 +861,101 @@ void main() {
       );
       semantics.dispose();
     });
+
+    testWidgets('a multi-line text row puts its label above the text', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        const AdaptiveFormSection(
+          children: [AdaptiveFormTextField(label: 'Notes', maxLines: 3)],
+        ),
+      );
+
+      final field = tester.widget<CupertinoTextField>(
+        find.byType(CupertinoTextField),
+      );
+      expect(field.maxLines, 3);
+      expect(field.textAlign, TextAlign.start);
+      expect(
+        tester.getRect(find.text('Notes')).bottom,
+        lessThanOrEqualTo(tester.getRect(find.byType(CupertinoTextField)).top),
+      );
+    });
+
+    testWidgets('a navigation row shows its value and a chevron, and opens '
+        'when enabled', (tester) async {
+      var opened = 0;
+      await _pump(
+        tester,
+        AdaptiveFormSection(
+          children: [
+            AdaptiveFormNavigationRow(
+              label: 'Time zone',
+              value: 'Europe/Berlin',
+              onTap: () => opened++,
+            ),
+            const AdaptiveFormNavigationRow(
+              label: 'Router password',
+              onTap: null,
+            ),
+          ],
+        ),
+      );
+
+      final value = find.text('Europe/Berlin');
+      expect(
+        tester.widget<Text>(value).style!.color,
+        CupertinoColors.secondaryLabel.resolveFrom(tester.element(value)),
+      );
+      expect(find.byIcon(CupertinoIcons.chevron_right), findsNWidgets(2));
+      await tester.tap(find.text('Time zone'));
+      await tester.tap(find.text('Router password'));
+      await tester.pump();
+      expect(opened, 1);
+      expect(
+        tester.widget<Text>(find.text('Router password')).style!.color,
+        CupertinoColors.tertiaryLabel.resolveFrom(
+          tester.element(find.text('Router password')),
+        ),
+        reason: 'a row that cannot open is dimmed',
+      );
+    });
+
+    testWidgets('a multi-line row keeps its suffix, an element of its own', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      var cleared = 0;
+      await _pump(
+        tester,
+        AdaptiveFormSection(
+          children: [
+            AdaptiveFormTextField(
+              label: 'Notes',
+              maxLines: 3,
+              suffix: Semantics(
+                button: true,
+                label: 'Clear notes',
+                onTap: () => cleared++,
+                child: const Icon(CupertinoIcons.clear_circled),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      expect(find.byIcon(CupertinoIcons.clear_circled), findsOneWidget);
+      final suffix = find.semantics.byLabel('Clear notes');
+      expect(suffix.evaluate().single.isMergedIntoParent, isFalse);
+      tester.semantics.tap(suffix);
+      await tester.pump();
+      expect(cleared, 1);
+      expect(
+        tester.getSemantics(find.byType(CupertinoTextField)).label,
+        'Notes',
+      );
+      semantics.dispose();
+    });
   });
 }
