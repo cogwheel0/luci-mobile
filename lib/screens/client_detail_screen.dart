@@ -109,8 +109,18 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     final detailAsync = ref.watch(clientDetailProvider(mac));
     final displayName = _displayName(detailAsync.value);
 
+    // iOS lays the details out as iOS Settings lays out a device: grouped
+    // rows on the grouped background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
-      appBar: LuciAppBar(title: displayName, showBack: true),
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: displayName,
+        showBack: true,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
+      ),
       body: AdaptiveRefreshIndicator(
         onRefresh: _refresh,
         child: ListView(
@@ -124,7 +134,9 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
                   : () => _rename(detailAsync.value, displayName),
             ),
             if (!_isOwnedBySelectedRouter) _crossRouterBanner(context),
-            const SizedBox(height: LuciSpacing.md),
+            // iOS's groups keep their own space between them.
+            if (!PlatformUiCapabilities.isIOS)
+              const SizedBox(height: LuciSpacing.md),
             ...detailAsync.when(
               // The addresses and lease the list already had show while the
               // rest loads, and when it cannot.
@@ -209,6 +221,19 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       icon: Icons.bookmark_outline,
       availability: availability,
       writable: _isOwnedBySelectedRouter && !detail.dhcpUnavailable,
+      iosRows: [
+        AdaptiveFormSwitch(
+          label: context.l10n.reserveThisAddress,
+          description: detail.hasReservation
+              ? '${context.l10n.reservedAddress}: ${detail.host!.ip}'
+              : null,
+          value: detail.hasReservation,
+          onChanged:
+              _canWrite(availability, configReadable: !detail.dhcpUnavailable)
+              ? (want) => _toggleReservation(detail, want)
+              : null,
+        ),
+      ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -242,6 +267,20 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       availability: availability,
       writable: _isOwnedBySelectedRouter,
       extraNote: mac == null ? context.l10n.wakeNeedsMac : null,
+      // The action as a blue row, what it does under the group.
+      footer: context.l10n.wakeDeviceDescription,
+      iosRows: [
+        AdaptiveFormButtonRow(
+          label: context.l10n.wakeDevice,
+          onPressed:
+              availability.available &&
+                  _isOwnedBySelectedRouter &&
+                  mac != null &&
+                  !_wakeBusy
+              ? () => _wake(mac)
+              : null,
+        ),
+      ],
       child: ListTile(
         contentPadding: EdgeInsets.zero,
         title: Text(context.l10n.wakeDevice),
@@ -306,6 +345,21 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
       // Without a resolvable zone the rule would have to guess `lan`, which
       // is wrong on any guest-VLAN or multi-zone router.
       extraNote: noZone ? context.l10n.noZoneForClient : null,
+      iosRows: [
+        AdaptiveFormSwitch(
+          label: context.l10n.blockClient,
+          description: context.l10n.blockClientDescription,
+          value: detail.isBlocked,
+          onChanged:
+              _canWrite(
+                    availability,
+                    configReadable: !detail.firewallUnavailable,
+                  ) &&
+                  !noZone
+              ? (want) => _toggleBlock(detail, want)
+              : null,
+        ),
+      ],
       child: AdaptiveSwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: Text(context.l10n.blockClient),
@@ -464,19 +518,40 @@ class _IdentityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final avatar = CircleAvatar(
+      backgroundColor: scheme.primaryContainer,
+      child: Icon(
+        client.connectionType == ConnectionType.wired
+            ? Icons.settings_ethernet
+            : Icons.wifi,
+        color: scheme.onPrimaryContainer,
+      ),
+    );
+    final rename = AdaptiveButton.sfSymbol(
+      onPressed: onRename,
+      sfSymbol: const SFSymbol('pencil'),
+      materialIcon: Icons.edit_outlined,
+      semanticLabel: context.l10n.displayName,
+      style: AdaptiveButtonStyle.plain,
+    );
+    if (PlatformUiCapabilities.isIOS) {
+      // The device as the head of its page, renamed from its pencil.
+      return AdaptiveFormSection(
+        children: [
+          AdaptiveListRow(
+            leading: ExcludeSemantics(child: avatar),
+            title: displayName,
+            subtitle: client.vendor ?? client.macAddress,
+            actions: [rename],
+          ),
+        ],
+      );
+    }
     return LuciCardStyles.standardCardWrapper(
       context: context,
       child: Row(
         children: [
-          CircleAvatar(
-            backgroundColor: scheme.primaryContainer,
-            child: Icon(
-              client.connectionType == ConnectionType.wired
-                  ? Icons.settings_ethernet
-                  : Icons.wifi,
-              color: scheme.onPrimaryContainer,
-            ),
-          ),
+          avatar,
           const SizedBox(width: LuciSpacing.md),
           Expanded(
             child: Column(
@@ -490,13 +565,7 @@ class _IdentityCard extends StatelessWidget {
               ],
             ),
           ),
-          AdaptiveButton.sfSymbol(
-            onPressed: onRename,
-            sfSymbol: const SFSymbol('pencil'),
-            materialIcon: Icons.edit_outlined,
-            semanticLabel: context.l10n.displayName,
-            style: AdaptiveButtonStyle.plain,
-          ),
+          rename,
         ],
       ),
     );
@@ -672,6 +741,21 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (rows.isEmpty) return const SizedBox.shrink();
+    if (PlatformUiCapabilities.isIOS) {
+      // The facts as value rows under the section's title; a value to copy
+      // is selectable, a long press offering Copy.
+      return AdaptiveFormSection(
+        header: title,
+        children: [
+          for (final (label, value) in rows)
+            AdaptiveFormValueRow(
+              label: label,
+              value: value,
+              selectable: copyable,
+            ),
+        ],
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: LuciSpacing.md),
       child: LuciCardStyles.standardCardWrapper(
@@ -729,19 +813,41 @@ class _GatedCard extends StatelessWidget {
     required this.availability,
     required this.writable,
     required this.child,
+    required this.iosRows,
     this.extraNote,
+    this.footer,
   });
 
   final String title;
   final IconData icon;
   final FeatureAvailability availability;
   final bool writable;
+
+  /// The control on Android, in the card.
   final Widget child;
+
+  /// The control on iOS, as rows of the group; disabled where it cannot
+  /// write, the reason under the group.
+  final List<Widget> iosRows;
+
   final String? extraNote;
+
+  /// What the control does, under the group on iOS.
+  final String? footer;
 
   @override
   Widget build(BuildContext context) {
     final note = _note(context) ?? extraNote;
+    if (PlatformUiCapabilities.isIOS) {
+      return AdaptiveFormSection(
+        header: title,
+        footer: switch ([?footer, ?note]) {
+          [] => null,
+          final parts => parts.join('\n\n'),
+        },
+        children: iosRows,
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: LuciSpacing.md),
       child: LuciCardStyles.standardCardWrapper(
@@ -791,27 +897,50 @@ class _MessageCard extends StatelessWidget {
   final VoidCallback? onAction;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: LuciSpacing.md),
-    child: LuciCardStyles.standardCardWrapper(
-      context: context,
-      child: Row(
-        children: [
-          Icon(icon),
-          const SizedBox(width: LuciSpacing.sm),
-          Expanded(
-            child: Text(message, style: LuciTextStyles.cardSubtitle(context)),
-          ),
-          if (action != null)
-            AdaptiveButton(
-              onPressed: onAction,
-              label: action!,
-              style: AdaptiveButtonStyle.plain,
+  Widget build(BuildContext context) => PlatformUiCapabilities.isIOS
+      ? AdaptiveFormSection(
+          children: [
+            AdaptiveListRow(
+              leading: Icon(
+                icon,
+                color: CupertinoColors.secondaryLabel.resolveFrom(context),
+              ),
+              title: message,
+              actions: [
+                if (action != null)
+                  AdaptiveButton(
+                    onPressed: onAction,
+                    label: action!,
+                    style: AdaptiveButtonStyle.plain,
+                  ),
+              ],
             ),
-        ],
-      ),
-    ),
-  );
+          ],
+        )
+      : Padding(
+          padding: const EdgeInsets.only(bottom: LuciSpacing.md),
+          child: LuciCardStyles.standardCardWrapper(
+            context: context,
+            child: Row(
+              children: [
+                Icon(icon),
+                const SizedBox(width: LuciSpacing.sm),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: LuciTextStyles.cardSubtitle(context),
+                  ),
+                ),
+                if (action != null)
+                  AdaptiveButton(
+                    onPressed: onAction,
+                    label: action!,
+                    style: AdaptiveButtonStyle.plain,
+                  ),
+              ],
+            ),
+          ),
+        );
 }
 
 /// Asks for a reservation address, validating it against the subnet, the DHCP
