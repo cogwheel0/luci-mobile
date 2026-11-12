@@ -323,4 +323,67 @@ void main() {
       await unmount(tester);
     });
   });
+
+  testWidgets('before iOS 26: the details as iOS groups of rows, values '
+      'selectable, switches and the wake action as rows', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    final phone = Client(
+      ipAddress: '192.168.1.20',
+      macAddress: 'AA:BB:CC:00:00:01',
+      hostname: 'phone',
+      vendor: 'Apple',
+      leaseTime: 3600,
+      routerId: 'home',
+    );
+    tester.view
+      ..physicalSize = const Size(1800, 6000)
+      ..devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appStateProvider.overrideWith((ref) => _TwoClients()),
+          clientDetailProvider(StationInfo.normalizeMac(phone.macAddress))
+              .overrideWith((ref) async => const ClientDetail()),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: luciLocalizationsDelegates,
+          home: ClientDetailScreen(client: phone),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 5));
+
+    // The device heads the page, renamed from its pencil.
+    expect(find.widgetWithText(AdaptiveListRow, 'phone'), findsOneWidget);
+    // Its addresses as value rows to copy.
+    expect(
+      tester
+          .widget<AdaptiveFormValueRow>(
+            find.widgetWithText(AdaptiveFormValueRow, 'MAC Address'),
+          )
+          .selectable,
+      isTrue,
+    );
+    expect(find.text('ADDRESSES'), findsOneWidget);
+    // Its controls as rows: switches, and waking as a button row.
+    expect(
+      find.widgetWithText(AdaptiveFormSwitch, 'Reserve this address'),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(AdaptiveFormSwitch, 'Block internet access'),
+      findsOneWidget,
+    );
+    expect(
+      find.widgetWithText(AdaptiveFormButtonRow, 'Wake this device'),
+      findsOneWidget,
+    );
+    expect(find.byType(AdaptiveSwitchListTile), findsNothing);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 30));
+  });
 }
