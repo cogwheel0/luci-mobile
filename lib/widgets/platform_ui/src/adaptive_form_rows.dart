@@ -349,68 +349,79 @@ class _AdaptiveFormTextFieldState extends State<AdaptiveFormTextField> {
     }
 
     final enabled = widget.enabled;
-    // One element to VoiceOver: the field, named by the label, as a
-    // Material field's label names it.
-    return MergeSemantics(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: enabled ? _focusNode.requestFocus : null,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: _rowHeight),
-          child: Padding(
-            padding: EdgeInsetsDirectional.only(
-              start: 16,
-              end: widget.suffix == null ? 16 : 4,
-            ),
-            child: LayoutBuilder(
-              builder: (context, constraints) => Row(
-                children: [
-                  ConstrainedBox(
-                    // A long label wraps rather than squeezing the value out.
-                    constraints: BoxConstraints(
-                      maxWidth: constraints.maxWidth * 0.5,
-                    ),
-                    child: _RowLabel(
-                      widget.label,
-                      error: widget.error != null,
-                      enabled: enabled,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      // Tapping anywhere on the row edits it. VoiceOver reaches the field
+      // itself, so this is no action of its own there.
+      excludeFromSemantics: true,
+      onTap: enabled ? _focusNode.requestFocus : null,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: _rowHeight),
+        child: Padding(
+          padding: EdgeInsetsDirectional.only(
+            start: 16,
+            end: widget.suffix == null ? 16 : 4,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                // One element to VoiceOver: the field, named by the label,
+                // as a Material field's label names it. A suffix, such as a
+                // show-password button, stays an element of its own.
+                child: MergeSemantics(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => Row(
+                      children: [
+                        ConstrainedBox(
+                          // A long label wraps rather than squeezing the
+                          // value out.
+                          constraints: BoxConstraints(
+                            maxWidth: constraints.maxWidth * 0.5,
+                          ),
+                          child: _RowLabel(
+                            widget.label,
+                            error: widget.error != null,
+                            enabled: enabled,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: CupertinoTextField(
+                            controller: widget.controller,
+                            focusNode: _focusNode,
+                            placeholder: widget.placeholder,
+                            keyboardType: widget.keyboardType,
+                            textInputAction: widget.textInputAction,
+                            textCapitalization: widget.textCapitalization,
+                            obscureText: widget.obscureText,
+                            autocorrect: widget.autocorrect,
+                            enableSuggestions: widget.enableSuggestions,
+                            autofocus: widget.autofocus,
+                            enabled: enabled,
+                            maxLength: widget.maxLength,
+                            inputFormatters: widget.inputFormatters,
+                            autofillHints: widget.autofillHints,
+                            onChanged: widget.onChanged,
+                            onSubmitted: widget.onSubmitted,
+                            textAlign: TextAlign.end,
+                            decoration: null,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            style: _bodyStyle(context).copyWith(
+                              color:
+                                  (enabled
+                                          ? CupertinoColors.label
+                                          : CupertinoColors.secondaryLabel)
+                                      .resolveFrom(context),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: CupertinoTextField(
-                      controller: widget.controller,
-                      focusNode: _focusNode,
-                      placeholder: widget.placeholder,
-                      keyboardType: widget.keyboardType,
-                      textInputAction: widget.textInputAction,
-                      textCapitalization: widget.textCapitalization,
-                      obscureText: widget.obscureText,
-                      autocorrect: widget.autocorrect,
-                      enableSuggestions: widget.enableSuggestions,
-                      autofocus: widget.autofocus,
-                      enabled: enabled,
-                      maxLength: widget.maxLength,
-                      inputFormatters: widget.inputFormatters,
-                      autofillHints: widget.autofillHints,
-                      onChanged: widget.onChanged,
-                      onSubmitted: widget.onSubmitted,
-                      textAlign: TextAlign.end,
-                      decoration: null,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      style: _bodyStyle(context).copyWith(
-                        color:
-                            (enabled
-                                    ? CupertinoColors.label
-                                    : CupertinoColors.secondaryLabel)
-                                .resolveFrom(context),
-                      ),
-                    ),
-                  ),
-                  if (widget.suffix != null) widget.suffix!,
-                ],
+                ),
               ),
-            ),
+              if (widget.suffix != null) widget.suffix!,
+            ],
           ),
         ),
       ),

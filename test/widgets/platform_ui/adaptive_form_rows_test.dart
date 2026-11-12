@@ -506,5 +506,45 @@ void main() {
 
       expect(chosen, isEmpty);
     });
+
+    testWidgets('VoiceOver can press a text row\'s suffix on its own, the '
+        'field keeping its name', (tester) async {
+      final semantics = tester.ensureSemantics();
+      var pressed = 0;
+      await _pump(
+        tester,
+        AdaptiveFormSection(
+          children: [
+            AdaptiveFormTextField(
+              label: 'Password',
+              obscureText: true,
+              // Not a CupertinoButton, which is an element of its own
+              // anyway: a suffix with a plain tap handler.
+              suffix: Semantics(
+                button: true,
+                label: 'Show password',
+                onTap: () => pressed++,
+                child: const Icon(CupertinoIcons.eye),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      expect(
+        tester.getSemantics(find.byType(CupertinoTextField)).label,
+        'Password',
+      );
+      final suffix = find.semantics.byLabel('Show password');
+      expect(
+        suffix.evaluate().single.isMergedIntoParent,
+        isFalse,
+        reason: 'an element of its own, not part of the field\'s row',
+      );
+      tester.semantics.tap(suffix);
+      await tester.pump();
+      expect(pressed, 1);
+      semantics.dispose();
+    });
   });
 }
