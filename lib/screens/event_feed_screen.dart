@@ -20,10 +20,16 @@ class EventFeedScreen extends ConsumerWidget {
     final l10n = context.l10n;
     final async = ref.watch(eventFeedProvider);
 
+    // iOS lists the events as one inset group, on the grouped background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
+      backgroundColor: grouped,
       appBar: LuciAppBar(
         title: l10n.activity,
         showBack: true,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
         actions: [
           LuciAppBarAction(
             sfSymbol: 'trash',
@@ -46,6 +52,14 @@ class EventFeedScreen extends ConsumerWidget {
                 // Saying plainly that this only records while the app is
                 // open stops an empty feed reading as a broken feature.
                 message: l10n.activityOnlyWhileOpen,
+              )
+            : PlatformUiCapabilities.isIOS
+            ? AdaptiveGroupedListView(
+                // The hairlines start at the descriptions, past the icons.
+                separatorIndent: 68,
+                itemCount: events.length,
+                itemBuilder: (context, i) =>
+                    _EventRow(event: events[events.length - 1 - i]),
               )
             : ListView.separated(
                 itemCount: events.length,
@@ -75,16 +89,22 @@ class _EventRow extends StatelessWidget {
       EventSeverity.info => scheme.primary,
     };
 
+    final icon = CircleAvatar(
+      backgroundColor: color.withValues(alpha: 0.12),
+      child: Icon(_icon(event.kind), color: color, size: 20),
+    );
+    final when = DateFormat.yMMMd().add_Hm().format(event.at);
+    if (PlatformUiCapabilities.isIOS) {
+      return AdaptiveListRow(
+        leading: ExcludeSemantics(child: icon),
+        title: _title(l10n, event),
+        subtitle: when,
+      );
+    }
     return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: color.withValues(alpha: 0.12),
-        child: Icon(_icon(event.kind), color: color, size: 20),
-      ),
+      leading: icon,
       title: Text(_title(l10n, event)),
-      subtitle: Text(
-        DateFormat.yMMMd().add_Hm().format(event.at),
-        style: LuciTextStyles.cardSubtitle(context),
-      ),
+      subtitle: Text(when, style: LuciTextStyles.cardSubtitle(context)),
     );
   }
 
