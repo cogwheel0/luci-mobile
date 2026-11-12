@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:cupertino_ui/cupertino_ui.dart'
     show
         CupertinoDialogAction,
@@ -337,6 +339,40 @@ void main() {
       expect(find.byType(AdaptiveFormSheet), findsNothing);
       await _finish(tester);
     });
+
+    testWidgets(
+      'iOS 26: a tap on a forward\'s native switch does not open the '
+      'forward, and the switch toggles it',
+      (tester) async {
+        PlatformUiCapabilities.debugIOSMajorVersionOverride = 26;
+        PlatformUiCapabilities.debugNativeIOS26Override = true;
+        final applied = await _pumpFirewall(tester);
+        await tester.tap(find.text('Port forwards'));
+        await tester.pumpAndSettle();
+
+        final web = find.widgetWithText(AdaptiveListRow, 'Web server');
+        final native = find.descendant(
+          of: web,
+          matching: find.byType(CNSwitch),
+        );
+        expect(native, findsOneWidget);
+        // A native view claims no tap in Flutter: inside the row's tap
+        // target, this tap would open the forward.
+        await tester.tap(native);
+        await tester.pumpAndSettle();
+        expect(find.byType(AdaptiveFormSheet), findsNothing);
+        expect(applied, isEmpty);
+
+        // The switch's own change, as the native control reports it.
+        tester.widget<CNSwitch>(native).onChanged(false);
+        await tester.pumpAndSettle();
+        expect(applied, hasLength(1));
+        expect(find.byType(AdaptiveFormSheet), findsNothing);
+        await _finish(tester);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+      skip: !Platform.isMacOS,
+    );
 
     testWidgets('traffic rules and static routes as grouped rows, with '
         'their switch and buttons', (tester) async {
