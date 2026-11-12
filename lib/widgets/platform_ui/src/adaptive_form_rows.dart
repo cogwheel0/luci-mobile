@@ -349,63 +349,67 @@ class _AdaptiveFormTextFieldState extends State<AdaptiveFormTextField> {
     }
 
     final enabled = widget.enabled;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: enabled ? _focusNode.requestFocus : null,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: _rowHeight),
-        child: Padding(
-          padding: EdgeInsetsDirectional.only(
-            start: 16,
-            end: widget.suffix == null ? 16 : 4,
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) => Row(
-              children: [
-                ConstrainedBox(
-                  // A long label wraps rather than squeezing the value out.
-                  constraints: BoxConstraints(
-                    maxWidth: constraints.maxWidth * 0.5,
-                  ),
-                  child: _RowLabel(
-                    widget.label,
-                    error: widget.error != null,
-                    enabled: enabled,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: CupertinoTextField(
-                    controller: widget.controller,
-                    focusNode: _focusNode,
-                    placeholder: widget.placeholder,
-                    keyboardType: widget.keyboardType,
-                    textInputAction: widget.textInputAction,
-                    textCapitalization: widget.textCapitalization,
-                    obscureText: widget.obscureText,
-                    autocorrect: widget.autocorrect,
-                    enableSuggestions: widget.enableSuggestions,
-                    autofocus: widget.autofocus,
-                    enabled: enabled,
-                    maxLength: widget.maxLength,
-                    inputFormatters: widget.inputFormatters,
-                    autofillHints: widget.autofillHints,
-                    onChanged: widget.onChanged,
-                    onSubmitted: widget.onSubmitted,
-                    textAlign: TextAlign.end,
-                    decoration: null,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    style: _bodyStyle(context).copyWith(
-                      color:
-                          (enabled
-                                  ? CupertinoColors.label
-                                  : CupertinoColors.secondaryLabel)
-                              .resolveFrom(context),
+    // One element to VoiceOver: the field, named by the label, as a
+    // Material field's label names it.
+    return MergeSemantics(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: enabled ? _focusNode.requestFocus : null,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: _rowHeight),
+          child: Padding(
+            padding: EdgeInsetsDirectional.only(
+              start: 16,
+              end: widget.suffix == null ? 16 : 4,
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) => Row(
+                children: [
+                  ConstrainedBox(
+                    // A long label wraps rather than squeezing the value out.
+                    constraints: BoxConstraints(
+                      maxWidth: constraints.maxWidth * 0.5,
+                    ),
+                    child: _RowLabel(
+                      widget.label,
+                      error: widget.error != null,
+                      enabled: enabled,
                     ),
                   ),
-                ),
-                if (widget.suffix != null) widget.suffix!,
-              ],
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: CupertinoTextField(
+                      controller: widget.controller,
+                      focusNode: _focusNode,
+                      placeholder: widget.placeholder,
+                      keyboardType: widget.keyboardType,
+                      textInputAction: widget.textInputAction,
+                      textCapitalization: widget.textCapitalization,
+                      obscureText: widget.obscureText,
+                      autocorrect: widget.autocorrect,
+                      enableSuggestions: widget.enableSuggestions,
+                      autofocus: widget.autofocus,
+                      enabled: enabled,
+                      maxLength: widget.maxLength,
+                      inputFormatters: widget.inputFormatters,
+                      autofillHints: widget.autofillHints,
+                      onChanged: widget.onChanged,
+                      onSubmitted: widget.onSubmitted,
+                      textAlign: TextAlign.end,
+                      decoration: null,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      style: _bodyStyle(context).copyWith(
+                        color:
+                            (enabled
+                                    ? CupertinoColors.label
+                                    : CupertinoColors.secondaryLabel)
+                                .resolveFrom(context),
+                      ),
+                    ),
+                  ),
+                  if (widget.suffix != null) widget.suffix!,
+                ],
+              ),
             ),
           ),
         ),
@@ -513,56 +517,73 @@ class _AdaptiveFormPickerState<T> extends State<AdaptiveFormPicker<T>> {
 
     final enabled = onChanged != null;
     final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
+    final open = enabled ? () => _choose(context) : null;
     return Semantics(
+      // An element of its own, which VoiceOver can open: without container
+      // the group's notes under it read as part of this row.
+      container: true,
       button: true,
       enabled: enabled,
       label: label,
       value: _current?.label ?? hint,
+      onTap: open,
       excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: enabled ? () => _choose(context) : null,
+      child: _TappableRow(
+        onTap: open,
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: _rowHeight),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-            child: Row(
-              children: [
-                _RowLabel(label, error: error != null, enabled: enabled),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Align(
-                    alignment: AlignmentDirectional.centerEnd,
-                    child: Row(
-                      key: _anchor,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            _current?.label ?? hint ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.end,
-                            style: _bodyStyle(context).copyWith(
-                              color: enabled
-                                  ? secondary
-                                  : CupertinoColors.tertiaryLabel.resolveFrom(
-                                      context,
-                                    ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Icon(
-                          CupertinoIcons.chevron_up_chevron_down,
-                          size: 15,
-                          color: secondary,
-                        ),
-                      ],
+            child: LayoutBuilder(
+              builder: (context, constraints) => Row(
+                children: [
+                  ConstrainedBox(
+                    // A long label, or large text, wraps rather than pushing
+                    // the choice out of the row.
+                    constraints: BoxConstraints(
+                      maxWidth: constraints.maxWidth * 0.5,
+                    ),
+                    child: _RowLabel(
+                      label,
+                      error: error != null,
+                      enabled: enabled,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: Row(
+                        key: _anchor,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              _current?.label ?? hint ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.end,
+                              style: _bodyStyle(context).copyWith(
+                                color: enabled
+                                    ? secondary
+                                    : CupertinoColors.tertiaryLabel.resolveFrom(
+                                        context,
+                                      ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Icon(
+                            CupertinoIcons.chevron_up_chevron_down,
+                            size: 15,
+                            color: secondary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -635,10 +656,10 @@ class AdaptiveFormButtonRow extends StatelessWidget {
         ? CupertinoColors.systemRed.resolveFrom(context)
         : CupertinoTheme.of(context).primaryColor;
     return Semantics(
+      container: true,
       button: true,
       enabled: enabled,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: _TappableRow(
         onTap: onPressed,
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: _rowHeight),
@@ -648,6 +669,52 @@ class AdaptiveFormButtonRow extends StatelessWidget {
               style: _bodyStyle(context).copyWith(color: color),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A row that acts when tapped, which a hardware keyboard can also reach,
+/// with Tab, and act on, with Space or Return, showing where focus is.
+class _TappableRow extends StatefulWidget {
+  const _TappableRow({required this.onTap, required this.child});
+
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  State<_TappableRow> createState() => _TappableRowState();
+}
+
+class _TappableRowState extends State<_TappableRow> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final onTap = widget.onTap;
+    return FocusableActionDetector(
+      enabled: onTap != null,
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            onTap?.call();
+            return null;
+          },
+        ),
+      },
+      onShowFocusHighlight: (show) => setState(() => _focused = show),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: _focused
+                ? CupertinoColors.systemFill.resolveFrom(context)
+                : null,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: widget.child,
         ),
       ),
     );

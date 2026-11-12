@@ -1,4 +1,7 @@
+import 'dart:ui' show SemanticsAction;
+
 import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 import 'package:material_ui/material_ui.dart';
@@ -356,6 +359,110 @@ void main() {
       final a = tester.getRect(find.byType(CupertinoTextField).at(0));
       final b = tester.getRect(find.byType(CupertinoTextField).at(1));
       expect(b.top - a.bottom, lessThan(100));
+    });
+
+    testWidgets('VoiceOver reads a text row as its field, named by its label, '
+        'and opens a picker read without the group\'s notes', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(
+        tester,
+        AdaptiveFormSection(
+          children: [
+            const AdaptiveFormTextField(label: 'Name'),
+            AdaptiveFormPicker<String>(
+              label: 'Encryption',
+              value: 'psk2',
+              choices: const [AdaptiveFormChoice('psk2', 'WPA2-PSK')],
+              onChanged: (_) {},
+              helper: 'Applies to every client',
+            ),
+          ],
+        ),
+      );
+
+      expect(
+        tester.getSemantics(find.byType(CupertinoTextField)).label,
+        'Name',
+      );
+      final picker = tester.getSemantics(
+        find.byWidgetPredicate((w) => w is AdaptiveFormPicker<String>),
+      );
+      expect(picker.label, 'Encryption');
+      expect(picker.value, 'WPA2-PSK');
+      expect(picker.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+
+      tester.semantics.tap(find.semantics.byLabel('Encryption'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoActionSheet), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets('a hardware keyboard reaches a picker and a button row with '
+        'Tab, and acts on them', (tester) async {
+      var removed = 0;
+      await _pump(
+        tester,
+        AdaptiveFormSection(
+          children: [
+            AdaptiveFormPicker<String>(
+              label: 'Protocol',
+              value: 'tcp',
+              choices: const [AdaptiveFormChoice('tcp', 'TCP')],
+              onChanged: (_) {},
+            ),
+            AdaptiveFormButtonRow(
+              label: 'Remove',
+              destructive: true,
+              onPressed: () => removed++,
+            ),
+          ],
+        ),
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoActionSheet), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(removed, 1);
+    });
+
+    testWidgets('on a narrow screen with large text, a picker\'s label wraps '
+        'and its choice stays in the row', (tester) async {
+      tester.view
+        ..physicalSize = const Size(320, 640)
+        ..devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await _pump(
+        tester,
+        AdaptiveFormSection(
+          children: [
+            AdaptiveFormPicker<String>(
+              label: 'Destination zone',
+              value: 'lan',
+              choices: const [AdaptiveFormChoice('lan', 'lan')],
+              onChanged: (_) {},
+            ),
+          ],
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+      final value = tester.getRect(find.text('lan'));
+      expect(value.width, greaterThan(0));
+      expect(value.right, lessThanOrEqualTo(320));
+      expect(
+        tester.getRect(find.text('Destination zone')).right,
+        lessThan(value.left),
+      );
     });
   });
 }
