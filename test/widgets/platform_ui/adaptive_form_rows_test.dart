@@ -133,6 +133,29 @@ void main() {
           PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android,
     );
 
+    testWidgets('a value row\'s long label wraps on a narrow screen with '
+        'large text, its value still beside it', (tester) async {
+      tester.view
+        ..physicalSize = const Size(320, 640)
+        ..devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await _pump(
+        tester,
+        const AdaptiveFormValueRow(
+          label: 'Verschlüsselungsverfahren des Netzwerks',
+          value: 'WPA2',
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+      final value = tester.getRect(find.text('WPA2'));
+      expect(value.width, greaterThan(0));
+      expect(value.right, lessThanOrEqualTo(320));
+    });
+
     testWidgets('a text field keeps its Material look, its own label and '
         'error on top', (tester) async {
       await _pump(
@@ -769,6 +792,73 @@ void main() {
           )
           .getSemanticsData();
       expect(picker.label, 'Protocol\nNot supported here');
+      semantics.dispose();
+    });
+
+    testWidgets('a value row shows a fact on the right, read with its label', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(
+        tester,
+        const AdaptiveFormSection(
+          children: [
+            AdaptiveFormValueRow(label: 'BSSID', value: 'AA:BB:CC:11:22:33'),
+          ],
+        ),
+      );
+
+      final value = find.text('AA:BB:CC:11:22:33');
+      expect(
+        tester.getRect(find.text('BSSID')).right,
+        lessThan(tester.getRect(value).left),
+      );
+      expect(tester.widget<Text>(value).textAlign, TextAlign.end);
+      expect(
+        tester.widget<Text>(value).style!.color,
+        CupertinoColors.secondaryLabel.resolveFrom(tester.element(value)),
+      );
+      expect(
+        find.bySemanticsLabel(RegExp('BSSID.*AA:BB:CC:11:22:33', dotAll: true)),
+        findsOneWidget,
+      );
+      semantics.dispose();
+    });
+
+    testWidgets('a group\'s own error is red under its rows, before its '
+        'footer, and announced', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(
+        tester,
+        const AdaptiveFormSection(
+          error: 'Could not connect',
+          footer: 'The radio will join as a client.',
+          children: [AdaptiveFormTextField(label: 'Password')],
+        ),
+      );
+
+      final error = find.text('Could not connect');
+      final footer = find.text('The radio will join as a client.');
+      expect(
+        tester.getRect(error).top,
+        greaterThan(tester.getRect(find.byType(CupertinoTextField)).bottom),
+      );
+      expect(
+        tester.getRect(footer).top,
+        greaterThan(tester.getRect(error).bottom),
+      );
+      expect(
+        tester.widget<Text>(error).style!.color,
+        CupertinoColors.systemRed.resolveFrom(tester.element(error)),
+      );
+      expect(
+        tester
+            .getSemantics(error)
+            .getSemanticsData()
+            .flagsCollection
+            .isLiveRegion,
+        isTrue,
+      );
       semantics.dispose();
     });
   });

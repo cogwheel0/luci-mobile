@@ -2003,10 +2003,8 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
         confirmLabel: context.l10n.saveAction,
         onConfirm: _save,
         busy: _isSaving,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: _form(context),
-        ),
+        grouped: true,
+        child: _iosForm(context),
       );
     }
 
@@ -2109,6 +2107,66 @@ class _WifiEditBottomSheetState extends ConsumerState<_WifiEditBottomSheet> {
           ),
         ),
       ),
+    );
+  }
+
+  /// The interface's settings as one iOS group, with what went wrong and
+  /// what saving them will do under it.
+  Widget _iosForm(BuildContext context) {
+    final l10n = context.l10n;
+    return AdaptiveFormSection(
+      error: _error,
+      footer: l10n.wifiChangesWarning,
+      children: [
+        AdaptiveFormTextField(
+          label: l10n.ssidNetworkName,
+          controller: _ssidController,
+          enabled: !_isSaving,
+          placeholder: l10n.enterSsid,
+        ),
+        AdaptiveFormPicker<String>(
+          label: l10n.encryption,
+          value: _selectedEncryption,
+          // An encryption this editor does not offer, such as WPA-EAP.
+          hint: _encryptionLabel(_originalEncryption),
+          choices: [
+            for (final option in _encryptionOptions)
+              AdaptiveFormChoice(option, _encryptionLabel(option)),
+          ],
+          onChanged: _isSaving
+              ? null
+              : (value) {
+                  if (value != null) {
+                    setState(() => _selectedEncryption = value);
+                  }
+                },
+        ),
+        if (_requiresPassword)
+          AdaptiveFormTextField(
+            label: l10n.password,
+            controller: _passwordController,
+            obscureText: _obscurePassword,
+            enabled: !_isSaving,
+            placeholder: l10n.enterNewPassword,
+            helper: _changingToEncrypted
+                ? l10n.passwordRequired
+                : l10n.passwordKeepCurrent,
+            suffix: AdaptiveObscureToggle(
+              obscured: _obscurePassword,
+              semanticLabel: _obscurePassword
+                  ? l10n.showPassword
+                  : l10n.hidePassword,
+              onPressed: () =>
+                  setState(() => _obscurePassword = !_obscurePassword),
+            ),
+          ),
+        AdaptiveFormTextField(
+          label: l10n.network,
+          controller: _networkController,
+          enabled: !_isSaving,
+          placeholder: l10n.networkExample,
+        ),
+      ],
     );
   }
 

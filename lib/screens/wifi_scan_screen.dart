@@ -931,10 +931,8 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
         confirmLabel: context.l10n.connect,
         onConfirm: _connect,
         busy: _isConnecting,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: _form(context),
-        ),
+        grouped: true,
+        child: _iosForm(context),
       );
     }
 
@@ -1043,6 +1041,79 @@ class _ConnectBottomSheetState extends ConsumerState<_ConnectBottomSheet> {
           ),
         ),
       ),
+    );
+  }
+
+  /// The network's details, then what connecting to it needs, as iOS
+  /// groups a form; what went wrong and the station-mode warning sit under
+  /// the second group.
+  Widget _iosForm(BuildContext context) {
+    final l10n = context.l10n;
+    final network = widget.network;
+    return AdaptiveForm(
+      sections: [
+        AdaptiveFormSection(
+          children: [
+            AdaptiveFormValueRow(label: l10n.bssid, value: network.bssid),
+            AdaptiveFormValueRow(
+              label: l10n.signal,
+              value:
+                  '${network.signal} dBm (${_signalStrength(context, network.signal)})',
+            ),
+            AdaptiveFormValueRow(
+              label: l10n.encryption,
+              value: _encryptionDescription(context, network.encryption),
+            ),
+          ],
+        ),
+        AdaptiveFormSection(
+          error: _error,
+          footer: l10n.stationModeWarning,
+          children: [
+            AdaptiveFormPicker<String>(
+              label: l10n.connectUsingRadio,
+              value: _selectedRadio,
+              choices: [
+                for (final device in widget.radioDevices)
+                  AdaptiveFormChoice(
+                    device['radioName'] ?? '',
+                    (device['band'] ?? '').isNotEmpty
+                        ? '${device['radioName']} (${device['band']})'
+                        : device['radioName'] ?? '',
+                  ),
+              ],
+              onChanged: _isConnecting
+                  ? null
+                  : (value) => setState(() => _selectedRadio = value),
+            ),
+            if (_isHidden)
+              AdaptiveFormTextField(
+                label: l10n.networkNameSsid,
+                controller: _hiddenSsidController,
+                enabled: !_isConnecting,
+                placeholder: l10n.enterHiddenNetworkName,
+              ),
+            if (network.encryption.requiresPassword)
+              AdaptiveFormTextField(
+                label: l10n.passwordLabel,
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                enabled: !_isConnecting,
+                placeholder: l10n.enterNetworkPassword,
+                textInputAction: TextInputAction.go,
+                onSubmitted: (_) => _connect(),
+                suffix: AdaptiveObscureToggle(
+                  obscured: _obscurePassword,
+                  semanticLabel: _obscurePassword
+                      ? l10n.showPassword
+                      : l10n.hidePassword,
+                  onPressed: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 
