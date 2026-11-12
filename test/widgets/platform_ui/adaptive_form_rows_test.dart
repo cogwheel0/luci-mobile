@@ -404,6 +404,51 @@ void main() {
       expect(chosen, ['udp']);
     });
 
+    testWidgets('a choice\'s subtitle sits under it in the action sheet, '
+        'while the row shows the label alone', (tester) async {
+      final chosen = <String?>[];
+      await _pump(
+        tester,
+        AdaptiveFormSection(
+          children: [
+            AdaptiveFormPicker<String>(
+              label: 'Radio',
+              value: 'radio0',
+              choices: const [
+                AdaptiveFormChoice(
+                  'radio0',
+                  'radio0 (2.4 GHz)',
+                  subtitle: 'Home',
+                ),
+                AdaptiveFormChoice('radio1', 'radio1 (5 GHz)'),
+              ],
+              onChanged: chosen.add,
+            ),
+          ],
+        ),
+      );
+
+      expect(find.text('radio0 (2.4 GHz)'), findsOneWidget);
+      expect(find.text('Home'), findsNothing);
+
+      await tester.tap(find.text('Radio'));
+      await tester.pumpAndSettle();
+      final home = find.descendant(
+        of: find.byType(CupertinoActionSheet),
+        matching: find.text('Home'),
+      );
+      expect(home, findsOneWidget);
+      expect(
+        tester.getRect(home).top,
+        greaterThanOrEqualTo(
+          tester.getRect(find.text('radio0 (2.4 GHz)').last).bottom,
+        ),
+      );
+      await tester.tap(home);
+      await tester.pumpAndSettle();
+      expect(chosen, ['radio0']);
+    });
+
     testWidgets('a disabled picker opens nothing; a value it does not list '
         'shows the hint', (tester) async {
       await _pump(

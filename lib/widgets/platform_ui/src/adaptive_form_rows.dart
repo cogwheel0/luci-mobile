@@ -541,10 +541,14 @@ class _AdaptiveFormTextFieldState extends State<AdaptiveFormTextField> {
 /// One of an [AdaptiveFormPicker]'s choices.
 @immutable
 class AdaptiveFormChoice<T> {
-  const AdaptiveFormChoice(this.value, this.label);
+  const AdaptiveFormChoice(this.value, this.label, {this.subtitle});
 
   final T value;
   final String label;
+
+  /// A second line under [label] in the iOS menu, such as the network a
+  /// radio serves. The row and the Android dropdown show [label] alone.
+  final String? subtitle;
 }
 
 /// A choice among a few values, as a form row.
@@ -729,6 +733,7 @@ class _AdaptiveFormPickerState<T> extends State<AdaptiveFormPicker<T>> {
             AdaptiveAnchoredMenuItem(
               id: '$i',
               label: choice.label,
+              subtitle: choice.subtitle,
               checked: choice.value == value,
             ),
         ],
@@ -747,7 +752,25 @@ class _AdaptiveFormPickerState<T> extends State<AdaptiveFormPicker<T>> {
             CupertinoActionSheetAction(
               isDefaultAction: choice.value == value,
               onPressed: () => Navigator.of(sheet).pop(choice),
-              child: Text(choice.label),
+              child: switch (choice.subtitle) {
+                final subtitle? when subtitle.isNotEmpty => Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(choice.label),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.normal,
+                        color: CupertinoColors.secondaryLabel.resolveFrom(
+                          sheet,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                _ => Text(choice.label),
+              },
             ),
         ],
         cancelButton: CupertinoActionSheetAction(

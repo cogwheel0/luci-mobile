@@ -11,6 +11,7 @@ import 'package:luci_mobile/state/feature_providers.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_feature_gate.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 import 'package:luci_mobile/utils/format_bytes.dart';
 
 final trafficServiceProvider = Provider<TrafficService?>((ref) {
@@ -100,6 +101,24 @@ class _Records extends ConsumerWidget {
   final String period;
   final ValueChanged<String> onPeriod;
 
+  /// The period as an iOS picker row, filled so it stands apart from the
+  /// list under it: the system pull-down menu from iOS 26, an action sheet
+  /// before.
+  Widget _iosPeriodPicker(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
+      borderRadius: BorderRadius.circular(adaptiveFormCornerRadius),
+    ),
+    child: AdaptiveFormPicker<String>(
+      label: context.l10n.trafficPeriod,
+      value: period,
+      choices: [for (final p in periods) AdaptiveFormChoice(p, p)],
+      onChanged: (p) {
+        if (p != null) onPeriod(p);
+      },
+    ),
+  );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
@@ -110,21 +129,23 @@ class _Records extends ConsumerWidget {
         if (periods.length > 1)
           Padding(
             padding: const EdgeInsets.all(LuciSpacing.md),
-            child: DropdownButtonFormField<String>(
-              initialValue: period,
-              decoration: InputDecoration(
-                labelText: l10n.trafficPeriod,
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-              items: [
-                for (final p in periods)
-                  DropdownMenuItem(value: p, child: Text(p)),
-              ],
-              onChanged: (p) {
-                if (p != null) onPeriod(p);
-              },
-            ),
+            child: PlatformUiCapabilities.isIOS
+                ? _iosPeriodPicker(context)
+                : DropdownButtonFormField<String>(
+                    initialValue: period,
+                    decoration: InputDecoration(
+                      labelText: l10n.trafficPeriod,
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: [
+                      for (final p in periods)
+                        DropdownMenuItem(value: p, child: Text(p)),
+                    ],
+                    onChanged: (p) {
+                      if (p != null) onPeriod(p);
+                    },
+                  ),
           ),
         Expanded(
           child: async.when(

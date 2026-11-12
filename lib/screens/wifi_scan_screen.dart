@@ -240,6 +240,42 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
     );
   }
 
+  /// The radio as an iOS picker row, filled as the buttons under it are:
+  /// the system pull-down menu from iOS 26, an action sheet before, each
+  /// radio with the network it serves.
+  Widget _iosRadioPicker(BuildContext context) {
+    final l10n = context.l10n;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
+        borderRadius: BorderRadius.circular(adaptiveFormCornerRadius),
+      ),
+      child: AdaptiveFormPicker<String>(
+        label: l10n.radio,
+        value: _selectedRadio,
+        hint: l10n.selectRadio,
+        choices: [
+          for (final device in _radioDevices)
+            if (device['radioName'] case final radioName?)
+              AdaptiveFormChoice(
+                radioName,
+                switch (device['band']) {
+                  final band? when band.isNotEmpty => '$radioName ($band)',
+                  _ => radioName,
+                },
+                subtitle: switch (device['ssid']) {
+                  final ssid? when ssid.isNotEmpty && ssid != radioName => ssid,
+                  _ => null,
+                },
+              ),
+        ],
+        onChanged: _isScanning || _isRestarting
+            ? null
+            : (value) => setState(() => _selectedRadio = value),
+      ),
+    );
+  }
+
   Widget _buildControlBar(ThemeData theme, ColorScheme colorScheme) {
     return Container(
       padding: const EdgeInsets.fromLTRB(
@@ -262,84 +298,87 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           // Radio device selector (full width)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: colorScheme.outline.withValues(alpha: 0.3),
-              ),
-              color: colorScheme.surfaceContainerLow,
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedRadio,
-                isExpanded: true,
-                icon: Icon(
-                  Icons.arrow_drop_down,
-                  color: colorScheme.onSurfaceVariant,
+          if (PlatformUiCapabilities.isIOS)
+            _iosRadioPicker(context)
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: colorScheme.outline.withValues(alpha: 0.3),
                 ),
-                hint: Text(
-                  context.l10n.selectRadio,
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.surfaceContainerLow,
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedRadio,
+                  isExpanded: true,
+                  icon: Icon(
+                    Icons.arrow_drop_down,
                     color: colorScheme.onSurfaceVariant,
                   ),
-                ),
-                items: _radioDevices.map((device) {
-                  final radioName = device['radioName'] ?? '';
-                  final ssid = device['ssid'] ?? '';
-                  final band = device['band'] ?? '';
-                  final label = band.isNotEmpty
-                      ? '$radioName ($band)'
-                      : radioName;
-                  final subtitle = ssid != radioName && ssid.isNotEmpty
-                      ? ssid
-                      : null;
-                  return DropdownMenuItem<String>(
-                    value: radioName,
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.router,
-                          size: 18,
-                          color: colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                label,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodyMedium,
-                              ),
-                              if (subtitle != null)
-                                Text(
-                                  subtitle,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
+                  hint: Text(
+                    context.l10n.selectRadio,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
                     ),
-                  );
-                }).toList(),
-                onChanged: (_isScanning || _isRestarting)
-                    ? null
-                    : (value) {
-                        setState(() {
-                          _selectedRadio = value;
-                        });
-                      },
+                  ),
+                  items: _radioDevices.map((device) {
+                    final radioName = device['radioName'] ?? '';
+                    final ssid = device['ssid'] ?? '';
+                    final band = device['band'] ?? '';
+                    final label = band.isNotEmpty
+                        ? '$radioName ($band)'
+                        : radioName;
+                    final subtitle = ssid != radioName && ssid.isNotEmpty
+                        ? ssid
+                        : null;
+                    return DropdownMenuItem<String>(
+                      value: radioName,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.router,
+                            size: 18,
+                            color: colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  label,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                                if (subtitle != null)
+                                  Text(
+                                    subtitle,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (_isScanning || _isRestarting)
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _selectedRadio = value;
+                          });
+                        },
+                ),
               ),
             ),
-          ),
           const SizedBox(height: 10),
           // Scan + Restart Radio buttons row
           Row(
