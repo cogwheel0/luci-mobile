@@ -2219,14 +2219,18 @@ class _IosRemoveWifiRowState extends ConsumerState<_IosRemoveWifiRow> {
     if (!confirmed || !mounted) return;
     setState(() => _removing = true);
     // Taken now: the refresh after removing rebuilds the page without this
-    // row.
+    // row. The page's own route, so that only it is closed: Back and Edit
+    // stay open while the router works.
     final navigator = Navigator.of(context);
+    final page = ModalRoute.of(context);
     final report = AdaptiveSnackBar.reporter(context);
     final success = await ref
         .read(appStateProvider)
         .deleteWirelessInterface(widget.uciSection, context: context);
     if (success) {
-      navigator.pop();
+      // Left already, or under the Edit sheet: the page then says the
+      // network is gone instead.
+      if (page != null && page.isCurrent) navigator.pop();
     } else if (mounted) {
       setState(() => _removing = false);
     }

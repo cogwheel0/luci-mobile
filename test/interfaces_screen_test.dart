@@ -32,13 +32,16 @@ class _Router extends AppState {
   /// The Wi-Fi sections removed.
   final removed = <String>[];
 
+  /// When set, removing waits for it.
+  Completer<bool>? removing;
+
   @override
   Future<bool> deleteWirelessInterface(
     String uciSection, {
     BuildContext? context,
   }) async {
     removed.add(uciSection);
-    return true;
+    return removing?.future ?? true;
   }
 
   /// Wi-Fi switch changes asked for, saved when [saving] completes.
@@ -371,6 +374,40 @@ void main() {
       expect(state.removed, ['default_radio0']);
       expect(_value('Channel'), findsNothing);
       expect(_openingRow('LAN'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('a removal that ends after the page was left closes nothing '
+        'else', (tester) async {
+      final state = await _pump(tester)
+        ..removing = Completer();
+      await tester.tap(find.text('Home'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(AdaptiveFormButtonRow, 'Remove'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Remove'));
+      await tester.pumpAndSettle();
+      expect(state.removed, ['default_radio0']);
+      expect(
+        tester
+            .widget<AdaptiveFormButtonRow>(
+              find.widgetWithText(AdaptiveFormButtonRow, 'Remove'),
+            )
+            .onPressed,
+        isNull,
+        reason: 'disabled while the router works',
+      );
+
+      // Back, and into the LAN's page, before the router answers.
+      Navigator.of(tester.element(_value('Channel'))).pop();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('LAN'));
+      await tester.pumpAndSettle();
+      expect(_value('IP Address'), findsOneWidget);
+
+      state.removing!.complete(true);
+      await tester.pumpAndSettle();
+      expect(_value('IP Address'), findsOneWidget);
       await tester.pump(const Duration(seconds: 4));
     });
 
