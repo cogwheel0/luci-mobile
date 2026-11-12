@@ -9,12 +9,20 @@ import 'platform_ui_capabilities.dart';
 /// A row of an [AdaptiveFormSection] that has something to say under the
 /// section on iOS: a field's hint, or its error.
 abstract interface class AdaptiveFormNotes {
+  /// The row's label, which names its note when the group shows several.
+  String get formNoteLabel;
+
   /// The error, if the row has one, else its hint.
   String? get formNote;
 
   /// Whether [formNote] is an error.
   bool get formNoteIsError;
 }
+
+/// A label as an iOS row shows it: a Material field label can end in a
+/// colon ("Network Name (SSID):"); an iOS row's label never does.
+String _rowLabelText(String label) =>
+    label.replaceFirst(RegExp(r'\s*[:：]\s*$'), '');
 
 /// A form made of [AdaptiveFormSection]s.
 ///
@@ -137,15 +145,21 @@ class AdaptiveFormSection extends StatelessWidget {
               ],
             ),
           ),
+          // Each row reads its own note to VoiceOver, so these are for
+          // the eye. Several in one group say which row each is about.
           for (final note in notes)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-              child: Text(
-                note.formNote!,
-                style: noteStyle.copyWith(
-                  color: note.formNoteIsError
-                      ? CupertinoColors.systemRed.resolveFrom(context)
-                      : secondary,
+            ExcludeSemantics(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                child: Text(
+                  notes.length > 1
+                      ? '${_rowLabelText(note.formNoteLabel)}: ${note.formNote}'
+                      : note.formNote!,
+                  style: noteStyle.copyWith(
+                    color: note.formNoteIsError
+                        ? CupertinoColors.systemRed.resolveFrom(context)
+                        : secondary,
+                  ),
                 ),
               ),
             ),
@@ -205,9 +219,7 @@ class _RowLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-    // A Material field label can end in a colon ("Network Name (SSID):");
-    // an iOS row's label never does.
-    text.replaceFirst(RegExp(r'\s*[:：]\s*$'), ''),
+    _rowLabelText(text),
     style: _bodyStyle(context).copyWith(
       color:
           (error
@@ -305,6 +317,9 @@ class AdaptiveFormTextField extends StatefulWidget
   final ValueChanged<String>? onSubmitted;
 
   @override
+  String get formNoteLabel => label;
+
+  @override
   String? get formNote => error ?? helper;
 
   @override
@@ -377,53 +392,59 @@ class _AdaptiveFormTextFieldState extends State<AdaptiveFormTextField> {
                 // as a Material field's label names it. A suffix, such as a
                 // show-password button, stays an element of its own.
                 child: MergeSemantics(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) => Row(
-                      children: [
-                        ConstrainedBox(
-                          // A long label wraps rather than squeezing the
-                          // value out.
-                          constraints: BoxConstraints(
-                            maxWidth: constraints.maxWidth * 0.5,
-                          ),
-                          child: _RowLabel(
-                            widget.label,
-                            error: widget.error != null,
-                            enabled: enabled,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: CupertinoTextField(
-                            controller: widget.controller,
-                            focusNode: _focusNode,
-                            placeholder: widget.placeholder,
-                            keyboardType: widget.keyboardType,
-                            textInputAction: widget.textInputAction,
-                            textCapitalization: widget.textCapitalization,
-                            obscureText: widget.obscureText,
-                            autocorrect: widget.autocorrect,
-                            enableSuggestions: widget.enableSuggestions,
-                            autofocus: widget.autofocus,
-                            enabled: enabled,
-                            maxLength: widget.maxLength,
-                            inputFormatters: widget.inputFormatters,
-                            autofillHints: widget.autofillHints,
-                            onChanged: widget.onChanged,
-                            onSubmitted: widget.onSubmitted,
-                            textAlign: TextAlign.end,
-                            decoration: null,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            style: _bodyStyle(context).copyWith(
-                              color:
-                                  (enabled
-                                          ? CupertinoColors.label
-                                          : CupertinoColors.secondaryLabel)
-                                      .resolveFrom(context),
+                  // The row's error is read with its name, as a Material
+                  // field's is; its hint after.
+                  child: Semantics(
+                    label: widget.error,
+                    hint: widget.error == null ? widget.helper : null,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) => Row(
+                        children: [
+                          ConstrainedBox(
+                            // A long label wraps rather than squeezing the
+                            // value out.
+                            constraints: BoxConstraints(
+                              maxWidth: constraints.maxWidth * 0.5,
+                            ),
+                            child: _RowLabel(
+                              widget.label,
+                              error: widget.error != null,
+                              enabled: enabled,
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: CupertinoTextField(
+                              controller: widget.controller,
+                              focusNode: _focusNode,
+                              placeholder: widget.placeholder,
+                              keyboardType: widget.keyboardType,
+                              textInputAction: widget.textInputAction,
+                              textCapitalization: widget.textCapitalization,
+                              obscureText: widget.obscureText,
+                              autocorrect: widget.autocorrect,
+                              enableSuggestions: widget.enableSuggestions,
+                              autofocus: widget.autofocus,
+                              enabled: enabled,
+                              maxLength: widget.maxLength,
+                              inputFormatters: widget.inputFormatters,
+                              autofillHints: widget.autofillHints,
+                              onChanged: widget.onChanged,
+                              onSubmitted: widget.onSubmitted,
+                              textAlign: TextAlign.end,
+                              decoration: null,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              style: _bodyStyle(context).copyWith(
+                                color:
+                                    (enabled
+                                            ? CupertinoColors.label
+                                            : CupertinoColors.secondaryLabel)
+                                        .resolveFrom(context),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -482,6 +503,9 @@ class AdaptiveFormPicker<T> extends StatefulWidget
 
   final String? helper;
   final String? error;
+
+  @override
+  String get formNoteLabel => label;
 
   @override
   String? get formNote => error ?? helper;
@@ -543,8 +567,11 @@ class _AdaptiveFormPickerState<T> extends State<AdaptiveFormPicker<T>> {
       container: true,
       button: true,
       enabled: enabled,
-      label: label,
+      // Its error read with its name, its hint after: the group's notes
+      // are for the eye.
+      label: error == null ? label : '$label\n$error',
       value: _current?.label ?? hint,
+      hint: error == null ? helper : null,
       onTap: open,
       excludeSemantics: true,
       child: _TappableRow(
@@ -780,6 +807,9 @@ class AdaptiveFormSwitch extends StatelessWidget implements AdaptiveFormNotes {
   final bool materialCheckbox;
 
   @override
+  String get formNoteLabel => label;
+
+  @override
   String? get formNote => description;
 
   @override
@@ -812,6 +842,7 @@ class AdaptiveFormSwitch extends StatelessWidget implements AdaptiveFormNotes {
       child: Semantics(
         toggled: value,
         enabled: change != null,
+        hint: description,
         onTap: change == null ? null : () => change(!value),
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: _rowHeight),

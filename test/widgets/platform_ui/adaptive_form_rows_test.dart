@@ -241,8 +241,11 @@ void main() {
       final header = tester.getRect(find.text('DESTINATION'));
       final first = tester.getRect(find.text('Internal address'));
       final second = tester.getRect(find.text('Source address'));
-      final error = find.text('Enter a valid IPv4 address');
-      final helper = find.text('Optional: only forward from this subnet');
+      // Two notes in one group: each says which row it is about.
+      final error = find.text('Internal address: Enter a valid IPv4 address');
+      final helper = find.text(
+        'Source address: Optional: only forward from this subnet',
+      );
       final footer = find.text('Applies to new connections.');
       expect(header.bottom, lessThan(first.top));
       expect(first.bottom, lessThan(second.top));
@@ -704,6 +707,69 @@ void main() {
 
       expect(find.text('Network Name (SSID)'), findsOneWidget);
       expect(find.text('Network Name (SSID):'), findsNothing);
+    });
+
+    testWidgets('a group\'s lone note is not prefixed, and VoiceOver hears '
+        'each note with its own row, not under the group', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(
+        tester,
+        AdaptiveForm(
+          sections: [
+            const AdaptiveFormSection(
+              children: [
+                AdaptiveFormTextField(
+                  label: 'Internal port',
+                  error: 'Enter a valid port',
+                ),
+              ],
+            ),
+            const AdaptiveFormSection(
+              children: [
+                AdaptiveFormTextField(
+                  label: 'Source address',
+                  helper: 'Optional',
+                ),
+              ],
+            ),
+            AdaptiveFormSection(
+              children: [
+                AdaptiveFormPicker<String>(
+                  label: 'Protocol',
+                  value: 'tcp',
+                  choices: const [AdaptiveFormChoice('tcp', 'TCP')],
+                  onChanged: (_) {},
+                  error: 'Not supported here',
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      expect(find.text('Enter a valid port'), findsOneWidget);
+      // The note under the group is for the eye only.
+      expect(find.bySemanticsLabel('Enter a valid port'), findsNothing);
+
+      final port = tester
+          .getSemantics(find.byType(CupertinoTextField).first)
+          .getSemanticsData();
+      expect(port.label, contains('Internal port'));
+      expect(port.label, contains('Enter a valid port'));
+
+      final source = tester
+          .getSemantics(find.byType(CupertinoTextField).last)
+          .getSemanticsData();
+      expect(source.label, 'Source address');
+      expect(source.hint, 'Optional');
+
+      final picker = tester
+          .getSemantics(
+            find.byWidgetPredicate((w) => w is AdaptiveFormPicker<String>),
+          )
+          .getSemanticsData();
+      expect(picker.label, 'Protocol\nNot supported here');
+      semantics.dispose();
     });
   });
 }
