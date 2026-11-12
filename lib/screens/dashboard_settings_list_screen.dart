@@ -5,6 +5,7 @@ import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/design/luci_design_system.dart';
 import 'package:luci_mobile/screens/router_dashboard_settings_screen.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 class DashboardSettingsListScreen extends ConsumerWidget {
   const DashboardSettingsListScreen({super.key});
@@ -14,8 +15,22 @@ class DashboardSettingsListScreen extends ConsumerWidget {
     final appState = ref.watch(appStateProvider);
     final routers = appState.routers;
 
+    void open(String routerId) => Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RouterDashboardSettingsScreen(routerId: routerId),
+      ),
+    );
+    // iOS lists the routers as one inset group, on the grouped background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
-      appBar: LuciAppBar(title: context.l10n.dashboardSettings, showBack: true),
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: context.l10n.dashboardSettings,
+        showBack: true,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
+      ),
       body: routers.isEmpty
           ? Center(
               child: Padding(
@@ -42,6 +57,26 @@ class DashboardSettingsListScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+            )
+          : PlatformUiCapabilities.isIOS
+          ? AdaptiveGroupedListView(
+              separatorIndent: 52,
+              itemCount: routers.length,
+              itemBuilder: (context, index) {
+                final r = routers[index];
+                return AdaptiveListRow(
+                  leading: Icon(
+                    Icons.router,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  title: r.lastKnownHostname?.isNotEmpty == true
+                      ? r.lastKnownHostname!
+                      : r.ipAddress,
+                  subtitle: r.ipAddress,
+                  showChevron: true,
+                  onTap: () => open(r.id),
+                );
+              },
             )
           : ListView.separated(
               padding: EdgeInsets.symmetric(
@@ -85,14 +120,7 @@ class DashboardSettingsListScreen extends ConsumerWidget {
                       size: 16,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              RouterDashboardSettingsScreen(routerId: r.id),
-                        ),
-                      );
-                    },
+                    onTap: () => open(r.id),
                   ),
                 );
               },
