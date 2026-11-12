@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'adaptive_controls.dart';
@@ -47,11 +50,16 @@ Future<T?> showAdaptiveFormSheet<T>({
     return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,
-      showDragHandle: material.showDragHandle,
+      // _FormSheetChrome draws it instead, inside the area it keeps a busy
+      // form from being dragged by.
+      showDragHandle: false,
       useSafeArea: material.useSafeArea,
       shape: material.shape,
-      builder: (context) =>
-          _AdaptiveFormSheetScope(bottomSheet: true, child: builder(context)),
+      builder: (context) => _FormSheetChrome(
+        bottomSheet: true,
+        showDragHandle: material.showDragHandle,
+        child: builder(context),
+      ),
     );
   }
   return showCupertinoSheet<T>(
@@ -59,10 +67,8 @@ Future<T?> showAdaptiveFormSheet<T>({
     // The page underneath, and the sheet's own buttons on iOS 26, are
     // native views that the transition has to account for.
     hasPlatformViews: PlatformUiCapabilities.usesNativeIOS26,
-    scrollableBuilder: (context, controller) => _AdaptiveFormSheetScope(
-      controller: controller,
-      child: builder(context),
-    ),
+    scrollableBuilder: (context, controller) =>
+        _FormSheetChrome(controller: controller, child: builder(context)),
   );
 }
 
@@ -123,6 +129,7 @@ class AdaptiveFormSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _AdaptiveFormSheetScope.reportBusy(context, busy);
     final confirm = busy ? null : onConfirm;
     if (!PlatformUiCapabilities.isIOS) {
       // While busy, neither the barrier nor Back may close it.
@@ -154,6 +161,10 @@ class AdaptiveFormSheet extends StatelessWidget {
             type: MaterialType.transparency,
             child: ListView(
               controller: _AdaptiveFormSheetScope.maybeControllerOf(context),
+              // The sheet's controller turns a drag down at the top into
+              // dragging the sheet away. While busy the form holds still,
+              // and the drag goes to _FormSheetChrome, which refuses it.
+              physics: busy ? const NeverScrollableScrollPhysics() : null,
               padding: const EdgeInsets.all(16),
               children: [
                 child,
@@ -356,18 +367,147 @@ class AdaptiveFormSheet extends StatelessWidget {
   }
 }
 
+/// Whether the form in a sheet is busy: written by its [AdaptiveFormSheet]
+/// as it builds, and read by [_FormSheetChrome] when a drag begins, so it
+/// needs no rebuild of its own.
+class _BusyFlag {
+  bool value = false;
+}
+
+/// What a form sheet's route wraps the form in.
+///
+/// Dragging a sheet down closes it with `Navigator.pop`, on Android and on
+/// iOS, which a busy form's [PopScope] cannot refuse. While the form says
+/// it is busy, a drag recognizer here joins the gesture and, being deeper
+/// than the sheet's own, takes it. It also draws a Material bottom sheet's
+/// drag handle, which the route would otherwise draw outside its reach.
+class _FormSheetChrome extends StatefulWidget {
+  const _FormSheetChrome({
+    this.controller,
+    this.bottomSheet = false,
+    this.showDragHandle = false,
+    required this.child,
+  });
+
+  final ScrollController? controller;
+  final bool bottomSheet;
+  final bool showDragHandle;
+  final Widget child;
+
+  @override
+  State<_FormSheetChrome> createState() => _FormSheetChromeState();
+}
+
+class _FormSheetChromeState extends State<_FormSheetChrome> {
+  final _busy = _BusyFlag();
+
+  static void _ignore(Object? _) {}
+
+  @override
+  Widget build(BuildContext context) {
+    var sheet = widget.child;
+    if (widget.showDragHandle) {
+      // Laid out as BottomSheet lays out its own handle.
+      sheet = Stack(
+        alignment: Alignment.topCenter,
+        children: [
+          const _FormSheetDragHandle(),
+          Padding(
+            padding: const EdgeInsets.only(top: kMinInteractiveDimension),
+            child: sheet,
+          ),
+        ],
+      );
+    }
+    return _AdaptiveFormSheetScope(
+      controller: widget.controller,
+      bottomSheet: widget.bottomSheet,
+      busy: _busy,
+      child: RawGestureDetector(
+        behavior: HitTestBehavior.opaque,
+        gestures: {
+          _BusyDragRecognizer:
+              GestureRecognizerFactoryWithHandlers<_BusyDragRecognizer>(
+                () => _BusyDragRecognizer(() => _busy.value),
+                (recognizer) => recognizer
+                  ..onStart = _ignore
+                  ..onUpdate = _ignore
+                  ..onEnd = _ignore,
+              ),
+        },
+        child: sheet,
+      ),
+    );
+  }
+}
+
+/// A vertical drag that takes part only while [blocking] says so, and then
+/// does nothing.
+class _BusyDragRecognizer extends VerticalDragGestureRecognizer {
+  _BusyDragRecognizer(this.blocking);
+
+  final bool Function() blocking;
+
+  @override
+  bool isPointerAllowed(PointerEvent event) =>
+      blocking() && super.isPointerAllowed(event);
+}
+
+/// Material 3's bottom sheet drag handle, as BottomSheet draws it, except
+/// that dismissing it from accessibility services asks the route, so a busy
+/// form's [PopScope] can refuse.
+class _FormSheetDragHandle extends StatelessWidget {
+  const _FormSheetDragHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final sheetTheme = theme.bottomSheetTheme;
+    final size = sheetTheme.dragHandleSize ?? const Size(32, 4);
+    return Semantics(
+      label: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      container: true,
+      button: true,
+      onTap: () => Navigator.maybePop(context),
+      child: SizedBox(
+        width: math.max(size.width, kMinInteractiveDimension),
+        height: math.max(size.height, kMinInteractiveDimension),
+        child: Center(
+          child: Container(
+            key: const ValueKey('adaptive-form-sheet-drag-handle'),
+            width: size.width,
+            height: size.height,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(size.height / 2),
+              color:
+                  WidgetStateProperty.resolveAs<Color?>(
+                    sheetTheme.dragHandleColor,
+                    const <WidgetState>{},
+                  ) ??
+                  theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// What the form's frame needs from how it was shown: on iOS the sheet's
 /// scroll controller, so dragging the content down at its top drags the
-/// sheet, and on Android whether it is in a bottom sheet.
+/// sheet, on Android whether it is in a bottom sheet, and on either where to
+/// say it is busy.
 class _AdaptiveFormSheetScope extends InheritedWidget {
   const _AdaptiveFormSheetScope({
     this.controller,
     this.bottomSheet = false,
+    required this.busy,
     required super.child,
   });
 
   final ScrollController? controller;
   final bool bottomSheet;
+  final _BusyFlag busy;
 
   static _AdaptiveFormSheetScope? _of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<_AdaptiveFormSheetScope>();
@@ -378,8 +518,19 @@ class _AdaptiveFormSheetScope extends InheritedWidget {
   static bool isBottomSheet(BuildContext context) =>
       _of(context)?.bottomSheet ?? false;
 
+  /// Tells the sheet whether the form is busy. A plain write, read when a
+  /// drag begins: nothing needs to rebuild for it.
+  static void reportBusy(BuildContext context, bool busy) {
+    context
+            .getInheritedWidgetOfExactType<_AdaptiveFormSheetScope>()
+            ?.busy
+            .value =
+        busy;
+  }
+
   @override
   bool updateShouldNotify(_AdaptiveFormSheetScope oldWidget) =>
       controller != oldWidget.controller ||
-      bottomSheet != oldWidget.bottomSheet;
+      bottomSheet != oldWidget.bottomSheet ||
+      busy != oldWidget.busy;
 }

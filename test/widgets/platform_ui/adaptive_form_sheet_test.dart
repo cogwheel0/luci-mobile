@@ -203,8 +203,8 @@ void main() {
       final sheet = find.byType(BottomSheet);
       expect(sheet, findsOneWidget);
       expect(
-        tester.widget<BottomSheet>(sheet).showDragHandle,
-        isTrue,
+        find.byKey(const ValueKey('adaptive-form-sheet-drag-handle')),
+        findsOneWidget,
         reason: 'as the sheets luci-mobile showed had',
       );
       expect(find.text('Rename'), findsOneWidget);
@@ -299,7 +299,88 @@ void main() {
       expect(results, isEmpty);
     });
 
-    testWidgets('a sheet drawing its own handle can turn the stock one off', (
+    testWidgets('a busy sheet cannot be flung away, by its body or its '
+        'handle', (tester) async {
+      final results = await _open(
+        tester,
+        cupertino: false,
+        busy: true,
+        material: bottomSheet,
+      );
+      final handle = find.byKey(
+        const ValueKey('adaptive-form-sheet-drag-handle'),
+      );
+
+      await tester.fling(find.text('Rename'), const Offset(0, 600), 2000);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.fling(handle, const Offset(0, 600), 2000);
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(results, isEmpty);
+    });
+
+    testWidgets('an idle sheet is flung away by its handle, which matches '
+        'the stock one', (tester) async {
+      final results = await _open(
+        tester,
+        cupertino: false,
+        material: bottomSheet,
+      );
+      final handle = find.byKey(
+        const ValueKey('adaptive-form-sheet-drag-handle'),
+      );
+
+      // Material 3's: 32 by 4, centred in a 48 point strip above the form.
+      expect(tester.getSize(handle), const Size(32, 4));
+      final sheetTop = tester.getTopLeft(find.byType(BottomSheet)).dy;
+      expect(tester.getCenter(handle).dy, sheetTop + 24);
+      expect(
+        tester.getCenter(handle).dx,
+        tester.getCenter(find.byType(BottomSheet)).dx,
+      );
+      final decoration =
+          tester.widget<Container>(handle).decoration! as BoxDecoration;
+      expect(
+        decoration.color,
+        Theme.of(tester.element(handle)).colorScheme.onSurfaceVariant,
+      );
+      expect(
+        tester.getTopLeft(find.text('Rename')).dy,
+        greaterThanOrEqualTo(sheetTop + 48),
+      );
+
+      await tester.fling(handle, const Offset(0, 600), 2000);
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(results, [null]);
+    });
+
+    testWidgets('a busy sheet\'s handle refuses to dismiss it for '
+        'accessibility services', (tester) async {
+      final results = await _open(
+        tester,
+        cupertino: false,
+        busy: true,
+        material: bottomSheet,
+      );
+
+      final semantics = tester.widget<Semantics>(
+        find
+            .ancestor(
+              of: find.byKey(const ValueKey('adaptive-form-sheet-drag-handle')),
+              matching: find.byType(Semantics),
+            )
+            .first,
+      );
+      semantics.properties.onTap!();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(results, isEmpty);
+    });
+
+    testWidgets('a sheet drawing its own handle can turn this one off', (
       tester,
     ) async {
       await _open(
@@ -311,8 +392,8 @@ void main() {
       );
 
       expect(
-        tester.widget<BottomSheet>(find.byType(BottomSheet)).showDragHandle,
-        isFalse,
+        find.byKey(const ValueKey('adaptive-form-sheet-drag-handle')),
+        findsNothing,
       );
     });
   });
@@ -389,6 +470,31 @@ void main() {
         ),
       );
       expect(cancel.onPressed, isNull);
+    });
+
+    testWidgets('an idle sheet is dragged away; a busy one holds', (
+      tester,
+    ) async {
+      final idle = await _open(tester, cupertino: true);
+      await tester.fling(
+        find.byKey(const Key('name')),
+        const Offset(0, 500),
+        2000,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoNavigationBar), findsNothing);
+      expect(idle, [null]);
+
+      final busy = await _open(tester, cupertino: true, busy: true);
+      for (final target in [
+        find.byKey(const Key('name')),
+        find.text('Rename'),
+      ]) {
+        await tester.fling(target, const Offset(0, 500), 2000);
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(find.byType(CupertinoNavigationBar), findsOneWidget);
+      expect(busy, isEmpty);
     });
 
     testWidgets('the subtitle sits under the title in the navigation bar', (
