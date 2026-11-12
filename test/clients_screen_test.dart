@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoIcons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +14,7 @@ import 'package:luci_mobile/services/mock_auth_service.dart';
 import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/state/app_state_provider.dart';
 import 'package:luci_mobile/state/client_detail_notifier.dart';
+import 'package:luci_mobile/widgets/luci_loading_states.dart';
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -142,49 +145,124 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('the details show how long the lease has left, as the '
-      'Android card did expanded', (tester) async {
-    final phone = Client(
-      ipAddress: '192.168.1.20',
-      macAddress: 'AA:BB:CC:00:00:01',
-      hostname: 'phone',
-      leaseTime: 3600,
-      isOnline: true,
-    );
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          appStateProvider.overrideWith((ref) => _TwoClients()),
-          clientDetailProvider(StationInfo.normalizeMac(phone.macAddress))
-              .overrideWith((ref) async => const ClientDetail()),
-        ],
-        child: MaterialApp(
-          localizationsDelegates: luciLocalizationsDelegates,
-          home: ClientDetailScreen(client: phone),
-        ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
+  group('the lease on the details', () {
+    int now() => DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
-    await tester.dragUntilVisible(
-      find.text('Lease Time Remaining'),
-      find.byType(Scrollable).first,
-      const Offset(0, -200),
-    );
-    final row = find.ancestor(
-      of: find.text('Lease Time Remaining'),
-      matching: find.byType(Row),
-    );
-    expect(
-      find.descendant(
-        of: row.first,
-        matching: find.text(Client.formatDuration(3600)),
-      ),
-      findsOneWidget,
-    );
-    // Let the page's own timers run out once it is gone.
-    await tester.pumpWidget(const SizedBox());
-    await tester.pump(const Duration(seconds: 30));
+    /// The phone's details, its own reads faked by [detail].
+    Future<void> pumpDetails(
+      WidgetTester tester,
+      Client phone, {
+      Future<ClientDetail> Function()? detail,
+    }) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appStateProvider.overrideWith((ref) => _TwoClients()),
+            clientDetailProvider(StationInfo.normalizeMac(phone.macAddress))
+                .overrideWith(
+                  (ref) => detail?.call() ?? Future.value(const ClientDetail()),
+                ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: luciLocalizationsDelegates,
+            home: ClientDetailScreen(client: phone),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+    }
+
+    /// The lease row's value.
+    String lease(WidgetTester tester) {
+      final row = find
+          .ancestor(
+            of: find.text('Lease Time Remaining'),
+            matching: find.byType(Row),
+          )
+          .first;
+      return tester
+          .widgetList<Text>(
+            find.descendant(of: row, matching: find.byType(Text)),
+          )
+          .last
+          .data!;
+    }
+
+    Future<void> unmount(WidgetTester tester) async {
+      // Let the page's own timers run out once it is gone.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 30));
+    }
+
+    testWidgets('counts from when the lease ends, not from when the list '
+        'was read', (tester) async {
+      // Read an hour from its end, but that end has since come.
+      await pumpDetails(
+        tester,
+        Client(
+          ipAddress: '192.168.1.20',
+          macAddress: 'AA:BB:CC:00:00:01',
+          hostname: 'phone',
+          leaseTime: 3600,
+          expiresAt: now() - 10,
+        ),
+      );
+      await tester.dragUntilVisible(
+        find.text('Lease Time Remaining'),
+        find.byType(Scrollable).first,
+        const Offset(0, -200),
+      );
+      expect(lease(tester), 'Expired');
+      await unmount(tester);
+    });
+
+    testWidgets('shows while the rest of the details load', (tester) async {
+      final never = Completer<ClientDetail>();
+      await pumpDetails(
+        tester,
+        Client(
+          ipAddress: '192.168.1.20',
+          macAddress: 'AA:BB:CC:00:00:01',
+          hostname: 'phone',
+          leaseTime: 3600,
+        ),
+        detail: () => never.future,
+      );
+
+      expect(find.byType(LuciCardSkeleton), findsWidgets);
+      expect(lease(tester), Client.formatDuration(3600));
+      await unmount(tester);
+    });
+
+    testWidgets('a refresh reads the lease again from the router', (
+      tester,
+    ) async {
+      // A minute left when the list was read; the router has since renewed
+      // it to an hour (see _TwoClients).
+      await pumpDetails(
+        tester,
+        Client(
+          ipAddress: '192.168.1.20',
+          macAddress: 'AA:BB:CC:00:00:01',
+          hostname: 'phone',
+          leaseTime: 60,
+          routerId: 'home',
+        ),
+      );
+      expect(lease(tester), Client.formatDuration(60));
+
+      await tester.flingFrom(
+        const Offset(400, 100),
+        const Offset(0, 300),
+        1000,
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      expect(lease(tester), Client.formatDuration(3600));
+      await unmount(tester);
+    });
   });
 }
