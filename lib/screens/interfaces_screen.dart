@@ -1225,10 +1225,10 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
         ),
         AdaptiveFormSection(
           children: [
-            AdaptiveFormButtonRow(
-              label: l10n.remove,
-              destructive: true,
-              onPressed: () => _showDeleteWifiDialog(context, iface),
+            _IosRemoveWifiRow(
+              ssid: iface['ssid']?.toString() ?? '',
+              uciSection: uciSection,
+              mode: iface['mode']?.toString() ?? 'ap',
             ),
           ],
         ),
@@ -2170,6 +2170,83 @@ class _InterfacePage extends ConsumerWidget {
   }
 }
 
+/// What removing a network in [mode] does to the devices on it.
+String _removeWifiWarning(BuildContext context, String mode) {
+  final modeLower = mode.toLowerCase();
+  final isStaMode =
+      modeLower.contains('sta') ||
+      modeLower.contains('client') ||
+      modeLower == 'station';
+  return isStaMode
+      ? context.l10n.removeStaWarning
+      : context.l10n.removeApWarning;
+}
+
+/// Remove, in red, on a Wi-Fi network's iOS page. It asks first in an iOS
+/// alert, shows it is at work while the router removes the network, then
+/// leaves the page, which has nothing left to show.
+class _IosRemoveWifiRow extends ConsumerStatefulWidget {
+  const _IosRemoveWifiRow({
+    required this.ssid,
+    required this.uciSection,
+    required this.mode,
+  });
+
+  final String ssid;
+  final String uciSection;
+  final String mode;
+
+  @override
+  ConsumerState<_IosRemoveWifiRow> createState() => _IosRemoveWifiRowState();
+}
+
+class _IosRemoveWifiRowState extends ConsumerState<_IosRemoveWifiRow> {
+  bool _removing = false;
+
+  Future<void> _remove() async {
+    final l10n = context.l10n;
+    final name = widget.ssid.isNotEmpty ? widget.ssid : widget.uciSection;
+    final confirmed = await AdaptiveAlertDialog.confirm(
+      context: context,
+      title: l10n.removeWirelessInterfaceQuestion,
+      message:
+          '${l10n.removeWirelessInterfaceDescription(name)}\n\n'
+          '${_removeWifiWarning(context, widget.mode)}',
+      confirmLabel: l10n.remove,
+      cancelLabel: l10n.cancel,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    setState(() => _removing = true);
+    // Taken now: the refresh after removing rebuilds the page without this
+    // row.
+    final navigator = Navigator.of(context);
+    final report = AdaptiveSnackBar.reporter(context);
+    final success = await ref
+        .read(appStateProvider)
+        .deleteWirelessInterface(widget.uciSection, context: context);
+    if (success) {
+      navigator.pop();
+    } else if (mounted) {
+      setState(() => _removing = false);
+    }
+    report.show(
+      message: success
+          ? l10n.interfaceRemoved(name)
+          : l10n.removeInterfaceFailed,
+      type: success ? AdaptiveSnackBarType.success : AdaptiveSnackBarType.error,
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => AdaptiveFormButtonRow(
+    label: context.l10n.remove,
+    destructive: true,
+    onPressed: _removing ? null : _remove,
+  );
+}
+
 // ──────────────────────────────────────────────────────────────────
 // WiFi Enable/Disable Toggle Row
 // ──────────────────────────────────────────────────────────────────
@@ -2875,14 +2952,7 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
     final displayName = widget.ssid.isNotEmpty
         ? widget.ssid
         : widget.uciSection;
-    final modeLower = widget.mode.toLowerCase();
-    final isStaMode =
-        modeLower.contains('sta') ||
-        modeLower.contains('client') ||
-        modeLower == 'station';
-    final warningMessage = isStaMode
-        ? context.l10n.removeStaWarning
-        : context.l10n.removeApWarning;
+    final warningMessage = _removeWifiWarning(context, widget.mode);
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),

@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoIcons;
+import 'package:cupertino_ui/cupertino_ui.dart'
+    show CupertinoDialogAction, CupertinoIcons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/main.dart';
@@ -27,6 +28,18 @@ class _Router extends AppState {
 
   /// The Wi-Fi network's name, as the router reports it.
   String ssid = 'Home';
+
+  /// The Wi-Fi sections removed.
+  final removed = <String>[];
+
+  @override
+  Future<bool> deleteWirelessInterface(
+    String uciSection, {
+    BuildContext? context,
+  }) async {
+    removed.add(uciSection);
+    return true;
+  }
 
   /// Wi-Fi switch changes asked for, saved when [saving] completes.
   final switched = <(String, bool)>[];
@@ -190,6 +203,20 @@ void main() {
     expect(find.text('Never'), findsOneWidget);
   });
 
+  testWidgets('Android: Remove asks in a Material dialog', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android;
+    final state = await _pump(tester);
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Remove'));
+    await tester.tap(find.text('Remove'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('Remove Wireless Interface?'), findsOneWidget);
+    expect(state.removed, isEmpty);
+  });
+
   group('before iOS 26', () {
     setUp(() {
       PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
@@ -315,6 +342,36 @@ void main() {
       await tester.pumpAndSettle();
       expect(toggle().value, isTrue);
       expect(toggle().onChanged, isNotNull);
+    });
+
+    testWidgets('Remove asks in an iOS alert, then removes the network and '
+        'leaves its page', (tester) async {
+      final state = await _pump(tester);
+      await tester.tap(find.text('Home'));
+      await tester.pumpAndSettle();
+
+      // Cancelling keeps it.
+      await tester.tap(find.widgetWithText(AdaptiveFormButtonRow, 'Remove'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('Remove Wireless Interface?'), findsOneWidget);
+      expect(
+        find.textContaining('Clients on this network will be disconnected'),
+        findsOneWidget,
+      );
+      await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Cancel'));
+      await tester.pumpAndSettle();
+      expect(state.removed, isEmpty);
+      expect(_value('Channel'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(AdaptiveFormButtonRow, 'Remove'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Remove'));
+      await tester.pumpAndSettle();
+      expect(state.removed, ['default_radio0']);
+      expect(_value('Channel'), findsNothing);
+      expect(_openingRow('LAN'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('a renamed network\'s page follows its new name', (
