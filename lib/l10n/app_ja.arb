@@ -385,6 +385,8 @@
   "staticRoutes": "静的ルート",
   "addPortForward": "ポート転送を追加",
   "editPortForward": "ポート転送を編集",
+  "removePortForwardQuestion": "ポート転送を削除しますか?",
+  "removePortForwardDescription": "これにより、ファイアウォール設定から「{name}」が完全に削除されます。",
   "forwardName": "名前",
   "sourceZone": "送信元ゾーン",
   "destinationZone": "宛先ゾーン",

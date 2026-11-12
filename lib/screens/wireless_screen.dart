@@ -354,6 +354,24 @@ class _NetworkSheetState extends State<_NetworkSheet> {
     return true;
   }
 
+  /// Removes [network] once the user confirms: Remove sits beside Save, and
+  /// removing a network drops every client on it.
+  Future<void> _remove(WirelessNetwork network) async {
+    final l10n = context.l10n;
+    final confirmed = await AdaptiveAlertDialog.confirm(
+      context: context,
+      title: l10n.removeWirelessInterfaceQuestion,
+      message: l10n.removeWirelessInterfaceDescription(
+        network.ssid ?? network.section,
+      ),
+      confirmLabel: l10n.remove,
+      cancelLabel: l10n.cancel,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    Navigator.of(context).pop(WirelessPlanner.planDeleteNetwork(network));
+  }
+
   void _save() {
     final ssid = _ssid.text.trim();
     final key = _security.needsPassphrase ? _key.text : null;
@@ -393,11 +411,7 @@ class _NetworkSheetState extends State<_NetworkSheet> {
       confirmLabel: l10n.saveAction,
       onConfirm: _isEnterprise || !_canSave ? null : _save,
       destructiveLabel: existing == null ? null : l10n.remove,
-      onDestructive: existing == null
-          ? null
-          : () =>
-                Navigator.of(context)
-                    .pop(WirelessPlanner.planDeleteNetwork(existing)),
+      onDestructive: existing == null ? null : () => _remove(existing),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

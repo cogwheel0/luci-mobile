@@ -385,6 +385,8 @@
   "staticRoutes": "Statické trasy",
   "addPortForward": "Přidat přesměrování portu",
   "editPortForward": "Upravit přesměrování portu",
+  "removePortForwardQuestion": "Odebrat přesměrování portu?",
+  "removePortForwardDescription": "Tím trvale odeberete „{name}“ z konfigurace firewallu.",
   "forwardName": "Název",
   "sourceZone": "Ze zóny",
   "destinationZone": "Cílová zóna",

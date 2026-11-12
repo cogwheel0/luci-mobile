@@ -385,6 +385,8 @@
   "staticRoutes": "Statische routes",
   "addPortForward": "Poortdoorverwijzing toevoegen",
   "editPortForward": "Poortdoorverwijzing bewerken",
+  "removePortForwardQuestion": "Poortdoorverwijzing verwijderen?",
+  "removePortForwardDescription": "Hierdoor wordt \"{name}\" definitief uit uw firewallconfiguratie verwijderd.",
   "forwardName": "Naam",
   "sourceZone": "Vanaf zone",
   "destinationZone": "Bestemmingszone",

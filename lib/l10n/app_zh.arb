@@ -385,6 +385,8 @@
   "staticRoutes": "静态路由",
   "addPortForward": "添加端口转发",
   "editPortForward": "编辑端口转发",
+  "removePortForwardQuestion": "删除端口转发？",
+  "removePortForwardDescription": "这将从您的防火墙配置中永久删除“{name}”。",
   "forwardName": "名称",
   "sourceZone": "来源区域",
   "destinationZone": "目标区域",

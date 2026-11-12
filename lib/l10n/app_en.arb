@@ -687,6 +687,15 @@
   "staticRoutes": "Static routes",
   "addPortForward": "Add port forward",
   "editPortForward": "Edit port forward",
+  "removePortForwardQuestion": "Remove port forward?",
+  "removePortForwardDescription": "This will permanently remove \"{name}\" from your firewall configuration.",
+  "@removePortForwardDescription": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "forwardName": "Name",
   "sourceZone": "From zone",
   "destinationZone": "Destination zone",
