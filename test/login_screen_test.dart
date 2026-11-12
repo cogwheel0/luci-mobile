@@ -177,4 +177,29 @@ void main() {
     pending.complete(false);
     await tester.pump();
   });
+
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    testWidgets('${platform.name}: a malformed or duplicate fallback address '
+        'blocks the sign-in', (tester) async {
+      PlatformUiCapabilities.debugPlatformOverride = platform;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+      final state = await _pumpLogin(tester);
+
+      await tester.tap(find.text('Add fallback address'));
+      await tester.pump();
+      await tester.enterText(_field('Router Address'), '10.0.0.1');
+      await tester.enterText(_field('Password'), 'secret');
+
+      for (final (fallback, error) in [
+        ('http://', 'Invalid address format'),
+        ('10.0.0.1', 'Must differ from primary address'),
+      ]) {
+        await tester.enterText(_field('Fallback Address'), fallback);
+        await tester.tap(find.text('Connect'));
+        await tester.pump();
+        expect(find.textContaining(error), findsOneWidget, reason: fallback);
+        expect(state.logins, isEmpty, reason: fallback);
+      }
+    });
+  }
 }
