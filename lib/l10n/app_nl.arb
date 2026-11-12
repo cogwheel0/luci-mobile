@@ -22,6 +22,7 @@
   "errorRpcFailed": "De router weigerde {call}.",
   "errorRpcFailedBecause": "De router weigerde {call}: {reason}.",
   "close": "Sluiten",
+  "done": "Gereed",
   "retry": "Opnieuw proberen",
   "back": "Terug",
   "add": "Toevoegen",

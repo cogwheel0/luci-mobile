@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/system_details.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 /// Makes [child] open the System details sheet on a tap, or the long press
 /// #14 asked for. Inert when there is nothing to show.
@@ -40,6 +41,29 @@ void showSystemDetailsSheet(
     SystemDetail.firmware => l10n.versionLabel,
     SystemDetail.kernel => l10n.kernelVersion,
   };
+
+  if (PlatformUiCapabilities.isIOS) {
+    // A sheet of facts, as iOS Settings' About lists them: each a row,
+    // its value selectable for a bug report.
+    showAdaptiveFormSheet<void>(
+      context: context,
+      builder: (_) => AdaptiveInfoSheet(
+        title: l10n.systemDetails,
+        doneLabel: l10n.done,
+        child: AdaptiveFormSection(
+          children: [
+            for (final (field, value) in details)
+              AdaptiveFormValueRow(
+                label: label(field),
+                value: value,
+                selectable: true,
+              ),
+          ],
+        ),
+      ),
+    );
+    return;
+  }
 
   showModalBottomSheet<void>(
     context: context,

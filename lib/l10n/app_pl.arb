@@ -22,6 +22,7 @@
   "errorRpcFailed": "Router odrzucił {call}.",
   "errorRpcFailedBecause": "Router odrzucił {call}: {reason}.",
   "close": "Zamknij",
+  "done": "Gotowe",
   "retry": "Ponów",
   "back": "Wstecz",
   "add": "Dodaj",
