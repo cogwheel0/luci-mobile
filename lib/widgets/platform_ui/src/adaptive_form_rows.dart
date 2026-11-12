@@ -67,6 +67,7 @@ class AdaptiveFormSection extends StatelessWidget {
     required this.children,
     this.header,
     this.footer,
+    this.error,
     this.materialGap = 16,
   });
 
@@ -77,6 +78,11 @@ class AdaptiveFormSection extends StatelessWidget {
 
   /// A note under the group, after its rows' own, on iOS.
   final String? footer;
+
+  /// What went wrong with the form as a whole, rather than with one row,
+  /// such as a failed connection: in red under the group, before
+  /// [footer], and announced when it appears. iOS only, like [footer].
+  final String? error;
 
   /// The space between rows on Android.
   final double materialGap;
@@ -159,6 +165,19 @@ class AdaptiveFormSection extends StatelessWidget {
                     color: note.formNoteIsError
                         ? CupertinoColors.systemRed.resolveFrom(context)
                         : secondary,
+                  ),
+                ),
+              ),
+            ),
+          if (error != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  error!,
+                  style: noteStyle.copyWith(
+                    color: CupertinoColors.systemRed.resolveFrom(context),
                   ),
                 ),
               ),
@@ -917,6 +936,68 @@ class AdaptiveObscureToggle extends StatelessWidget {
         size: 20,
         color: CupertinoColors.secondaryLabel.resolveFrom(context),
         semanticLabel: semanticLabel,
+      ),
+    );
+  }
+}
+
+/// A read-only detail as a form row: [label] on the left and [value] on
+/// the right in the secondary colour, as iOS Settings shows a fact it does
+/// not let you change. On Android, the same two texts in a row; Android
+/// forms lay their details out themselves.
+class AdaptiveFormValueRow extends StatelessWidget {
+  const AdaptiveFormValueRow({
+    super.key,
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PlatformUiCapabilities.isIOS) {
+      return MergeSemantics(
+        child: Row(
+          children: [
+            Text(label),
+            const SizedBox(width: 16),
+            Expanded(child: Text(value, textAlign: TextAlign.end)),
+          ],
+        ),
+      );
+    }
+    return MergeSemantics(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: _rowHeight),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          child: LayoutBuilder(
+            builder: (context, constraints) => Row(
+              children: [
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth * 0.5,
+                  ),
+                  child: _RowLabel(label, error: false, enabled: true),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    value,
+                    textAlign: TextAlign.end,
+                    style: _bodyStyle(context).copyWith(
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
