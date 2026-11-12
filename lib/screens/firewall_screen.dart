@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:luci_mobile/l10n/app_localizations.dart';
 import 'package:luci_mobile/l10n/failure_text.dart';
 import 'package:luci_mobile/utils/ipv4.dart';
 import 'package:luci_mobile/utils/keyboards.dart';
@@ -10,15 +11,20 @@ import 'package:luci_mobile/models/firewall_config.dart';
 import 'package:luci_mobile/models/uci_change.dart';
 import 'package:luci_mobile/services/firewall_planner.dart';
 import 'package:luci_mobile/state/firewall_notifier.dart';
+import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_apply_progress.dart';
+import 'package:luci_mobile/widgets/luci_hub_tile.dart';
 import 'package:luci_mobile/widgets/luci_loading_states.dart';
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 /// Port forwards, traffic rules, zones and static routes.
 ///
-/// One screen with tabs rather than four hub entries: these are four views of
-/// the same question — what is allowed in and out — and jumping between them
-/// while diagnosing something is the normal case.
+/// On Android, one screen with tabs rather than four hub entries: these are
+/// four views of the same question — what is allowed in and out — and
+/// jumping between them while diagnosing something is the normal case. On
+/// iOS, where tabs under a navigation bar are not how settings are laid
+/// out, a list of the four that each push their own page, as iOS Settings
+/// does; each row says what is in it.
 class FirewallScreen extends ConsumerStatefulWidget {
   const FirewallScreen({super.key});
 
@@ -26,36 +32,43 @@ class FirewallScreen extends ConsumerStatefulWidget {
   ConsumerState<FirewallScreen> createState() => _FirewallScreenState();
 }
 
-class _FirewallScreenState extends ConsumerState<FirewallScreen> {
+/// The four parts of the firewall: a tab each on Android, a page each on iOS.
+enum _FirewallSection { forwards, rules, zones, routes }
+
+extension on _FirewallSection {
+  String title(AppLocalizations l10n) => switch (this) {
+    _FirewallSection.forwards => l10n.portForwards,
+    _FirewallSection.rules => l10n.trafficRules,
+    _FirewallSection.zones => l10n.zones,
+    _FirewallSection.routes => l10n.staticRoutes,
+  };
+
+  IconData get icon => switch (this) {
+    _FirewallSection.forwards => Icons.swap_horiz,
+    _FirewallSection.rules => Icons.rule,
+    _FirewallSection.zones => Icons.security,
+    _FirewallSection.routes => Icons.alt_route,
+  };
+}
+
+String _forwardName(PortForward f) =>
+    f.name ?? '${f.sourceZone}:${f.sourcePort ?? "?"}';
+
+String _routeName(StaticRoute r) =>
+    '${r.target}${r.netmask == null ? '' : '/${r.netmask}'}';
+
+/// What every firewall view does with the state: apply a change, or open a
+/// port forward. One change at a time per view.
+mixin _FirewallActions<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   bool _busy = false;
 
-  @override
-  Widget build(BuildContext context) {
+  /// The firewall as [build] shows it, with the screens' shared loading and
+  /// error states.
+  Widget _firewallBody(Widget Function(FirewallState state) data) {
     final l10n = context.l10n;
-    final async = ref.watch(firewallProvider);
-
-    return DefaultTabController(
-      length: 4,
-      child: Scaffold(
-        appBar: AppBar(
-          // Match LuciAppBar's chrome: a raw AppBar picks a different surface
-          // and leaves the status bar reading against the wrong colour.
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          elevation: 2,
-          scrolledUnderElevation: 2,
-          title: Text(l10n.firewall),
-          bottom: TabBar(
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            tabs: [
-              Tab(text: l10n.portForwards),
-              Tab(text: l10n.trafficRules),
-              Tab(text: l10n.zones),
-              Tab(text: l10n.staticRoutes),
-            ],
-          ),
-        ),
-        body: async.when(
+    return ref
+        .watch(firewallProvider)
+        .when(
           loading: () => const Padding(
             padding: EdgeInsets.all(LuciSpacing.md),
             child: LuciCardSkeleton(contentLines: 4),
@@ -67,40 +80,41 @@ class _FirewallScreenState extends ConsumerState<FirewallScreen> {
             action: l10n.retry,
             onAction: () => ref.invalidate(firewallProvider),
           ),
-          data: (state) => TabBarView(
-            children: [
-              _ForwardsTab(
-                state: state,
-                busy: _busy,
-                onToggle: (f, on) => _apply(
-                  FirewallPlanner.planSetForwardEnabled(
-                    forward: f,
-                    enabled: on,
-                  ),
-                ),
-                onEdit: (f) => _editForward(state, f),
-                onAdd: () => _editForward(state, null),
-              ),
-              _RulesTab(
-                rules: state.rules,
-                busy: _busy,
-                onToggle: (r, on) => _apply(
-                  FirewallPlanner.planSetRuleEnabled(rule: r, enabled: on),
-                ),
-                onRemove: (r) => _apply(FirewallPlanner.planRemoveRule(r)),
-              ),
-              _ZonesTab(zones: state.zones),
-              _RoutesTab(
-                routes: state.routes,
-                busy: _busy,
-                onRemove: (r) => _apply(FirewallPlanner.planDeleteRoute(r)),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+          data: data,
+        );
   }
+
+  /// One part of the firewall, wired to these actions. [showAddButton] is
+  /// false where the port forwards' page has its own add action.
+  Widget _section(
+    _FirewallSection section,
+    FirewallState state, {
+    bool showAddButton = true,
+  }) => switch (section) {
+    _FirewallSection.forwards => _ForwardsTab(
+      state: state,
+      busy: _busy,
+      showAddButton: showAddButton,
+      onToggle: (f, on) => _apply(
+        FirewallPlanner.planSetForwardEnabled(forward: f, enabled: on),
+      ),
+      onEdit: (f) => _editForward(state, f),
+      onAdd: () => _editForward(state, null),
+    ),
+    _FirewallSection.rules => _RulesTab(
+      rules: state.rules,
+      busy: _busy,
+      onToggle: (r, on) =>
+          _apply(FirewallPlanner.planSetRuleEnabled(rule: r, enabled: on)),
+      onRemove: (r) => _apply(FirewallPlanner.planRemoveRule(r)),
+    ),
+    _FirewallSection.zones => _ZonesTab(zones: state.zones),
+    _FirewallSection.routes => _RoutesTab(
+      routes: state.routes,
+      busy: _busy,
+      onRemove: (r) => _apply(FirewallPlanner.planDeleteRoute(r)),
+    ),
+  };
 
   Future<void> _editForward(FirewallState state, PortForward? existing) async {
     if (_busy) return;
@@ -144,6 +158,159 @@ class _FirewallScreenState extends ConsumerState<FirewallScreen> {
   }
 }
 
+class _FirewallScreenState extends ConsumerState<FirewallScreen>
+    with _FirewallActions {
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    if (PlatformUiCapabilities.isIOS) {
+      return Scaffold(
+        appBar: LuciAppBar(title: l10n.firewall, showBack: true),
+        body: _firewallBody(
+          (state) => ListView(
+            padding: const EdgeInsets.symmetric(vertical: LuciSpacing.sm),
+            children: [
+              LuciHubSection(
+                tiles: [
+                  for (final section in _FirewallSection.values)
+                    _hubTile(context, section, state),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return DefaultTabController(
+      length: 4,
+      child: Scaffold(
+        appBar: AppBar(
+          // Match LuciAppBar's chrome: a raw AppBar picks a different surface
+          // and leaves the status bar reading against the wrong colour.
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          elevation: 2,
+          scrolledUnderElevation: 2,
+          title: Text(l10n.firewall),
+          bottom: TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            tabs: [
+              for (final section in _FirewallSection.values)
+                Tab(text: section.title(l10n)),
+            ],
+          ),
+        ),
+        body: _firewallBody(
+          (state) => TabBarView(
+            children: [
+              for (final section in _FirewallSection.values)
+                _section(section, state),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A row of the iOS list: the part's name, what is in it, and how many.
+  Widget _hubTile(
+    BuildContext context,
+    _FirewallSection section,
+    FirewallState state,
+  ) {
+    final l10n = context.l10n;
+    final (names, empty) = switch (section) {
+      _FirewallSection.forwards => (
+        [for (final f in state.forwards) _forwardName(f)],
+        l10n.noPortForwards,
+      ),
+      _FirewallSection.rules => (
+        [for (final r in state.rules) r.name ?? r.section],
+        l10n.noTrafficRules,
+      ),
+      _FirewallSection.zones => (
+        [for (final z in state.zones) z.name],
+        l10n.noZones,
+      ),
+      _FirewallSection.routes => (
+        [for (final r in state.routes) _routeName(r)],
+        l10n.noStaticRoutes,
+      ),
+    };
+    return LuciHubTile(
+      icon: section.icon,
+      title: section.title(l10n),
+      subtitle: names.isEmpty ? empty : names.join(', '),
+      subtitleMaxLines: 2,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (names.isNotEmpty)
+            Text(
+              '${names.length}',
+              style: LuciTextStyles.cardSubtitle(context)
+                  .copyWith(fontSize: 15),
+            ),
+          const SizedBox(width: LuciSpacing.xs),
+          Icon(
+            Icons.chevron_right,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ],
+      ),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => _FirewallSectionPage(section: section),
+        ),
+      ),
+    );
+  }
+}
+
+/// One part of the firewall on its own page, pushed from the iOS list.
+class _FirewallSectionPage extends ConsumerStatefulWidget {
+  const _FirewallSectionPage({required this.section});
+
+  final _FirewallSection section;
+
+  @override
+  ConsumerState<_FirewallSectionPage> createState() =>
+      _FirewallSectionPageState();
+}
+
+class _FirewallSectionPageState extends ConsumerState<_FirewallSectionPage>
+    with _FirewallActions {
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final state = ref.watch(firewallProvider).value;
+    final forwards = widget.section == _FirewallSection.forwards;
+    return Scaffold(
+      appBar: LuciAppBar(
+        title: widget.section.title(l10n),
+        showBack: true,
+        actions: [
+          // Adding a forward is the navigation bar's +, as on iOS, rather
+          // than a floating button.
+          if (forwards)
+            LuciAppBarAction(
+              sfSymbol: 'plus',
+              materialIcon: Icons.add,
+              tooltip: l10n.addPortForward,
+              onPressed: _busy || state == null
+                  ? null
+                  : () => _editForward(state, null),
+            ),
+        ],
+      ),
+      body: _firewallBody(
+        (state) => _section(widget.section, state, showAddButton: false),
+      ),
+    );
+  }
+}
+
 class _ForwardsTab extends StatelessWidget {
   const _ForwardsTab({
     required this.state,
@@ -151,10 +318,12 @@ class _ForwardsTab extends StatelessWidget {
     required this.onToggle,
     required this.onEdit,
     required this.onAdd,
+    this.showAddButton = true,
   });
 
   final FirewallState state;
   final bool busy;
+  final bool showAddButton;
   final void Function(PortForward, bool) onToggle;
   final void Function(PortForward) onEdit;
   final VoidCallback onAdd;
@@ -175,7 +344,7 @@ class _ForwardsTab extends StatelessWidget {
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, i) {
                 final f = state.forwards[i];
-                final name = f.name ?? '${f.sourceZone}:${f.sourcePort ?? "?"}';
+                final name = _forwardName(f);
                 return ListTile(
                   onTap: busy ? null : () => onEdit(f),
                   leading: Icon(
@@ -202,11 +371,13 @@ class _ForwardsTab extends StatelessWidget {
                 );
               },
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: busy ? null : onAdd,
-        icon: const Icon(Icons.add),
-        label: Text(l10n.addPortForward),
-      ),
+      floatingActionButton: showAddButton
+          ? FloatingActionButton.extended(
+              onPressed: busy ? null : onAdd,
+              icon: const Icon(Icons.add),
+              label: Text(l10n.addPortForward),
+            )
+          : null,
     );
   }
 }
@@ -389,7 +560,7 @@ class _RoutesTab extends StatelessWidget {
         final r = routes[i];
         return ListTile(
           leading: const Icon(Icons.alt_route),
-          title: Text('${r.target}${r.netmask == null ? '' : '/${r.netmask}'}'),
+          title: Text(_routeName(r)),
           subtitle: Text(
             [
               if (r.gateway != null) 'via ${r.gateway}',
