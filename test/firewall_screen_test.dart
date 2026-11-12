@@ -41,7 +41,13 @@ class _RecordingMutations extends FirewallMutations {
 
 /// Shows the firewall. Completes with the list of what the screen goes on
 /// to apply.
-Future<List<List<UciOperation>>> _pumpFirewall(WidgetTester tester) async {
+Future<List<List<UciOperation>>> _pumpFirewall(
+  WidgetTester tester, {
+  List<FirewallZone> zones = const [
+    FirewallZone(section: 'lan', name: 'lan'),
+    FirewallZone(section: 'wan', name: 'wan', masq: true),
+  ],
+}) async {
   final applied = <List<UciOperation>>[];
   // Tall enough for the whole form, and wide enough for the test font's
   // square glyphs, which make "TCP + UDP" far wider than a phone's font.
@@ -53,13 +59,10 @@ Future<List<List<UciOperation>>> _pumpFirewall(WidgetTester tester) async {
     ProviderScope(
       overrides: [
         firewallProvider.overrideWith(
-          (ref) async => const FirewallState(
-            zones: [
-              FirewallZone(section: 'lan', name: 'lan'),
-              FirewallZone(section: 'wan', name: 'wan', masq: true),
-            ],
-            forwards: [_forward],
-            sectionNames: {'web'},
+          (ref) async => FirewallState(
+            zones: zones,
+            forwards: const [_forward],
+            sectionNames: const {'web'},
           ),
         ),
         firewallMutationsProvider.overrideWith(
@@ -209,6 +212,31 @@ void main() {
       expect(rowText('Traffic rules'), 'Traffic rules | No traffic rules');
       expect(rowText('Zones'), 'Zones | lan, wan | 2');
       expect(rowText('Static routes'), 'Static routes | No static routes');
+    });
+
+    testWidgets('a long list shows its first five names and the full count', (
+      tester,
+    ) async {
+      await _pumpFirewall(
+        tester,
+        zones: [
+          for (var i = 1; i <= 30; i++)
+            FirewallZone(section: 'zone$i', name: 'zone$i'),
+        ],
+      );
+
+      final row = find.ancestor(
+        of: find.text('Zones'),
+        matching: find.byType(LuciHubTile),
+      );
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.text('zone1, zone2, zone3, zone4, zone5, …'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.descendant(of: row, matching: find.text('30')), findsOne);
     });
 
     testWidgets('each row pushes its own page, with a back button', (

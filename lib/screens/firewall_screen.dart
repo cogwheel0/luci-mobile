@@ -54,6 +54,15 @@ extension on _FirewallSection {
 String _forwardName(PortForward f) =>
     f.name ?? '${f.sourceZone}:${f.sourcePort ?? "?"}';
 
+/// The first few of [names], for a row that shows two lines and is read
+/// out whole by VoiceOver: a router with dozens of rules should not have
+/// them all built and announced. The row's count gives the total.
+String _preview(List<String> names) {
+  const shown = 5;
+  if (names.length <= shown) return names.join(', ');
+  return '${names.take(shown).join(', ')}, …';
+}
+
 String _routeName(StaticRoute r) =>
     '${r.target}${r.netmask == null ? '' : '/${r.netmask}'}';
 
@@ -241,7 +250,7 @@ class _FirewallScreenState extends ConsumerState<FirewallScreen>
     return LuciHubTile(
       icon: section.icon,
       title: section.title(l10n),
-      subtitle: names.isEmpty ? empty : names.join(', '),
+      subtitle: names.isEmpty ? empty : _preview(names),
       subtitleMaxLines: 2,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
