@@ -385,6 +385,8 @@
   "staticRoutes": "Statische Routen",
   "addPortForward": "Portweiterleitung hinzufügen",
   "editPortForward": "Portweiterleitung bearbeiten",
+  "removePortForwardQuestion": "Portweiterleitung entfernen?",
+  "removePortForwardDescription": "Dadurch wird „{name}“ dauerhaft aus Ihrer Firewall-Konfiguration entfernt.",
   "forwardName": "Name",
   "sourceZone": "Von Zone",
   "destinationZone": "Zielzone",

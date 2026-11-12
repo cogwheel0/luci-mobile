@@ -1,5 +1,8 @@
 import 'package:cupertino_ui/cupertino_ui.dart'
-    show CupertinoNavigationBar, CupertinoNavigationBarBackButton;
+    show
+        CupertinoDialogAction,
+        CupertinoNavigationBar,
+        CupertinoNavigationBarBackButton;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/models/firewall_config.dart';
@@ -99,7 +102,7 @@ void main() {
   tearDown(PlatformUiCapabilities.resetDebugOverrides);
 
   testWidgets('Android: a port forward opens in a bottom sheet whose Remove '
-      'deletes it', (tester) async {
+      'deletes it once confirmed', (tester) async {
     PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android;
     final applied = await _openForward(tester);
 
@@ -107,7 +110,36 @@ void main() {
     expect(find.text('Edit port forward'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Save'), findsOneWidget);
 
+    // Cancelling the confirmation keeps the forward, and the sheet.
     await tester.tap(find.widgetWithText(TextButton, 'Remove'));
+    await tester.pumpAndSettle();
+    final dialog = find.byType(AlertDialog);
+    expect(
+      find.descendant(of: dialog, matching: find.text('Remove port forward?')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text(
+          'This will permanently remove "Web server" from your firewall '
+          'configuration.',
+        ),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.descendant(of: dialog, matching: find.text('Cancel')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(applied, isEmpty);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Remove'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(of: dialog, matching: find.text('Remove')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.byType(BottomSheet), findsNothing);
@@ -139,6 +171,9 @@ void main() {
     await tester.tap(find.text('Web server'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(AdaptiveButton, 'Remove'));
+    await tester.pumpAndSettle();
+    expect(applied, isEmpty, reason: 'not before it is confirmed');
+    await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Remove'));
     await tester.pumpAndSettle();
 
     final [ops] = applied;

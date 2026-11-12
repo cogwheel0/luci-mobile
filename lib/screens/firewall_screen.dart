@@ -714,11 +714,7 @@ class _ForwardSheetState extends State<_ForwardSheet> {
       confirmLabel: l10n.saveAction,
       onConfirm: _canSave ? _save : null,
       destructiveLabel: existing == null ? null : l10n.remove,
-      onDestructive: existing == null
-          ? null
-          : () =>
-                Navigator.of(context)
-                    .pop(FirewallPlanner.planDeletePortForward(existing)),
+      onDestructive: existing == null ? null : () => _remove(existing),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -823,6 +819,22 @@ class _ForwardSheetState extends State<_ForwardSheet> {
         ],
       ),
     );
+  }
+
+  /// Removes [forward] once the user confirms: Remove sits beside Save, and
+  /// a forward deleted by a slip would have to be typed in again.
+  Future<void> _remove(PortForward forward) async {
+    final l10n = context.l10n;
+    final confirmed = await AdaptiveAlertDialog.confirm(
+      context: context,
+      title: l10n.removePortForwardQuestion,
+      message: l10n.removePortForwardDescription(_forwardName(forward)),
+      confirmLabel: l10n.remove,
+      cancelLabel: l10n.cancel,
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    Navigator.of(context).pop(FirewallPlanner.planDeletePortForward(forward));
   }
 
   void _save() {

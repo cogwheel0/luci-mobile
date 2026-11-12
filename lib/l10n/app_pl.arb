@@ -385,6 +385,8 @@
   "staticRoutes": "Trasy statyczne",
   "addPortForward": "Dodaj przekierowanie portu",
   "editPortForward": "Edytuj przekierowanie portu",
+  "removePortForwardQuestion": "Usunąć przekierowanie portu?",
+  "removePortForwardDescription": "Spowoduje to trwałe usunięcie „{name}” z konfiguracji zapory.",
   "forwardName": "Nazwa",
   "sourceZone": "Ze strefy",
   "destinationZone": "Strefa docelowa",

@@ -385,6 +385,8 @@
   "staticRoutes": "Routes statiques",
   "addPortForward": "Ajouter une redirection",
   "editPortForward": "Modifier la redirection",
+  "removePortForwardQuestion": "Supprimer la redirection ?",
+  "removePortForwardDescription": "Cela supprimera définitivement « {name} » de la configuration du pare-feu.",
   "forwardName": "Nom",
   "sourceZone": "Depuis la zone",
   "destinationZone": "Zone de destination",

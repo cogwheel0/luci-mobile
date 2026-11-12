@@ -385,6 +385,8 @@
   "staticRoutes": "Статические маршруты",
   "addPortForward": "Добавить проброс порта",
   "editPortForward": "Изменить проброс порта",
+  "removePortForwardQuestion": "Удалить проброс порта?",
+  "removePortForwardDescription": "Это приведет к окончательному удалению «{name}» из конфигурации брандмауэра.",
   "forwardName": "Название",
   "sourceZone": "Из зоны",
   "destinationZone": "Зона назначения",

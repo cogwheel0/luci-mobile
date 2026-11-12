@@ -385,6 +385,8 @@
   "staticRoutes": "정적 경로",
   "addPortForward": "포트 포워딩 추가",
   "editPortForward": "포트 포워딩 편집",
+  "removePortForwardQuestion": "포트 포워딩을 제거하시겠습니까?",
+  "removePortForwardDescription": "이렇게 하면 방화벽 구성에서 \"{name}\"이(가) 영구적으로 제거됩니다.",
   "forwardName": "이름",
   "sourceZone": "출발 영역",
   "destinationZone": "대상 영역",
