@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
 import 'package:luci_mobile/models/system_details.dart';
 import 'package:luci_mobile/services/api_service.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 import 'package:luci_mobile/widgets/system_details_sheet.dart';
 
 void main() {
@@ -129,6 +130,62 @@ void main() {
       await tester.longPress(find.text('card'));
       await tester.pumpAndSettle();
       expectSheet();
+    });
+
+    group('before iOS 26', () {
+      setUp(() {
+        PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+        PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+      });
+      tearDown(PlatformUiCapabilities.resetDebugOverrides);
+
+      testWidgets('a sheet of value rows, selectable, closed by Done', (
+        tester,
+      ) async {
+        final semantics = tester.ensureSemantics();
+        await pumpCard(tester, details);
+        await tester.tap(find.text('card'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(BottomSheet), findsNothing);
+        expect(find.byType(AdaptiveInfoSheet), findsOneWidget);
+        expect(find.text('System details'), findsOneWidget);
+        final model = find.widgetWithText(AdaptiveFormValueRow, 'Model');
+        expect(
+          find.descendant(
+            of: model,
+            matching: find.widgetWithText(
+              SelectableText,
+              'TP-Link Archer C7 v5',
+            ),
+          ),
+          findsOneWidget,
+        );
+        // The value sits on the right of its label.
+        expect(
+          tester.getRect(find.text('Model')).right,
+          lessThan(tester.getRect(find.text('TP-Link Archer C7 v5')).left),
+        );
+        expect(
+          find.widgetWithText(AdaptiveFormValueRow, 'Kernel version'),
+          findsOneWidget,
+        );
+        // VoiceOver reads each value with its label, as one read-only
+        // element.
+        expect(
+          tester.getSemantics(find.text('Model')),
+          isSemantics(
+            label: 'Model',
+            value: 'TP-Link Archer C7 v5',
+            isReadOnly: true,
+          ),
+        );
+
+        await tester.tap(find.text('Done'));
+        await tester.pumpAndSettle();
+        expect(find.byType(AdaptiveInfoSheet), findsNothing);
+        semantics.dispose();
+      });
     });
 
     testWidgets('with nothing to show, the card is inert', (tester) async {

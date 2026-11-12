@@ -22,6 +22,7 @@
   "errorRpcFailed": "라우터가 {call}을(를) 거부했습니다.",
   "errorRpcFailedBecause": "라우터가 {call}을(를) 거부했습니다: {reason}.",
   "close": "닫기",
+  "done": "완료",
   "retry": "다시 시도",
   "back": "뒤로",
   "add": "추가",

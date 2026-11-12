@@ -22,6 +22,7 @@
   "errorRpcFailed": "Роутер отклонил {call}.",
   "errorRpcFailedBecause": "Роутер отклонил {call}: {reason}.",
   "close": "Закрыть",
+  "done": "Готово",
   "retry": "Повторить",
   "back": "Назад",
   "add": "Добавить",

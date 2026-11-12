@@ -22,6 +22,7 @@
   "errorRpcFailed": "Le routeur a refusé {call}.",
   "errorRpcFailedBecause": "Le routeur a refusé {call} : {reason}.",
   "close": "Fermer",
+  "done": "OK",
   "retry": "Réessayer",
   "back": "Retour",
   "add": "Ajouter",

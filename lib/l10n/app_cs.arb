@@ -22,6 +22,7 @@
   "errorRpcFailed": "Router odmítl {call}.",
   "errorRpcFailedBecause": "Router odmítl {call}: {reason}.",
   "close": "Zavřít",
+  "done": "Hotovo",
   "retry": "Zkusit znovu",
   "back": "Zpět",
   "add": "Přidat",

@@ -89,6 +89,10 @@
     }
   },
   "close": "Close",
+  "done": "Done",
+  "@done": {
+    "description": "Closes a sheet that only shows information, as iOS's Done button does."
+  },
   "exit": "Exit",
   "retry": "Retry",
   "back": "Back",

@@ -22,6 +22,7 @@
   "errorRpcFailed": "ルーターが {call} を拒否しました。",
   "errorRpcFailedBecause": "ルーターが {call} を拒否しました: {reason}。",
   "close": "閉じる",
+  "done": "完了",
   "retry": "再試行",
   "back": "戻る",
   "add": "追加",

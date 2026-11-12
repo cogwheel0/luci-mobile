@@ -1122,10 +1122,25 @@ class AdaptiveFormValueRow extends StatelessWidget {
     super.key,
     required this.label,
     required this.value,
+    this.selectable = false,
   });
 
   final String label;
   final String value;
+
+  /// Whether [value] can be selected and copied, such as a version to paste
+  /// into a bug report.
+  final bool selectable;
+
+  Widget _value(BuildContext context, TextStyle? style) => selectable
+      ? SelectableText(
+          value,
+          textAlign: TextAlign.end,
+          // iOS's body style stands alone (inherit: false), which selectable
+          // text accepts only with a baseline.
+          style: style?.copyWith(textBaseline: TextBaseline.alphabetic),
+        )
+      : Text(value, textAlign: TextAlign.end, style: style);
 
   @override
   Widget build(BuildContext context) {
@@ -1142,7 +1157,7 @@ class AdaptiveFormValueRow extends StatelessWidget {
                 child: Text(label),
               ),
               const SizedBox(width: 16),
-              Expanded(child: Text(value, textAlign: TextAlign.end)),
+              Expanded(child: _value(context, null)),
             ],
           ),
         ),
@@ -1164,10 +1179,9 @@ class AdaptiveFormValueRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: Text(
-                    value,
-                    textAlign: TextAlign.end,
-                    style: _bodyStyle(context).copyWith(
+                  child: _value(
+                    context,
+                    _bodyStyle(context).copyWith(
                       color: CupertinoColors.secondaryLabel.resolveFrom(
                         context,
                       ),

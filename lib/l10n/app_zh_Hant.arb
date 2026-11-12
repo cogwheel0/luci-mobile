@@ -22,6 +22,7 @@
   "errorRpcFailed": "路由器拒絕了 {call}。",
   "errorRpcFailedBecause": "路由器拒絕了 {call}：{reason}。",
   "close": "關閉",
+  "done": "完成",
   "retry": "重試",
   "back": "返回",
   "add": "新增",

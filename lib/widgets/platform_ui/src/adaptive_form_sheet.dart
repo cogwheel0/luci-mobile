@@ -401,6 +401,76 @@ class AdaptiveFormSheet extends StatelessWidget {
   }
 }
 
+/// A sheet that only shows information, such as facts about the router,
+/// for [showAdaptiveFormSheet] on iOS: [title] in its navigation bar,
+/// [child] under it on the grouped background, and [doneLabel] to close
+/// it: a prominent ✓ in Liquid Glass on iOS 26, a bold text button before.
+/// Dragging it down closes it too. iOS only.
+class AdaptiveInfoSheet extends StatelessWidget {
+  const AdaptiveInfoSheet({
+    super.key,
+    required this.title,
+    required this.doneLabel,
+    required this.child,
+  });
+
+  final String title;
+  final String doneLabel;
+
+  /// The content, typically [AdaptiveFormSection]s of value rows.
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = CupertinoColors.systemGroupedBackground.resolveFrom(
+      context,
+    );
+    void done() => Navigator.of(context).pop();
+    return CupertinoPageScaffold(
+      backgroundColor: background,
+      navigationBar: CupertinoNavigationBar(
+        automaticallyImplyLeading: false,
+        automaticallyImplyMiddle: false,
+        backgroundColor: background.withValues(alpha: 0.94),
+        middle: Text(title),
+        trailing: PlatformUiCapabilities.usesNativeIOS26
+            ? AdaptiveButton.sfSymbol(
+                onPressed: done,
+                sfSymbol: const SFSymbol('checkmark'),
+                semanticLabel: doneLabel,
+                style: AdaptiveButtonStyle.prominentGlass,
+                minSize: const Size.square(44),
+                padding: EdgeInsets.zero,
+                borderRadius: BorderRadius.circular(22),
+                useSmoothRectangleBorder: false,
+              )
+            : CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: done,
+                child: Text(
+                  doneLabel,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+      ),
+      child: SafeArea(
+        // Selectable text and other Material content need a Material
+        // ancestor, which a Cupertino sheet does not give them.
+        child: Material(
+          type: MaterialType.transparency,
+          child: ListView(
+            // The sheet's controller turns a drag down at the top into
+            // dragging the sheet away.
+            controller: _AdaptiveFormSheetScope.maybeControllerOf(context),
+            padding: const EdgeInsets.all(16),
+            children: [child],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Whether the form in a sheet is busy: written by its [AdaptiveFormSheet]
 /// as it builds, and read by [_FormSheetChrome] when a drag begins, so it
 /// needs no rebuild of its own.
