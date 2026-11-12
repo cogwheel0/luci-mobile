@@ -724,63 +724,151 @@ class _AdaptiveFormPickerState<T> extends State<AdaptiveFormPicker<T>> {
   Future<void> _choose(BuildContext context) async {
     final AdaptiveFormPicker(:label, :value, :choices) = widget;
     FocusScope.of(context).unfocus();
-    final anchor = _anchor.currentContext ?? context;
-    if (AdaptiveAnchoredMenu.canShow(anchor)) {
-      final id = await AdaptiveAnchoredMenu.show(
-        anchorContext: anchor,
-        items: [
-          for (final (i, choice) in choices.indexed)
-            AdaptiveAnchoredMenuItem(
-              id: '$i',
-              label: choice.label,
-              subtitle: choice.subtitle,
-              checked: choice.value == value,
-            ),
-        ],
-      );
-      // The form may have closed while the menu was open.
-      if (id == null || !mounted) return;
-      widget.onChanged?.call(choices[int.parse(id)].value);
-      return;
-    }
-    final chosen = await showCupertinoModalPopup<AdaptiveFormChoice<T>>(
+    final chosen = await showAdaptiveChoiceMenu<T>(
       context: context,
-      builder: (sheet) => CupertinoActionSheet(
-        title: Text(label),
-        actions: [
-          for (final choice in choices)
-            CupertinoActionSheetAction(
-              isDefaultAction: choice.value == value,
-              onPressed: () => Navigator.of(sheet).pop(choice),
-              child: switch (choice.subtitle) {
-                final subtitle? when subtitle.isNotEmpty => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(choice.label),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.normal,
-                        color: CupertinoColors.secondaryLabel.resolveFrom(
-                          sheet,
-                        ),
-                      ),
+      anchorContext: _anchor.currentContext,
+      title: label,
+      choices: choices,
+      value: value,
+    );
+    // The form may have closed while the menu was open.
+    if (chosen == null || !mounted) return;
+    widget.onChanged?.call(chosen.value);
+  }
+}
+
+/// Lets the person pick one of [choices], [value] checked, and completes
+/// with the one picked, or null when they closed the menu without picking.
+///
+/// From iOS 26 it is the system pull-down menu, growing out of
+/// [anchorContext]'s widget (or [context]'s). Before, it is an action sheet
+/// titled [title], [value] its default action. Each choice's subtitle is a
+/// second line under it in both. iOS only.
+Future<AdaptiveFormChoice<T>?> showAdaptiveChoiceMenu<T>({
+  required BuildContext context,
+  BuildContext? anchorContext,
+  required String title,
+  required List<AdaptiveFormChoice<T>> choices,
+  T? value,
+}) async {
+  if (choices.isEmpty) return null;
+  final anchor = anchorContext ?? context;
+  if (AdaptiveAnchoredMenu.canShow(anchor)) {
+    final id = await AdaptiveAnchoredMenu.show(
+      anchorContext: anchor,
+      items: [
+        for (final (i, choice) in choices.indexed)
+          AdaptiveAnchoredMenuItem(
+            id: '$i',
+            label: choice.label,
+            subtitle: choice.subtitle,
+            checked: choice.value == value,
+          ),
+      ],
+    );
+    return id == null ? null : choices[int.parse(id)];
+  }
+  return showCupertinoModalPopup<AdaptiveFormChoice<T>>(
+    context: context,
+    builder: (sheet) => CupertinoActionSheet(
+      title: Text(title),
+      actions: [
+        for (final choice in choices)
+          CupertinoActionSheetAction(
+            isDefaultAction: choice.value == value,
+            onPressed: () => Navigator.of(sheet).pop(choice),
+            child: switch (choice.subtitle) {
+              final subtitle? when subtitle.isNotEmpty => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(choice.label),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.normal,
+                      color: CupertinoColors.secondaryLabel.resolveFrom(sheet),
                     ),
-                  ],
-                ),
-                _ => Text(choice.label),
-              },
+                  ),
+                ],
+              ),
+              _ => Text(choice.label),
+            },
+          ),
+      ],
+      cancelButton: CupertinoActionSheetAction(
+        onPressed: () => Navigator.of(sheet).pop(),
+        child: Text(MaterialLocalizations.of(sheet).cancelButtonLabel),
+      ),
+    ),
+  );
+}
+
+/// A navigation bar title that switches among [choices], as iOS apps switch
+/// mailboxes or albums from the title: [title] with a chevron under which
+/// [showAdaptiveChoiceMenu] opens, titled [menuTitle], [value] checked.
+/// iOS only.
+class AdaptiveTitleMenu<T> extends StatelessWidget {
+  const AdaptiveTitleMenu({
+    super.key,
+    required this.title,
+    required this.menuTitle,
+    required this.value,
+    required this.choices,
+    required this.onChanged,
+  });
+
+  final String title;
+
+  /// What the menu chooses, such as "Select router": the action sheet's
+  /// title, and what VoiceOver says the title does.
+  final String menuTitle;
+
+  final T? value;
+  final List<AdaptiveFormChoice<T>> choices;
+
+  /// Called with the choice made, the current one included.
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final titleStyle = CupertinoTheme.of(context).textTheme.navTitleTextStyle;
+    return Semantics(
+      hint: menuTitle,
+      child: CupertinoButton(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        onPressed: () async {
+          final chosen = await showAdaptiveChoiceMenu<T>(
+            context: context,
+            title: menuTitle,
+            choices: choices,
+            value: value,
+          );
+          if (chosen != null && context.mounted) onChanged(chosen.value);
+        },
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: titleStyle,
+              ),
             ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(sheet).pop(),
-          child: Text(MaterialLocalizations.of(sheet).cancelButtonLabel),
+            const SizedBox(width: 4),
+            ExcludeSemantics(
+              child: Icon(
+                CupertinoIcons.chevron_down,
+                size: 13,
+                color: CupertinoColors.secondaryLabel.resolveFrom(context),
+              ),
+            ),
+          ],
         ),
       ),
     );
-    if (chosen == null || !mounted) return;
-    widget.onChanged?.call(chosen.value);
   }
 }
 

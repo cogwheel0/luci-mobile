@@ -9,6 +9,7 @@ import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/main.dart';
 import 'package:luci_mobile/navigation/luci_tab.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 import 'package:luci_mobile/widgets/luci_animation_system.dart';
 import 'package:luci_mobile/models/glinet_data.dart';
 import 'package:luci_mobile/models/router.dart' as model;
@@ -1448,6 +1449,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
   }
 
+  /// What the router switcher calls [r]: the connected router's hostname,
+  /// another's last known one (stale, as it may have changed since), or
+  /// else its address.
+  static ({String routerTitle, bool isStale}) _routerTitle(
+    model.Router r, {
+    required bool isSelected,
+    required Map<String, dynamic>? boardInfo,
+  }) {
+    if (isSelected && boardInfo != null) {
+      final hostname = boardInfo['hostname']?.toString();
+      return (
+        routerTitle: (hostname != null && hostname.isNotEmpty)
+            ? hostname
+            : (r.lastKnownHostname ?? r.ipAddress),
+        isStale: false,
+      );
+    }
+    if (r.lastKnownHostname case final known? when known.isNotEmpty) {
+      return (routerTitle: known, isStale: true);
+    }
+    return (routerTitle: r.ipAddress, isStale: false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = ref.watch(appStateProvider);
@@ -1463,7 +1487,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       appBar: LuciAppBar(
         centerTitle: true,
         title: null, // Always use titleWidget now
-        titleWidget: routers.length > 1
+        titleWidget: routers.length > 1 && PlatformUiCapabilities.isIOS
+            ? AdaptiveTitleMenu<String>(
+                title: headerText,
+                menuTitle: context.l10n.selectRouter,
+                value: selected?.id,
+                choices: [
+                  for (final r in routers)
+                    AdaptiveFormChoice(
+                      r.id,
+                      _routerTitle(
+                        r,
+                        isSelected: r.id == selected?.id,
+                        boardInfo: boardInfo,
+                      ).routerTitle,
+                      subtitle: r.ipAddress,
+                    ),
+                ],
+                onChanged: (id) async {
+                  if (id != selected?.id && mounted) {
+                    await appState.selectRouter(id, context: context);
+                  }
+                },
+              )
+            : routers.length > 1
             ? Center(
                 child: Container(
                   decoration: BoxDecoration(
@@ -1543,24 +1590,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                     const Divider(height: 16),
                                     ...routers.map((r) {
                                       final isSelected = r.id == selected?.id;
-                                      String routerTitle;
-                                      bool isStale = false;
-                                      if (isSelected && boardInfo != null) {
-                                        final hostname = boardInfo['hostname']
-                                            ?.toString();
-                                        routerTitle =
-                                            (hostname != null &&
-                                                hostname.isNotEmpty)
-                                            ? hostname
-                                            : (r.lastKnownHostname ??
-                                                  r.ipAddress);
-                                      } else if (r.lastKnownHostname != null &&
-                                          r.lastKnownHostname!.isNotEmpty) {
-                                        routerTitle = r.lastKnownHostname!;
-                                        isStale = true;
-                                      } else {
-                                        routerTitle = r.ipAddress;
-                                      }
+                                      final (
+                                        :routerTitle,
+                                        :isStale,
+                                      ) = _routerTitle(
+                                        r,
+                                        isSelected: isSelected,
+                                        boardInfo: boardInfo,
+                                      );
                                       return ListTile(
                                         leading: Icon(
                                           Icons.router,
