@@ -1,5 +1,9 @@
 import 'package:cupertino_ui/cupertino_ui.dart'
-    show CupertinoActionSheetAction, CupertinoDialogAction;
+    show
+        CupertinoActionSheetAction,
+        CupertinoDialogAction,
+        CupertinoIcons,
+        CupertinoTextField;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/models/router_capabilities.dart';
@@ -145,7 +149,7 @@ void main() {
     PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
     final applied = await _openNetwork(tester);
 
-    await tester.tap(find.widgetWithText(AdaptiveButton, 'Remove'));
+    await tester.tap(find.widgetWithText(AdaptiveFormButtonRow, 'Remove'));
     await tester.pumpAndSettle();
     expect(applied, isEmpty, reason: 'not before it is confirmed');
     await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Remove'));
@@ -216,5 +220,60 @@ void main() {
     final set = ops.whereType<UciSet>().single;
     expect(set.values, {'channel': '11'});
     await _finish(tester);
+  });
+
+  testWidgets('Android: the network form is the Material fields and switch '
+      'tiles it was', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android;
+    await _openNetwork(tester);
+
+    final fields = tester.widgetList<TextField>(find.byType(TextField));
+    expect(
+      [for (final f in fields) f.decoration!.labelText],
+      ['Network Name (SSID):', 'Password'],
+    );
+    expect(fields.last.obscureText, isTrue);
+    expect(find.byType(DropdownButtonFormField<WirelessSecurity>), findsOne);
+    expect(find.byType(SwitchListTile), findsNWidgets(2));
+
+    await tester.tap(find.byTooltip('Show password'));
+    await tester.pump();
+    expect(
+      tester.widgetList<TextField>(find.byType(TextField)).last.obscureText,
+      isFalse,
+    );
+    expect(find.byTooltip('Hide password'), findsOneWidget);
+  });
+
+  testWidgets('before iOS 26: the network form is grouped rows, each switch '
+      'explained under its own group', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    await _openNetwork(tester);
+
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(SwitchListTile), findsNothing);
+    CupertinoTextField password() => tester.widget<CupertinoTextField>(
+      find.descendant(
+        of: find.widgetWithText(AdaptiveFormTextField, 'Password'),
+        matching: find.byType(CupertinoTextField),
+      ),
+    );
+    expect(password().obscureText, isTrue);
+    await tester.tap(find.byIcon(CupertinoIcons.eye));
+    await tester.pump();
+    expect(password().obscureText, isFalse);
+
+    for (final (label, description) in [
+      ('Hidden', 'The name is not broadcast; devices must be told it'),
+      ('Client isolation', 'Devices on this network cannot reach each other'),
+    ]) {
+      final row = find.widgetWithText(AdaptiveFormSwitch, label);
+      expect(
+        tester.getRect(find.text(description)).top,
+        greaterThan(tester.getRect(row).bottom),
+        reason: '$label is explained under it',
+      );
+    }
   });
 }

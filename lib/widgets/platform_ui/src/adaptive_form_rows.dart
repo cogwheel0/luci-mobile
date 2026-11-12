@@ -3,17 +3,26 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'adaptive_anchored_menu.dart';
+import 'adaptive_selection_controls.dart';
 import 'platform_ui_capabilities.dart';
 
 /// A row of an [AdaptiveFormSection] that has something to say under the
 /// section on iOS: a field's hint, or its error.
 abstract interface class AdaptiveFormNotes {
+  /// The row's label, which names its note when the group shows several.
+  String get formNoteLabel;
+
   /// The error, if the row has one, else its hint.
   String? get formNote;
 
   /// Whether [formNote] is an error.
   bool get formNoteIsError;
 }
+
+/// A label as an iOS row shows it: a Material field label can end in a
+/// colon ("Network Name (SSID):"); an iOS row's label never does.
+String _rowLabelText(String label) =>
+    label.replaceFirst(RegExp(r'\s*[:：]\s*$'), '');
 
 /// A form made of [AdaptiveFormSection]s.
 ///
@@ -136,15 +145,21 @@ class AdaptiveFormSection extends StatelessWidget {
               ],
             ),
           ),
+          // Each row reads its own note to VoiceOver, so these are for
+          // the eye. Several in one group say which row each is about.
           for (final note in notes)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-              child: Text(
-                note.formNote!,
-                style: noteStyle.copyWith(
-                  color: note.formNoteIsError
-                      ? CupertinoColors.systemRed.resolveFrom(context)
-                      : secondary,
+            ExcludeSemantics(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                child: Text(
+                  notes.length > 1
+                      ? '${_rowLabelText(note.formNoteLabel)}: ${note.formNote}'
+                      : note.formNote!,
+                  style: noteStyle.copyWith(
+                    color: note.formNoteIsError
+                        ? CupertinoColors.systemRed.resolveFrom(context)
+                        : secondary,
+                  ),
                 ),
               ),
             ),
@@ -204,7 +219,7 @@ class _RowLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-    text,
+    _rowLabelText(text),
     style: _bodyStyle(context).copyWith(
       color:
           (error
@@ -261,11 +276,16 @@ class AdaptiveFormTextField extends StatefulWidget
     this.autofillHints,
     this.onChanged,
     this.onSubmitted,
+    this.materialDecoration = const InputDecoration(),
   });
 
   final String label;
   final TextEditingController? controller;
   final FocusNode? focusNode;
+
+  /// The Material field's look on Android, such as an outlined border. Its
+  /// label, hint, helper, error and suffix come from the fields here.
+  final InputDecoration materialDecoration;
 
   /// Shown while the field is empty.
   final String? placeholder;
@@ -295,6 +315,9 @@ class AdaptiveFormTextField extends StatefulWidget
   final Iterable<String>? autofillHints;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
+
+  @override
+  String get formNoteLabel => label;
 
   @override
   String? get formNote => error ?? helper;
@@ -337,7 +360,7 @@ class _AdaptiveFormTextFieldState extends State<AdaptiveFormTextField> {
         autofillHints: widget.autofillHints,
         onChanged: widget.onChanged,
         onSubmitted: widget.onSubmitted,
-        decoration: InputDecoration(
+        decoration: widget.materialDecoration.copyWith(
           labelText: widget.label,
           hintText: widget.placeholder,
           helperText: widget.helper,
@@ -369,53 +392,59 @@ class _AdaptiveFormTextFieldState extends State<AdaptiveFormTextField> {
                 // as a Material field's label names it. A suffix, such as a
                 // show-password button, stays an element of its own.
                 child: MergeSemantics(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) => Row(
-                      children: [
-                        ConstrainedBox(
-                          // A long label wraps rather than squeezing the
-                          // value out.
-                          constraints: BoxConstraints(
-                            maxWidth: constraints.maxWidth * 0.5,
-                          ),
-                          child: _RowLabel(
-                            widget.label,
-                            error: widget.error != null,
-                            enabled: enabled,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: CupertinoTextField(
-                            controller: widget.controller,
-                            focusNode: _focusNode,
-                            placeholder: widget.placeholder,
-                            keyboardType: widget.keyboardType,
-                            textInputAction: widget.textInputAction,
-                            textCapitalization: widget.textCapitalization,
-                            obscureText: widget.obscureText,
-                            autocorrect: widget.autocorrect,
-                            enableSuggestions: widget.enableSuggestions,
-                            autofocus: widget.autofocus,
-                            enabled: enabled,
-                            maxLength: widget.maxLength,
-                            inputFormatters: widget.inputFormatters,
-                            autofillHints: widget.autofillHints,
-                            onChanged: widget.onChanged,
-                            onSubmitted: widget.onSubmitted,
-                            textAlign: TextAlign.end,
-                            decoration: null,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            style: _bodyStyle(context).copyWith(
-                              color:
-                                  (enabled
-                                          ? CupertinoColors.label
-                                          : CupertinoColors.secondaryLabel)
-                                      .resolveFrom(context),
+                  // The row's error is read with its name, as a Material
+                  // field's is; its hint after.
+                  child: Semantics(
+                    label: widget.error,
+                    hint: widget.error == null ? widget.helper : null,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) => Row(
+                        children: [
+                          ConstrainedBox(
+                            // A long label wraps rather than squeezing the
+                            // value out.
+                            constraints: BoxConstraints(
+                              maxWidth: constraints.maxWidth * 0.5,
+                            ),
+                            child: _RowLabel(
+                              widget.label,
+                              error: widget.error != null,
+                              enabled: enabled,
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: CupertinoTextField(
+                              controller: widget.controller,
+                              focusNode: _focusNode,
+                              placeholder: widget.placeholder,
+                              keyboardType: widget.keyboardType,
+                              textInputAction: widget.textInputAction,
+                              textCapitalization: widget.textCapitalization,
+                              obscureText: widget.obscureText,
+                              autocorrect: widget.autocorrect,
+                              enableSuggestions: widget.enableSuggestions,
+                              autofocus: widget.autofocus,
+                              enabled: enabled,
+                              maxLength: widget.maxLength,
+                              inputFormatters: widget.inputFormatters,
+                              autofillHints: widget.autofillHints,
+                              onChanged: widget.onChanged,
+                              onSubmitted: widget.onSubmitted,
+                              textAlign: TextAlign.end,
+                              decoration: null,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              style: _bodyStyle(context).copyWith(
+                                color:
+                                    (enabled
+                                            ? CupertinoColors.label
+                                            : CupertinoColors.secondaryLabel)
+                                        .resolveFrom(context),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -474,6 +503,9 @@ class AdaptiveFormPicker<T> extends StatefulWidget
 
   final String? helper;
   final String? error;
+
+  @override
+  String get formNoteLabel => label;
 
   @override
   String? get formNote => error ?? helper;
@@ -535,8 +567,11 @@ class _AdaptiveFormPickerState<T> extends State<AdaptiveFormPicker<T>> {
       container: true,
       button: true,
       enabled: enabled,
-      label: label,
+      // Its error read with its name, its hint after: the group's notes
+      // are for the eye.
+      label: error == null ? label : '$label\n$error',
       value: _current?.label ?? hint,
+      hint: error == null ? helper : null,
       onTap: open,
       excludeSemantics: true,
       child: _TappableRow(
@@ -730,6 +765,158 @@ class _TappableRowState extends State<_TappableRow> {
           ),
           child: widget.child,
         ),
+      ),
+    );
+  }
+}
+
+/// An on/off setting as a form row.
+///
+/// On Android, the switch tile luci-mobile's forms used, [description]
+/// under its title. On iOS, a row of an [AdaptiveFormSection]: [label] on
+/// the left and the switch on the right, the native one on iOS 26, with
+/// [description] under the group, as iOS Settings explains a switch. Give a
+/// switch with a description a section of its own, so its explanation sits
+/// under it.
+class AdaptiveFormSwitch extends StatelessWidget implements AdaptiveFormNotes {
+  const AdaptiveFormSwitch({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.description,
+    this.materialContentPadding = EdgeInsets.zero,
+    this.materialCheckbox = false,
+  });
+
+  final String label;
+  final bool value;
+
+  /// Called with the new value; null disables the switch.
+  final ValueChanged<bool>? onChanged;
+
+  /// What the setting does.
+  final String? description;
+
+  /// The tile's padding on Android.
+  final EdgeInsetsGeometry materialContentPadding;
+
+  /// Whether Android shows a checkbox tile rather than a switch tile, for
+  /// an option that goes with the rest of the form rather than a setting
+  /// of its own. iOS forms use a switch for either.
+  final bool materialCheckbox;
+
+  @override
+  String get formNoteLabel => label;
+
+  @override
+  String? get formNote => description;
+
+  @override
+  bool get formNoteIsError => false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PlatformUiCapabilities.isIOS && materialCheckbox) {
+      return AdaptiveCheckboxListTile(
+        contentPadding: materialContentPadding,
+        title: Text(label),
+        subtitle: description == null ? null : Text(description!),
+        value: value,
+        onChanged: onChanged,
+      );
+    }
+    if (!PlatformUiCapabilities.isIOS) {
+      return AdaptiveSwitchListTile(
+        contentPadding: materialContentPadding,
+        title: Text(label),
+        subtitle: description == null ? null : Text(description!),
+        value: value,
+        onChanged: onChanged,
+      );
+    }
+    final change = onChanged;
+    // One switch to assistive technology, as a Settings row is; only the
+    // switch itself responds to touch.
+    return MergeSemantics(
+      child: Semantics(
+        toggled: value,
+        enabled: change != null,
+        hint: description,
+        onTap: change == null ? null : () => change(!value),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: _rowHeight),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _RowLabel(
+                    label,
+                    error: false,
+                    enabled: change != null,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ExcludeSemantics(
+                  child: AdaptiveSwitch(value: value, onChanged: change),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The button at the end of a password field that shows or hides what is
+/// typed: an eye on iOS, at a 44 point target, and the Material visibility
+/// icon on Android. It shows what tapping it will do, as both platforms do.
+class AdaptiveObscureToggle extends StatelessWidget {
+  const AdaptiveObscureToggle({
+    super.key,
+    required this.obscured,
+    required this.onPressed,
+    this.semanticLabel,
+    this.materialOutlined = false,
+  });
+
+  /// Whether the field hides its text now.
+  final bool obscured;
+
+  /// Whether Android shows the outlined visibility icons.
+  final bool materialOutlined;
+
+  final VoidCallback? onPressed;
+
+  /// What the button does, such as "Show password", for assistive
+  /// technology (and a tooltip on Android).
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PlatformUiCapabilities.isIOS) {
+      return IconButton(
+        icon: Icon(switch ((obscured, materialOutlined)) {
+          (true, false) => Icons.visibility,
+          (false, false) => Icons.visibility_off,
+          (true, true) => Icons.visibility_outlined,
+          (false, true) => Icons.visibility_off_outlined,
+        }),
+        tooltip: semanticLabel,
+        onPressed: onPressed,
+      );
+    }
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size.square(44),
+      onPressed: onPressed,
+      child: Icon(
+        obscured ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+        size: 20,
+        color: CupertinoColors.secondaryLabel.resolveFrom(context),
+        semanticLabel: semanticLabel,
       ),
     );
   }

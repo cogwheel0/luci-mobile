@@ -127,6 +127,89 @@ void main() {
     });
   });
 
+  group('Android options', () {
+    setUp(
+      () =>
+          PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android,
+    );
+
+    testWidgets('a text field keeps its Material look, its own label and '
+        'error on top', (tester) async {
+      await _pump(
+        tester,
+        const AdaptiveFormTextField(
+          label: 'New password',
+          error: 'Too short',
+          materialDecoration: InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: 'ignored',
+          ),
+        ),
+      );
+
+      final decoration = tester
+          .widget<TextField>(find.byType(TextField))
+          .decoration!;
+      expect(decoration.border, isA<OutlineInputBorder>());
+      expect(decoration.labelText, 'New password');
+      expect(decoration.errorText, 'Too short');
+    });
+
+    testWidgets('a switch row is the switch tile, or the checkbox tile when '
+        'asked, its description under its title', (tester) async {
+      final changes = <bool>[];
+      for (final checkbox in [false, true]) {
+        await _pump(
+          tester,
+          AdaptiveFormSwitch(
+            label: 'Hidden',
+            description: 'Not broadcast',
+            value: false,
+            onChanged: changes.add,
+            materialCheckbox: checkbox,
+          ),
+        );
+
+        expect(find.byType(SwitchListTile), checkbox ? findsNothing : findsOne);
+        expect(
+          find.byType(CheckboxListTile),
+          checkbox ? findsOne : findsNothing,
+        );
+        expect(find.text('Not broadcast'), findsOneWidget);
+        await tester.tap(find.text('Hidden'));
+        await tester.pump();
+      }
+      expect(changes, [true, true]);
+    });
+
+    for (final (outlined, obscured, icon) in [
+      (false, true, Icons.visibility),
+      (false, false, Icons.visibility_off),
+      (true, true, Icons.visibility_outlined),
+      (true, false, Icons.visibility_off_outlined),
+    ]) {
+      testWidgets('the ${outlined ? 'outlined ' : ''}show-password button '
+          'while ${obscured ? 'hidden' : 'shown'}', (tester) async {
+        var taps = 0;
+        await _pump(
+          tester,
+          AdaptiveObscureToggle(
+            obscured: obscured,
+            materialOutlined: outlined,
+            semanticLabel: obscured ? 'Show password' : 'Hide password',
+            onPressed: () => taps++,
+          ),
+        );
+
+        expect(find.byIcon(icon), findsOneWidget);
+        await tester.tap(
+          find.byTooltip(obscured ? 'Show password' : 'Hide password'),
+        );
+        expect(taps, 1);
+      });
+    }
+  });
+
   group('before iOS 26', () {
     setUp(() {
       PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
@@ -158,8 +241,11 @@ void main() {
       final header = tester.getRect(find.text('DESTINATION'));
       final first = tester.getRect(find.text('Internal address'));
       final second = tester.getRect(find.text('Source address'));
-      final error = find.text('Enter a valid IPv4 address');
-      final helper = find.text('Optional: only forward from this subnet');
+      // Two notes in one group: each says which row it is about.
+      final error = find.text('Internal address: Enter a valid IPv4 address');
+      final helper = find.text(
+        'Source address: Optional: only forward from this subnet',
+      );
       final footer = find.text('Applies to new connections.');
       expect(header.bottom, lessThan(first.top));
       expect(first.bottom, lessThan(second.top));
@@ -544,6 +630,145 @@ void main() {
       tester.semantics.tap(suffix);
       await tester.pump();
       expect(pressed, 1);
+      semantics.dispose();
+    });
+    testWidgets('a switch row is a label and a switch, its description under '
+        'the group, even when Android would show a checkbox', (tester) async {
+      final changes = <bool>[];
+      await _pump(
+        tester,
+        AdaptiveFormSection(
+          children: [
+            AdaptiveFormSwitch(
+              label: 'Set DHCP hostname',
+              description: 'The router hands this name out',
+              value: false,
+              onChanged: changes.add,
+              materialCheckbox: true,
+            ),
+          ],
+        ),
+      );
+
+      expect(find.byType(CheckboxListTile), findsNothing);
+      expect(find.byType(SwitchListTile), findsNothing);
+      final row = find.byType(AdaptiveFormSwitch);
+      expect(
+        find.descendant(of: row, matching: find.byType(AdaptiveSwitch)),
+        findsOneWidget,
+      );
+      expect(
+        tester.getRect(find.text('The router hands this name out')).top,
+        greaterThan(tester.getRect(row).bottom),
+      );
+      await tester.tap(find.byType(AdaptiveSwitch));
+      await tester.pump();
+      expect(changes, [true]);
+    });
+
+    testWidgets('the show-password button is an eye, named for VoiceOver', (
+      tester,
+    ) async {
+      var taps = 0;
+      await _pump(
+        tester,
+        // As at the end of a row, which does not stretch it.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: AdaptiveObscureToggle(
+            obscured: true,
+            semanticLabel: 'Show password',
+            onPressed: () => taps++,
+          ),
+        ),
+      );
+
+      expect(find.byIcon(CupertinoIcons.eye), findsOneWidget);
+      expect(find.byIcon(Icons.visibility), findsNothing);
+      expect(find.bySemanticsLabel('Show password'), findsOneWidget);
+      await tester.tap(find.byType(CupertinoButton));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(taps, 1);
+      expect(
+        tester.getSize(find.byType(CupertinoButton)),
+        const Size.square(44),
+      );
+    });
+
+    testWidgets('a row label drops a Material label\'s trailing colon', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        const AdaptiveFormSection(
+          children: [AdaptiveFormTextField(label: 'Network Name (SSID):')],
+        ),
+      );
+
+      expect(find.text('Network Name (SSID)'), findsOneWidget);
+      expect(find.text('Network Name (SSID):'), findsNothing);
+    });
+
+    testWidgets('a group\'s lone note is not prefixed, and VoiceOver hears '
+        'each note with its own row, not under the group', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(
+        tester,
+        AdaptiveForm(
+          sections: [
+            const AdaptiveFormSection(
+              children: [
+                AdaptiveFormTextField(
+                  label: 'Internal port',
+                  error: 'Enter a valid port',
+                ),
+              ],
+            ),
+            const AdaptiveFormSection(
+              children: [
+                AdaptiveFormTextField(
+                  label: 'Source address',
+                  helper: 'Optional',
+                ),
+              ],
+            ),
+            AdaptiveFormSection(
+              children: [
+                AdaptiveFormPicker<String>(
+                  label: 'Protocol',
+                  value: 'tcp',
+                  choices: const [AdaptiveFormChoice('tcp', 'TCP')],
+                  onChanged: (_) {},
+                  error: 'Not supported here',
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      expect(find.text('Enter a valid port'), findsOneWidget);
+      // The note under the group is for the eye only.
+      expect(find.bySemanticsLabel('Enter a valid port'), findsNothing);
+
+      final port = tester
+          .getSemantics(find.byType(CupertinoTextField).first)
+          .getSemanticsData();
+      expect(port.label, contains('Internal port'));
+      expect(port.label, contains('Enter a valid port'));
+
+      final source = tester
+          .getSemantics(find.byType(CupertinoTextField).last)
+          .getSemanticsData();
+      expect(source.label, 'Source address');
+      expect(source.hint, 'Optional');
+
+      final picker = tester
+          .getSemantics(
+            find.byWidgetPredicate((w) => w is AdaptiveFormPicker<String>),
+          )
+          .getSemanticsData();
+      expect(picker.label, 'Protocol\nNot supported here');
       semantics.dispose();
     });
   });

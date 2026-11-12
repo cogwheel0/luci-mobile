@@ -1,4 +1,4 @@
-# luci-mobile's platform UI baseline: 133 entries, 170 occurrences.
+# luci-mobile's platform UI baseline: 127 entries, 160 occurrences.
 # Each entry is a direct Material or Cupertino import or control outside
 # lib/widgets/platform_ui. Counts may only go down: migrate a screen to the
 # platform UI layer and remove or lower its entries.
@@ -73,12 +73,6 @@ exceptions:
   - path: lib/screens/client_detail_screen.dart
     package: "package:material_ui/material_ui.dart"
     count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/client_detail_screen.dart
-    symbol: "TextField"
-    count: 2
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -521,14 +515,8 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/system_settings_screen.dart
-    symbol: "IconButton"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/system_settings_screen.dart
     symbol: "TextField"
-    count: 6
+    count: 4
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
@@ -595,30 +583,6 @@ exceptions:
   - path: lib/screens/wireless_screen.dart
     package: "package:material_ui/material_ui.dart"
     count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/wireless_screen.dart
-    symbol: "DropdownButtonFormField"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/wireless_screen.dart
-    symbol: "DropdownMenuItem"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/wireless_screen.dart
-    symbol: "IconButton"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/wireless_screen.dart
-    symbol: "TextField"
-    count: 2
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
