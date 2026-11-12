@@ -49,6 +49,7 @@ class LuciHubTile extends StatelessWidget {
     this.subtitleColor,
     this.showSpinner = false,
     this.trailing,
+    this.subtitleMaxLines,
   });
 
   final IconData icon;
@@ -61,6 +62,10 @@ class LuciHubTile extends StatelessWidget {
   final Color? subtitleColor;
   final bool showSpinner;
   final Widget? trailing;
+
+  /// Lines the subtitle may take before it is cut with an ellipsis; null
+  /// for as many as it needs.
+  final int? subtitleMaxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -102,6 +107,8 @@ class LuciHubTile extends StatelessWidget {
                     .copyWith(color: subtitleColor)
               : LuciTextStyles.cardSubtitle(context),
           semanticsLabel: subtitle,
+          maxLines: subtitleMaxLines,
+          overflow: subtitleMaxLines == null ? null : TextOverflow.ellipsis,
         ),
         trailing: trailing,
         enabled: enabled,

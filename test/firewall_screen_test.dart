@@ -1,4 +1,5 @@
-import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoNavigationBar;
+import 'package:cupertino_ui/cupertino_ui.dart'
+    show CupertinoNavigationBar, CupertinoNavigationBarBackButton;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/models/firewall_config.dart';
@@ -7,6 +8,8 @@ import 'package:luci_mobile/screens/firewall_screen.dart';
 import 'package:luci_mobile/services/uci_changeset_service.dart';
 import 'package:luci_mobile/state/firewall_notifier.dart';
 import 'package:luci_mobile/utils/keyboards.dart';
+import 'package:luci_mobile/widgets/luci_app_bar.dart';
+import 'package:luci_mobile/widgets/luci_hub_tile.dart';
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -36,9 +39,15 @@ class _RecordingMutations extends FirewallMutations {
   }
 }
 
-/// Shows the firewall's port forwards and opens [_forward]. Completes with
-/// the list of what the screen goes on to apply.
-Future<List<List<UciOperation>>> _openForward(WidgetTester tester) async {
+/// Shows the firewall. Completes with the list of what the screen goes on
+/// to apply.
+Future<List<List<UciOperation>>> _pumpFirewall(
+  WidgetTester tester, {
+  List<FirewallZone> zones = const [
+    FirewallZone(section: 'lan', name: 'lan'),
+    FirewallZone(section: 'wan', name: 'wan', masq: true),
+  ],
+}) async {
   final applied = <List<UciOperation>>[];
   // Tall enough for the whole form, and wide enough for the test font's
   // square glyphs, which make "TCP + UDP" far wider than a phone's font.
@@ -50,13 +59,10 @@ Future<List<List<UciOperation>>> _openForward(WidgetTester tester) async {
     ProviderScope(
       overrides: [
         firewallProvider.overrideWith(
-          (ref) async => const FirewallState(
-            zones: [
-              FirewallZone(section: 'lan', name: 'lan'),
-              FirewallZone(section: 'wan', name: 'wan', masq: true),
-            ],
-            forwards: [_forward],
-            sectionNames: {'web'},
+          (ref) async => FirewallState(
+            zones: zones,
+            forwards: const [_forward],
+            sectionNames: const {'web'},
           ),
         ),
         firewallMutationsProvider.overrideWith(
@@ -67,6 +73,17 @@ Future<List<List<UciOperation>>> _openForward(WidgetTester tester) async {
     ),
   );
   await tester.pumpAndSettle();
+  return applied;
+}
+
+/// Shows the firewall's port forwards, from the list on iOS, and opens
+/// [_forward].
+Future<List<List<UciOperation>>> _openForward(WidgetTester tester) async {
+  final applied = await _pumpFirewall(tester);
+  if (PlatformUiCapabilities.isIOS) {
+    await tester.tap(find.text('Port forwards'));
+    await tester.pumpAndSettle();
+  }
   await tester.tap(find.text('Web server'));
   await tester.pumpAndSettle();
   return applied;
@@ -148,5 +165,119 @@ void main() {
     }
     // A subnet needs "/", which only the full keyboard has everywhere.
     expect(keyboard('Source address'), TextInputType.text);
+  });
+
+  testWidgets('Android: the four parts are tabs, and port forwards has its '
+      'floating add button', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android;
+    await _pumpFirewall(tester);
+
+    expect(find.byType(TabBar), findsOneWidget);
+    expect(find.byType(Tab), findsNWidgets(4));
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(find.text('Web server'), findsOneWidget);
+  });
+
+  group('iOS', () {
+    setUp(() {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    });
+
+    testWidgets('a list of the four parts, each saying what is in it', (
+      tester,
+    ) async {
+      await _pumpFirewall(tester);
+
+      expect(find.byType(TabBar), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(CupertinoNavigationBar),
+          matching: find.text('Firewall'),
+        ),
+        findsOneWidget,
+      );
+      Finder row(String title) => find.ancestor(
+        of: find.text(title),
+        matching: find.byType(LuciHubTile),
+      );
+      String rowText(String title) => tester
+          .widgetList<Text>(
+            find.descendant(of: row(title), matching: find.byType(Text)),
+          )
+          .map((text) => text.data)
+          .join(' | ');
+
+      expect(rowText('Port forwards'), 'Port forwards | Web server | 1');
+      expect(rowText('Traffic rules'), 'Traffic rules | No traffic rules');
+      expect(rowText('Zones'), 'Zones | lan, wan | 2');
+      expect(rowText('Static routes'), 'Static routes | No static routes');
+    });
+
+    testWidgets('a long list shows its first five names and the full count', (
+      tester,
+    ) async {
+      await _pumpFirewall(
+        tester,
+        zones: [
+          for (var i = 1; i <= 30; i++)
+            FirewallZone(section: 'zone$i', name: 'zone$i'),
+        ],
+      );
+
+      final row = find.ancestor(
+        of: find.text('Zones'),
+        matching: find.byType(LuciHubTile),
+      );
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.text('zone1, zone2, zone3, zone4, zone5, …'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.descendant(of: row, matching: find.text('30')), findsOne);
+    });
+
+    testWidgets('each row pushes its own page, with a back button', (
+      tester,
+    ) async {
+      await _pumpFirewall(tester);
+
+      await tester.tap(find.text('Zones'));
+      await tester.pumpAndSettle();
+      final bar = find.byType(CupertinoNavigationBar).last;
+      expect(find.descendant(of: bar, matching: find.text('Zones')), findsOne);
+      // The zone cards, as the tab showed them.
+      expect(find.text('LAN'), findsOneWidget);
+      expect(find.text('WAN'), findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: bar,
+          matching: find.byType(CupertinoNavigationBarBackButton),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(LuciHubTile), findsNWidgets(4));
+    });
+
+    testWidgets('port forwards adds from the navigation bar\'s +, not a '
+        'floating button', (tester) async {
+      await _pumpFirewall(tester);
+      await tester.tap(find.text('Port forwards'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(FloatingActionButton), findsNothing);
+      await tester.tap(find.byType(LuciAppBarAction));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byType(CupertinoNavigationBar).last,
+          matching: find.text('Add port forward'),
+        ),
+        findsOneWidget,
+      );
+    });
   });
 }
