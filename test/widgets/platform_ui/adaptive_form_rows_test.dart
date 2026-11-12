@@ -921,5 +921,41 @@ void main() {
         reason: 'a row that cannot open is dimmed',
       );
     });
+
+    testWidgets('a multi-line row keeps its suffix, an element of its own', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      var cleared = 0;
+      await _pump(
+        tester,
+        AdaptiveFormSection(
+          children: [
+            AdaptiveFormTextField(
+              label: 'Notes',
+              maxLines: 3,
+              suffix: Semantics(
+                button: true,
+                label: 'Clear notes',
+                onTap: () => cleared++,
+                child: const Icon(CupertinoIcons.clear_circled),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      expect(find.byIcon(CupertinoIcons.clear_circled), findsOneWidget);
+      final suffix = find.semantics.byLabel('Clear notes');
+      expect(suffix.evaluate().single.isMergedIntoParent, isFalse);
+      tester.semantics.tap(suffix);
+      await tester.pump();
+      expect(cleared, 1);
+      expect(
+        tester.getSemantics(find.byType(CupertinoTextField)).label,
+        'Notes',
+      );
+      semantics.dispose();
+    });
   });
 }

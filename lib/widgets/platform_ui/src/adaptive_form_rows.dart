@@ -445,23 +445,38 @@ class _AdaptiveFormTextFieldState extends State<AdaptiveFormTextField> {
         excludeFromSemantics: true,
         onTap: enabled ? _focusNode.requestFocus : null,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
-          child: MergeSemantics(
-            child: Semantics(
-              label: widget.error,
-              hint: widget.error == null ? widget.helper : null,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _RowLabel(
-                    widget.label,
-                    error: widget.error != null,
-                    enabled: enabled,
+          padding: EdgeInsetsDirectional.fromSTEB(
+            16,
+            11,
+            widget.suffix == null ? 16 : 4,
+            11,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: MergeSemantics(
+                  child: Semantics(
+                    label: widget.error,
+                    hint: widget.error == null ? widget.helper : null,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _RowLabel(
+                          widget.label,
+                          error: widget.error != null,
+                          enabled: enabled,
+                        ),
+                        _field(context),
+                      ],
+                    ),
                   ),
-                  _field(context),
-                ],
+                ),
               ),
-            ),
+              // Beside the label, an element of its own, as in a one-line
+              // row.
+              if (widget.suffix != null) widget.suffix!,
+            ],
           ),
         ),
       );
