@@ -1367,7 +1367,12 @@ class AdaptiveListRow extends StatefulWidget {
     this.showChevron = false,
     this.selected = false,
     this.actions = const [],
+    this.destructive = false,
   });
+
+  /// Whether the row's action destroys or ends something, such as signing
+  /// out: its title in red, as iOS Settings draws "Sign Out".
+  final bool destructive;
 
   /// Buttons at the row's end, such as removing what the row shows. They
   /// sit outside the row's own tap target, so a tap on one never also opens
@@ -1415,6 +1420,7 @@ class _AdaptiveListRowState extends State<AdaptiveListRow> {
       :showChevron,
       :selected,
       :actions,
+      :destructive,
     ) = widget;
     final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
     final row = ConstrainedBox(
@@ -1439,9 +1445,11 @@ class _AdaptiveListRowState extends State<AdaptiveListRow> {
                             Text(
                               title,
                               style: _bodyStyle(context).copyWith(
-                                color: CupertinoColors.label.resolveFrom(
-                                  context,
-                                ),
+                                color:
+                                    (destructive
+                                            ? CupertinoColors.systemRed
+                                            : CupertinoColors.label)
+                                        .resolveFrom(context),
                               ),
                             ),
                             if (subtitle != null) ...[

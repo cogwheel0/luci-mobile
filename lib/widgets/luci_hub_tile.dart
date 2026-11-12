@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import 'package:luci_mobile/design/luci_design_system.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 /// A grouped card of hub entries, divided like a settings list.
 class LuciHubSection extends StatelessWidget {
@@ -11,6 +12,14 @@ class LuciHubSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (tiles.isEmpty) return const SizedBox.shrink();
+    if (PlatformUiCapabilities.isIOS) {
+      // An inset group, as iOS Settings lists its entries, the hairlines
+      // starting at the titles, past the icons.
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: LuciSpacing.md),
+        child: AdaptiveFormSection(separatorIndent: 72, children: tiles),
+      );
+    }
     return Card(
       elevation: 2,
       margin: const EdgeInsets.symmetric(
@@ -50,7 +59,12 @@ class LuciHubTile extends StatelessWidget {
     this.showSpinner = false,
     this.trailing,
     this.subtitleMaxLines,
+    this.destructive = false,
   });
+
+  /// Whether the entry destroys or ends something, such as signing out: on
+  /// iOS its title is red and it has no chevron, as it opens no page.
+  final bool destructive;
 
   final IconData icon;
   final String title;
@@ -81,18 +95,34 @@ class LuciHubTile extends StatelessWidget {
     if (showSpinner) {
       leadingIcon = _SpinningIcon(icon: icon, color: tint, label: title);
     }
+    final leading = Container(
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: 0.12),
+        shape: BoxShape.circle,
+      ),
+      padding: const EdgeInsets.all(10),
+      child: leadingIcon,
+    );
 
+    if (PlatformUiCapabilities.isIOS) {
+      // A row of an iOS Settings list: a chevron where it opens a page.
+      return Opacity(
+        opacity: enabled ? 1.0 : 0.5,
+        child: AdaptiveListRow(
+          leading: ExcludeSemantics(child: leading),
+          title: title,
+          subtitle: subtitle,
+          trailing: trailing,
+          destructive: destructive,
+          showChevron: enabled && onTap != null && !destructive,
+          onTap: enabled ? onTap : null,
+        ),
+      );
+    }
     return Opacity(
       opacity: enabled ? 1.0 : 0.5,
       child: ListTile(
-        leading: Container(
-          decoration: BoxDecoration(
-            color: tint.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
-          ),
-          padding: const EdgeInsets.all(10),
-          child: leadingIcon,
-        ),
+        leading: leading,
         title: Text(
           title,
           style: titleColor != null

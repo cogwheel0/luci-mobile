@@ -200,8 +200,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // iOS lays the hub out as iOS Settings: inset groups on the grouped
+    // background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
-      appBar: LuciAppBar(title: context.l10n.settings),
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: context.l10n.settings,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
+      ),
       body: SingleChildScrollView(
         padding: EdgeInsets.only(
           top: LuciSpacing.sm,
@@ -346,6 +355,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   titleColor: Theme.of(context).colorScheme.error,
                   subtitleColor: Theme.of(context).colorScheme.error
                       .withValues(alpha: 0.7),
+                  destructive: true,
                   onTap: () => _showLogoutDialog(context),
                 ),
               ],

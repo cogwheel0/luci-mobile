@@ -173,8 +173,16 @@ class _FirewallScreenState extends ConsumerState<FirewallScreen>
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     if (PlatformUiCapabilities.isIOS) {
+      final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
+        context,
+      );
       return Scaffold(
-        appBar: LuciAppBar(title: l10n.firewall, showBack: true),
+        backgroundColor: grouped,
+        appBar: LuciAppBar(
+          title: l10n.firewall,
+          showBack: true,
+          backgroundColor: grouped.withValues(alpha: 0.94),
+        ),
         body: _firewallBody(
           (state) => ListView(
             padding: const EdgeInsets.symmetric(vertical: LuciSpacing.sm),
@@ -252,22 +260,16 @@ class _FirewallScreenState extends ConsumerState<FirewallScreen>
       title: section.title(l10n),
       subtitle: names.isEmpty ? empty : _preview(names),
       subtitleMaxLines: 2,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (names.isNotEmpty)
-            Text(
+      // How many there are; the hub row adds its own chevron.
+      trailing: names.isEmpty
+          ? null
+          : Text(
               '${names.length}',
-              style: LuciTextStyles.cardSubtitle(context)
-                  .copyWith(fontSize: 15),
+              style: TextStyle(
+                fontSize: 17,
+                color: CupertinoColors.secondaryLabel.resolveFrom(context),
+              ),
             ),
-          const SizedBox(width: LuciSpacing.xs),
-          Icon(
-            Icons.chevron_right,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ],
-      ),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => _FirewallSectionPage(section: section),
