@@ -186,22 +186,77 @@ class _ServiceRow extends StatelessWidget {
           service.enabled ? l10n.serviceStartsAtBoot : l10n.serviceNotAtBoot,
         ].join(' · '),
       ),
-      trailing: PopupMenuButton<String>(
-        enabled: enabled,
-        onSelected: onAction,
-        itemBuilder: (context) => [
-          PopupMenuItem(value: 'start', child: Text(l10n.serviceStart)),
-          PopupMenuItem(value: 'restart', child: Text(l10n.serviceRestart)),
-          PopupMenuItem(value: 'stop', child: Text(l10n.serviceStop)),
-          const PopupMenuDivider(),
-          PopupMenuItem(
-            value: service.enabled ? 'disable' : 'enable',
-            child: Text(
-              service.enabled ? l10n.serviceDisable : l10n.serviceEnable,
+      trailing: PlatformUiCapabilities.isIOS
+          ? _iosMenu(context)
+          : PopupMenuButton<String>(
+              enabled: enabled,
+              onSelected: onAction,
+              itemBuilder: (context) => [
+                PopupMenuItem(value: 'start', child: Text(l10n.serviceStart)),
+                PopupMenuItem(
+                  value: 'restart',
+                  child: Text(l10n.serviceRestart),
+                ),
+                PopupMenuItem(value: 'stop', child: Text(l10n.serviceStop)),
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: service.enabled ? 'disable' : 'enable',
+                  child: Text(
+                    service.enabled ? l10n.serviceDisable : l10n.serviceEnable,
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
+    );
+  }
+
+  /// The same actions behind the ellipsis of an iOS row: the system
+  /// pull-down menu from iOS 26, an action sheet before.
+  Widget _iosMenu(BuildContext context) {
+    final l10n = context.l10n;
+    final tint = Theme.of(context).colorScheme.primary;
+    return AdaptivePopupMenuButton.icon<String>(
+      icon: 'ellipsis',
+      semanticLabel: l10n.more,
+      enabled: enabled,
+      tint: tint,
+      iconColor: enabled
+          ? tint
+          : CupertinoColors.tertiaryLabel.resolveFrom(context),
+      buttonStyle: PopupButtonStyle.plain,
+      // Sections, not a divider: a menu with sections keeps its order when
+      // it opens upward, so the boot setting stays last.
+      items: [
+        AdaptivePopupMenuSection<String>(
+          items: [
+            AdaptivePopupMenuItem(
+              label: l10n.serviceStart,
+              value: 'start',
+              icon: 'play.fill',
+            ),
+            AdaptivePopupMenuItem(
+              label: l10n.serviceRestart,
+              value: 'restart',
+              icon: 'arrow.clockwise',
+            ),
+            AdaptivePopupMenuItem(
+              label: l10n.serviceStop,
+              value: 'stop',
+              icon: 'stop.fill',
+            ),
+          ],
+        ),
+        AdaptivePopupMenuSection<String>(
+          items: [
+            AdaptivePopupMenuItem(
+              label: service.enabled ? l10n.serviceDisable : l10n.serviceEnable,
+              value: service.enabled ? 'disable' : 'enable',
+              icon: 'power',
+            ),
+          ],
+        ),
+      ],
+      onSelected: (_, item) => onAction(item.value!),
     );
   }
 }

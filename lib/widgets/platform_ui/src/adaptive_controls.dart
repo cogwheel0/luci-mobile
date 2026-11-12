@@ -32,6 +32,8 @@ IconData? cupertinoIconForSFSymbol(String symbol) => switch (symbol) {
   'square.and.arrow.down' => CupertinoIcons.square_arrow_down,
   'stop.fill' => CupertinoIcons.stop_fill,
   'play.fill' => CupertinoIcons.play_fill,
+  'ellipsis' => CupertinoIcons.ellipsis,
+  'power' => CupertinoIcons.power,
   'wifi' => CupertinoIcons.wifi,
   'arrow.right.to.line' => CupertinoIcons.arrow_right_to_line,
   'doc.on.doc' => CupertinoIcons.doc_on_doc,
@@ -992,6 +994,7 @@ class AdaptivePopupMenuButton<T> {
         },
         tint: iconColor ?? tint,
         height: size,
+        enabled: enabled,
       );
     }
     return IgnorePointer(ignoring: !enabled, child: button);
@@ -1243,6 +1246,7 @@ class AdaptivePopupMenuButton<T> {
     onSelected,
     Color? tint,
     required double height,
+    bool enabled = true,
   }) {
     if (PlatformUiCapabilities.isIOS) {
       return Builder(
@@ -1254,12 +1258,19 @@ class AdaptivePopupMenuButton<T> {
             padding: icon == null
                 ? const EdgeInsets.symmetric(horizontal: 12, vertical: 4)
                 : EdgeInsets.zero,
-            onPressed: () =>
-                _showCupertinoMenu<T>(context, label, items, onSelected),
+            onPressed: enabled
+                ? () => _showCupertinoMenu<T>(context, label, items, onSelected)
+                : null,
             child: icon == null
                 ? Text(label ?? '', style: TextStyle(color: tint))
                 : Icon(
-                    icon is IconData ? icon : CupertinoIcons.ellipsis,
+                    switch (icon) {
+                      final IconData data => data,
+                      final String symbol =>
+                        cupertinoIconForSFSymbol(symbol) ??
+                            CupertinoIcons.ellipsis,
+                      _ => CupertinoIcons.ellipsis,
+                    },
                     color: tint,
                     semanticLabel: semanticLabel,
                   ),
@@ -1270,6 +1281,7 @@ class AdaptivePopupMenuButton<T> {
     final flat = _flatEntries<T>(items);
     return PopupMenuButton<int>(
       key: key,
+      enabled: enabled,
       tooltip: semanticLabel ?? label,
       onSelected: (position) => _dispatch<T>(flat, position, onSelected),
       itemBuilder: (context) => _materialMenuEntries<T>(flat),
