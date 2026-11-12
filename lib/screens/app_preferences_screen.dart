@@ -33,8 +33,81 @@ class AppPreferencesScreen extends ConsumerWidget {
     unawaited(navigator.pushNamedAndRemoveUntil('/login', (route) => false));
   }
 
+  /// The preferences as iOS Settings lays them out, on the grouped
+  /// background: the theme as checked rows, the dashboard as a row that
+  /// opens its page, and reviewer mode with its way out.
+  Widget _iosPreferences(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final appState = ref.watch(appStateProvider);
+    final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
+      context,
+    );
+    final scheme = Theme.of(context).colorScheme;
+    Widget mode(String label, ThemeMode value) => AdaptiveListRow(
+      title: label,
+      selected: appState.themeMode == value,
+      onTap: () => appState.setThemeMode(value),
+    );
+    return Scaffold(
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: l10n.appPreferences,
+        showBack: true,
+        backgroundColor: grouped.withValues(alpha: 0.94),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          AdaptiveFormSection(
+            header: l10n.theme,
+            children: [
+              mode(l10n.systemDefault, ThemeMode.system),
+              mode(l10n.light, ThemeMode.light),
+              mode(l10n.dark, ThemeMode.dark),
+            ],
+          ),
+          AdaptiveFormSection(
+            header: l10n.dashboard,
+            separatorIndent: 52,
+            children: [
+              AdaptiveListRow(
+                leading: Icon(Icons.dashboard_customize, color: scheme.primary),
+                title: l10n.customizeDashboard,
+                subtitle: l10n.customizeDashboardDescription,
+                showChevron: true,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const DashboardSettingsListScreen(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (appState.reviewerModeEnabled)
+            AdaptiveFormSection(
+              header: l10n.reviewerMode,
+              footer: l10n.reviewerModeActiveDescription,
+              separatorIndent: 52,
+              children: [
+                AdaptiveListRow(
+                  leading: const Icon(Icons.info_outline, color: Colors.orange),
+                  title: l10n.reviewerModeActive,
+                ),
+                AdaptiveFormButtonRow(
+                  label: l10n.exitReviewerMode,
+                  destructive: true,
+                  onPressed: () => _showReviewerModeResetDialog(context, ref),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (PlatformUiCapabilities.isIOS) return _iosPreferences(context, ref);
     return Scaffold(
       appBar: LuciAppBar(title: context.l10n.appPreferences, showBack: true),
       body: ListView(
