@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -36,8 +38,41 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
   bool _busy = false;
   bool _wakeBusy = false;
 
+  /// The client's lease as last read: as the list had it, then as a
+  /// refresh reads it again. Both fields together, so a refreshed lease with
+  /// no end clears the end the old one had.
+  late _Lease _lease = (
+    leaseTime: widget.client.leaseTime,
+    expiresAt: widget.client.expiresAt,
+  );
+
   Client get client => widget.client;
   String get mac => StationInfo.normalizeMac(client.macAddress);
+
+  /// Reads the details again and, for a client of the router in use, its
+  /// lease, which only the router's lease list has.
+  Future<void> _refresh() async {
+    ref.invalidate(clientDetailProvider(mac));
+    if (!_isOwnedBySelectedRouter) return;
+    try {
+      final clients = await ref
+          .read(appStateProvider)
+          .fetchClientsForSelectedRouter();
+      final fresh = clients.where(
+        (c) => StationInfo.normalizeMac(c.macAddress) == mac,
+      );
+      if (!mounted || fresh.isEmpty) return;
+      setState(
+        () => _lease = (
+          leaseTime: fresh.first.leaseTime,
+          expiresAt: fresh.first.expiresAt,
+        ),
+      );
+    } catch (_) {
+      // The details' own refresh reports what failed; the lease keeps the
+      // value it had.
+    }
+  }
 
   /// The name the page shows: the alias if set, else the lease name, else
   /// the MAC. The same name goes on anything written to the router about
@@ -77,7 +112,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     return Scaffold(
       appBar: LuciAppBar(title: displayName, showBack: true),
       body: AdaptiveRefreshIndicator(
-        onRefresh: () async => ref.invalidate(clientDetailProvider(mac)),
+        onRefresh: _refresh,
         child: ListView(
           padding: const EdgeInsets.all(LuciSpacing.md),
           children: [
@@ -91,12 +126,16 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
             if (!_isOwnedBySelectedRouter) _crossRouterBanner(context),
             const SizedBox(height: LuciSpacing.md),
             ...detailAsync.when(
-              loading: () => const [
-                LuciCardSkeleton(contentLines: 3),
-                SizedBox(height: LuciSpacing.md),
-                LuciCardSkeleton(contentLines: 4),
+              // The addresses and lease the list already had show while the
+              // rest loads, and when it cannot.
+              loading: () => [
+                _AddressesCard(client: client, lease: _lease),
+                const LuciCardSkeleton(contentLines: 3),
+                const SizedBox(height: LuciSpacing.md),
+                const LuciCardSkeleton(contentLines: 4),
               ],
               error: (error, _) => [
+                _AddressesCard(client: client, lease: _lease),
                 _MessageCard(
                   icon: Icons.error_outline,
                   message: apiErrorText(context, error),
@@ -152,7 +191,7 @@ class _ClientDetailScreenState extends ConsumerState<ClientDetailScreen> {
     if (detail.station != null || detail.stationUnavailable)
       _SignalCard(detail: detail),
     if (detail.station != null) _TrafficCard(station: detail.station!),
-    _AddressesCard(client: client, detail: detail),
+    _AddressesCard(client: client, lease: _lease, detail: detail),
     _reservationCard(context, detail),
     _wakeCard(context, detail),
     _blockCard(context, detail),
@@ -521,15 +560,85 @@ class _TrafficCard extends StatelessWidget {
   );
 }
 
-class _AddressesCard extends StatelessWidget {
-  const _AddressesCard({required this.client, required this.detail});
+/// A DHCP lease: the seconds it had left when read ([Client.leaseTime]),
+/// and when it ends ([Client.expiresAt]), either unknown.
+typedef _Lease = ({int? leaseTime, int? expiresAt});
+
+/// How long [client]'s DHCP lease has left, now: a duration, "Unlimited"
+/// for a lease that does not end, or "Expired".
+String clientLeaseTimeText(BuildContext context, Client client) => _leaseText(
+  context,
+  (leaseTime: client.leaseTime, expiresAt: client.expiresAt),
+);
+
+/// How long [lease] has left, now: counted from its end when known, so it
+/// is right however long ago it was read.
+String _leaseText(BuildContext context, _Lease lease) {
+  final end = lease.expiresAt;
+  if (end != null && end > 0) {
+    final left = end - DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    // A lease with an end that has come has expired.
+    return left > 0 ? Client.formatDuration(left) : context.l10n.expired;
+  }
+  final seconds = lease.leaseTime;
+  if (seconds == null || seconds == 0) return context.l10n.unlimited;
+  if (seconds < 0) return context.l10n.expired;
+  return Client.formatDuration(seconds);
+}
+
+class _AddressesCard extends StatefulWidget {
+  const _AddressesCard({
+    required this.client,
+    required this.lease,
+    this.detail,
+  });
 
   final Client client;
-  final ClientDetail detail;
+  final _Lease lease;
+
+  /// The router's further addresses for the client, once read.
+  final ClientDetail? detail;
+
+  @override
+  State<_AddressesCard> createState() => _AddressesCardState();
+}
+
+class _AddressesCardState extends State<_AddressesCard> {
+  /// Redraws the card while its lease counts down, so an open page keeps
+  /// the time left current. Only this card redraws.
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _schedule();
+  }
+
+  @override
+  void didUpdateWidget(_AddressesCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lease != widget.lease) _schedule();
+  }
+
+  void _schedule() {
+    _tick?.cancel();
+    final end = widget.lease.expiresAt;
+    _tick = end != null && end > 0
+        // The time left shows minutes: twice a minute keeps it right.
+        ? Timer.periodic(const Duration(seconds: 30), (_) => setState(() {}))
+        : null;
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final ipv6 = <String>{...?client.ipv6Addresses, ...detail.hintIpv6};
+    final _AddressesCard(:client, :lease, :detail) = widget;
+    final ipv6 = <String>{...?client.ipv6Addresses, ...?detail?.hintIpv6};
     return _SectionCard(
       title: context.l10n.addressesSection,
       icon: Icons.language,
@@ -540,6 +649,8 @@ class _AddressesCard extends StatelessWidget {
         for (final addr in ipv6) (context.l10n.ipv6Address, addr),
         (context.l10n.macAddress, client.macAddress),
         if (client.dnsName != null) (context.l10n.dnsName, client.dnsName!),
+        if (lease.leaseTime != null || lease.expiresAt != null)
+          (context.l10n.leaseTimeRemaining, _leaseText(context, lease)),
       ],
     );
   }
