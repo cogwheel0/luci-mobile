@@ -1367,7 +1367,22 @@ class AdaptiveListRow extends StatefulWidget {
     this.showChevron = false,
     this.selected = false,
     this.actions = const [],
+    this.destructive = false,
+    this.subtitleMaxLines,
+    this.enabled = true,
   });
+
+  /// Lines the subtitle may take before it is cut with an ellipsis; null
+  /// for as many as it needs.
+  final int? subtitleMaxLines;
+
+  /// False for a row that cannot be used here, such as an entry the router
+  /// does not support: read by VoiceOver as dimmed. The caller dims it.
+  final bool enabled;
+
+  /// Whether the row's action destroys or ends something, such as signing
+  /// out: its title in red, as iOS Settings draws "Sign Out".
+  final bool destructive;
 
   /// Buttons at the row's end, such as removing what the row shows. They
   /// sit outside the row's own tap target, so a tap on one never also opens
@@ -1415,6 +1430,9 @@ class _AdaptiveListRowState extends State<AdaptiveListRow> {
       :showChevron,
       :selected,
       :actions,
+      :destructive,
+      :subtitleMaxLines,
+      :enabled,
     ) = widget;
     final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
     final row = ConstrainedBox(
@@ -1439,15 +1457,21 @@ class _AdaptiveListRowState extends State<AdaptiveListRow> {
                             Text(
                               title,
                               style: _bodyStyle(context).copyWith(
-                                color: CupertinoColors.label.resolveFrom(
-                                  context,
-                                ),
+                                color:
+                                    (destructive
+                                            ? CupertinoColors.systemRed
+                                            : CupertinoColors.label)
+                                        .resolveFrom(context),
                               ),
                             ),
                             if (subtitle != null) ...[
                               const SizedBox(height: 2),
                               Text(
                                 subtitle,
+                                maxLines: subtitleMaxLines,
+                                overflow: subtitleMaxLines == null
+                                    ? null
+                                    : TextOverflow.ellipsis,
                                 style: _footnoteStyle(context)
                                     .copyWith(fontSize: 15, color: secondary),
                               ),
@@ -1494,6 +1518,7 @@ class _AdaptiveListRowState extends State<AdaptiveListRow> {
       content = Semantics(
         container: true,
         selected: selected ? true : null,
+        enabled: enabled ? null : false,
         child: row,
       );
     } else {

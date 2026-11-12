@@ -87,8 +87,17 @@ class _NetworkScreenState extends ConsumerState<NetworkScreen> {
 
     final interfaces = _interfaceSummary(appState.dashboardData);
 
+    // iOS lays the hub out as iOS Settings: inset groups on the grouped
+    // background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
-      appBar: LuciAppBar(title: l10n.network),
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: l10n.network,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
+      ),
       body: AdaptiveRefreshIndicator(
         onRefresh: () => ref.read(appStateProvider).fetchDashboardData(),
         child: ListView(

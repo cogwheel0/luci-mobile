@@ -9,6 +9,7 @@ import 'package:luci_mobile/screens/event_feed_screen.dart';
 import 'package:luci_mobile/screens/log_screen.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_hub_tile.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 /// Read-only visibility into what the router is doing: logs, diagnostics and
 /// activity.
@@ -18,8 +19,17 @@ class InsightsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
+    // iOS lays the hub out as iOS Settings: inset groups on the grouped
+    // background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
-      appBar: LuciAppBar(title: l10n.insights),
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: l10n.insights,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
+      ),
       body: ListView(
         children: [
           LuciSectionHeader(l10n.insights),

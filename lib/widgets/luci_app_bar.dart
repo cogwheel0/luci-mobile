@@ -160,6 +160,26 @@ class LuciSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformUiCapabilities.isIOS) {
+      // A grouped list's header: small grey capitals over its group, as
+      // iOS Settings titles one. The group above it keeps its own space.
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(
+          LuciSpacing.md * 2,
+          LuciSpacing.sm,
+          LuciSpacing.md * 2,
+          6,
+        ),
+        child: Text(
+          title.toUpperCase(),
+          style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
+            fontSize: 13,
+            letterSpacing: -0.08,
+            color: CupertinoColors.secondaryLabel.resolveFrom(context),
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(
         left: LuciSpacing.md,

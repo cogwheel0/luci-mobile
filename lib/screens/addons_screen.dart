@@ -12,6 +12,7 @@ import 'package:luci_mobile/state/feature_providers.dart';
 import 'package:luci_mobile/widgets/luci_app_bar.dart';
 import 'package:luci_mobile/widgets/luci_feature_gate.dart';
 import 'package:luci_mobile/widgets/luci_hub_tile.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 /// The add-on packages this router has, and what to do about the ones it
 /// does not.
@@ -31,8 +32,18 @@ class AddonsScreen extends ConsumerWidget {
     final l10n = context.l10n;
     final scheme = Theme.of(context).colorScheme;
 
+    // iOS lays the hub out as iOS Settings: inset groups on the grouped
+    // background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
-      appBar: LuciAppBar(title: l10n.addons, showBack: true),
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: l10n.addons,
+        showBack: true,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
+      ),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: LuciSpacing.sm),
         children: [
