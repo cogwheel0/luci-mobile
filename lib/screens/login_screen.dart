@@ -254,6 +254,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Future<void> _connect() async {
+    // Return in the password field can arrive while a sign-in is under
+    // way; a second one would make the first report a failure.
+    if (ref.read(appStateProvider).isLoading) return;
     if (_validate()) {
       final appState = ref.read(appStateProvider);
       final input = _ipController.text.trim();
@@ -394,7 +397,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       autocorrect: false,
                       autofillHints: const [AutofillHints.url],
                       textInputAction: TextInputAction.next,
-                      onChanged: (_) => clear(() => _addressError = null),
+                      // The fallback's "must differ" depends on this
+                      // field too.
+                      onChanged: (_) => clear(() {
+                        _addressError = null;
+                        _alternateError = null;
+                      }),
                     ),
                     if (_showAlternateAddress)
                       AdaptiveFormTextField(

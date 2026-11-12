@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoTextField;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -21,6 +23,14 @@ class _TestAppState extends AppState {
 
   final logins = <String>[];
 
+  /// When set, a sign-in waits for it, loading meanwhile, as one over the
+  /// network does.
+  Completer<bool>? pendingLogin;
+  bool _loading = false;
+
+  @override
+  bool get isLoading => _loading;
+
   @override
   Future<bool> tryAutoLogin({BuildContext? context}) async => false;
 
@@ -37,7 +47,12 @@ class _TestAppState extends AppState {
     BuildContext? context,
   }) async {
     logins.add('$ip $user $pass');
-    return true;
+    final pending = pendingLogin;
+    if (pending == null) return true;
+    _loading = true;
+    final result = await pending.future;
+    _loading = false;
+    return result;
   }
 }
 
@@ -121,5 +136,45 @@ void main() {
     await tester.tap(find.text('Connect'));
     await tester.pump();
     expect(state.logins, ['10.0.0.1 root secret']);
+  });
+
+  testWidgets('before iOS 26: changing the address clears the fallback\'s '
+      'error, and Return while signing in starts no second sign-in', (
+    tester,
+  ) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    final state = await _pumpLogin(tester);
+
+    await tester.tap(find.text('Add fallback address'));
+    await tester.pump();
+    await tester.enterText(_field('Router Address'), '10.0.0.1');
+    await tester.enterText(_field('Fallback Address'), '10.0.0.1');
+    await tester.tap(find.text('Connect'));
+    await tester.pump();
+    expect(
+      find.text('Fallback Address: Must differ from primary address'),
+      findsOneWidget,
+    );
+    await tester.enterText(_field('Router Address'), '10.0.0.2');
+    await tester.pump();
+    expect(
+      find.text('Fallback Address: Must differ from primary address'),
+      findsNothing,
+    );
+
+    final pending = state.pendingLogin = Completer<bool>();
+    await tester.enterText(_field('Fallback Address'), 'router.example.com');
+    await tester.enterText(_field('Password'), 'secret');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    // Done closes the keyboard; back in the field, Return again.
+    await tester.tap(_field('Password'));
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(state.logins, ['10.0.0.2 root secret']);
+    pending.complete(false);
+    await tester.pump();
   });
 }
