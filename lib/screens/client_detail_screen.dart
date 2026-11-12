@@ -521,6 +521,15 @@ class _TrafficCard extends StatelessWidget {
   );
 }
 
+/// How long [client]'s DHCP lease has left: a duration, "Unlimited" for a
+/// lease that does not end, or "Expired".
+String clientLeaseTimeText(BuildContext context, Client client) {
+  final seconds = client.leaseTime;
+  if (seconds == null || seconds == 0) return context.l10n.unlimited;
+  if (seconds < 0) return context.l10n.expired;
+  return Client.formatDuration(seconds);
+}
+
 class _AddressesCard extends StatelessWidget {
   const _AddressesCard({required this.client, required this.detail});
 
@@ -540,6 +549,11 @@ class _AddressesCard extends StatelessWidget {
         for (final addr in ipv6) (context.l10n.ipv6Address, addr),
         (context.l10n.macAddress, client.macAddress),
         if (client.dnsName != null) (context.l10n.dnsName, client.dnsName!),
+        if (client.leaseTime != null)
+          (
+            context.l10n.leaseTimeRemaining,
+            clientLeaseTimeText(context, client),
+          ),
       ],
     );
   }

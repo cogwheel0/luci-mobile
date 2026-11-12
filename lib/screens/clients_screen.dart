@@ -141,12 +141,20 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
       _computeClientsFuture();
       future = _clientsFuture;
     }
+    // iOS lists the clients as one inset group, on the grouped background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return FutureBuilder<List<Client>>(
       future: future,
       builder: (context, snapshot) {
         final aggregatedClients = snapshot.data ?? [];
         return Scaffold(
-          appBar: LuciAppBar(title: context.l10n.clients),
+          backgroundColor: grouped,
+          appBar: LuciAppBar(
+            title: context.l10n.clients,
+            backgroundColor: grouped?.withValues(alpha: 0.94),
+          ),
           body: Stack(
             children: [
               LuciPullToRefresh(
@@ -326,6 +334,36 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                                             .noMatchingClientsDescription,
                                   icon: Icons.people_outline,
                                 )
+                              : PlatformUiCapabilities.isIOS
+                              ? AdaptiveGroupedListView(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  padding: EdgeInsets.fromLTRB(
+                                    16,
+                                    8,
+                                    16,
+                                    16 + TabBarInset.of(context),
+                                  ),
+                                  // The hairlines start at the names, past
+                                  // the avatars.
+                                  separatorIndent: 66,
+                                  itemCount: filteredClients.length,
+                                  itemBuilder: (context, index) {
+                                    final client = filteredClients[index];
+                                    return _ClientRow(
+                                      client: client,
+                                      onOpenDetails: () => Navigator.of(context)
+                                          .push(
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  ClientDetailScreen(
+                                                    client: client,
+                                                  ),
+                                            ),
+                                          ),
+                                    );
+                                  },
+                                )
                               : ListView.separated(
                                   padding: EdgeInsets.only(
                                     bottom: 16 + TabBarInset.of(context),
@@ -476,55 +514,9 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
                 ),
                 child: Row(
                   children: [
-                    Stack(
-                      alignment: Alignment.topRight,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8.0),
-                          decoration: BoxDecoration(
-                            color: colorScheme.primaryContainer.withValues(
-                              alpha: 0.13,
-                            ),
-                            shape: BoxShape.circle,
-                          ),
-                          child: AnimatedScale(
-                            scale: widget.isExpanded ? 1.1 : 1.0,
-                            duration: const Duration(milliseconds: 500),
-                            curve: Curves.elasticOut,
-                            child: Icon(
-                              Icons.person_outline,
-                              color: colorScheme.primary,
-                              size: 22,
-                              semanticLabel: context.l10n.clientIcon,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Tooltip(
-                            message: widget.client.isOnline == false
-                                ? context.l10n.clientOffline
-                                : _connectionLabel(context, widget.client),
-                            child: Container(
-                              width: 10,
-                              height: 10,
-                              decoration: BoxDecoration(
-                                color: widget.client.isOnline == false
-                                    ? Colors.grey
-                                    : widget.client.isOnline == true
-                                    ? Colors.green
-                                    : Colors.amber,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: colorScheme.surface,
-                                  width: 1.5,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                    _ClientAvatar(
+                      client: widget.client,
+                      emphasised: widget.isExpanded,
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -552,10 +544,10 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
                             ),
                           ),
                           Text(
-                            _buildMinimalClientSubtitle(widget.client),
+                            _minimalSubtitle(widget.client),
                             style: LuciTextStyles.cardSubtitle(context),
                             semanticsLabel: context.l10n.clientDetailsSemantics(
-                              _buildMinimalClientSubtitle(widget.client),
+                              _minimalSubtitle(widget.client),
                             ),
                           ),
                           if (widget.client.vendor != null &&
@@ -772,13 +764,13 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
           const SizedBox(height: 8),
           detailRow(
             context.l10n.leaseTimeRemaining,
-            _leaseTime(context, client),
+            clientLeaseTimeText(context, client),
             valueColor: client.leaseTime != null && client.leaseTime! < 0
                 ? theme.colorScheme.error
                 : null,
             semanticsLabel: context.l10n.detailSemantics(
               context.l10n.leaseTimeRemaining,
-              _leaseTime(context, client),
+              clientLeaseTimeText(context, client),
             ),
           ),
           const SizedBox(height: 8),
@@ -786,41 +778,136 @@ class _UnifiedClientCardState extends State<_UnifiedClientCard>
       ),
     );
   }
+}
 
-  String _buildMinimalClientSubtitle(Client client) {
-    final v4 = client.ipAddress;
-    final v6s = client.ipv6Addresses ?? [];
-    final v6 = v6s.isNotEmpty ? v6s.first : null;
-    String? shown;
-    int extra = 0;
-    if (v4 != 'N/A') {
-      shown = v4;
-      if (v6 != null) extra++;
-    } else if (v6 != null) {
-      shown = v6;
-    }
-    if (shown == null) return '';
-    if (extra > 0) {
-      return '$shown  +$extra';
-    } else {
-      return shown;
-    }
+/// The address a client row shows: its IPv4 one, or else its first IPv6
+/// one, with how many more it has.
+String _minimalSubtitle(Client client) {
+  final v4 = client.ipAddress;
+  final v6s = client.ipv6Addresses ?? [];
+  final v6 = v6s.isNotEmpty ? v6s.first : null;
+  String? shown;
+  int extra = 0;
+  if (v4 != 'N/A') {
+    shown = v4;
+    if (v6 != null) extra++;
+  } else if (v6 != null) {
+    shown = v6;
   }
-
-  String _connectionLabel(BuildContext context, Client client) {
-    if (client.isOnline == false) return context.l10n.offline;
-    if (client.wifiBand != null) return client.connectionLabel;
-    return switch (client.connectionType) {
-      ConnectionType.wireless => context.l10n.wifi,
-      ConnectionType.wired => context.l10n.ethernet,
-      ConnectionType.unknown => context.l10n.unknown,
-    };
+  if (shown == null) return '';
+  if (extra > 0) {
+    return '$shown  +$extra';
+  } else {
+    return shown;
   }
+}
 
-  String _leaseTime(BuildContext context, Client client) {
-    final seconds = client.leaseTime;
-    if (seconds == null || seconds == 0) return context.l10n.unlimited;
-    if (seconds < 0) return context.l10n.expired;
-    return Client.formatDuration(seconds);
+String _connectionLabel(BuildContext context, Client client) {
+  if (client.isOnline == false) return context.l10n.offline;
+  if (client.wifiBand != null) return client.connectionLabel;
+  return switch (client.connectionType) {
+    ConnectionType.wireless => context.l10n.wifi,
+    ConnectionType.wired => context.l10n.ethernet,
+    ConnectionType.unknown => context.l10n.unknown,
+  };
+}
+
+/// A client's icon with a dot for whether it is online: green online,
+/// grey offline, amber when the router did not say.
+class _ClientAvatar extends StatelessWidget {
+  const _ClientAvatar({required this.client, this.emphasised = false});
+
+  final Client client;
+
+  /// Grown a little, as an expanded card shows it.
+  final bool emphasised;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    // The dot's ring is the colour of what the avatar sits on: the row on
+    // iOS, the card on Android.
+    final ring = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.secondarySystemGroupedBackground.resolveFrom(context)
+        : colorScheme.surface;
+    return Stack(
+      alignment: Alignment.topRight,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8.0),
+          decoration: BoxDecoration(
+            color: colorScheme.primaryContainer.withValues(alpha: 0.13),
+            shape: BoxShape.circle,
+          ),
+          child: AnimatedScale(
+            scale: emphasised ? 1.1 : 1.0,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.elasticOut,
+            child: Icon(
+              Icons.person_outline,
+              color: colorScheme.primary,
+              size: 22,
+              semanticLabel: context.l10n.clientIcon,
+            ),
+          ),
+        ),
+        Positioned(
+          right: 0,
+          top: 0,
+          child: Tooltip(
+            message: client.isOnline == false
+                ? context.l10n.clientOffline
+                : _connectionLabel(context, client),
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: client.isOnline == false
+                    ? Colors.grey
+                    : client.isOnline == true
+                    ? Colors.green
+                    : Colors.amber,
+                shape: BoxShape.circle,
+                border: Border.all(color: ring, width: 1.5),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A client as a row of an iOS list, as iOS Settings lists things that
+/// open a page: its avatar, name, address and maker, how it is connected on
+/// the right, and a chevron to its details.
+class _ClientRow extends StatelessWidget {
+  const _ClientRow({required this.client, required this.onOpenDetails});
+
+  final Client client;
+  final VoidCallback onOpenDetails;
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = [
+      _minimalSubtitle(client),
+      ?client.vendor,
+    ].where((line) => line.isNotEmpty);
+    return AdaptiveListRow(
+      // The row says how the client is connected on its right; VoiceOver
+      // need not hear it from the avatar's dot too.
+      leading: ExcludeSemantics(child: _ClientAvatar(client: client)),
+      title: client.hostname,
+      subtitle: lines.isEmpty ? null : lines.join('\n'),
+      trailing: Text(
+        _connectionLabel(context, client),
+        style: TextStyle(
+          fontSize: 15,
+          color: CupertinoColors.secondaryLabel.resolveFrom(context),
+        ),
+      ),
+      showChevron: true,
+      onTap: onOpenDetails,
+    );
   }
 }

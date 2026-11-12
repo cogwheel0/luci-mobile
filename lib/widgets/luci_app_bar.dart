@@ -75,6 +75,11 @@ class LuciAppBar extends StatelessWidget implements PreferredSizeWidget {
     return CupertinoNavigationBar(
       automaticallyImplyLeading: false,
       automaticallyImplyMiddle: false,
+      // Always the page's colour. A tab's page sits in the main screen's
+      // Cupertino scaffold, where the bar would otherwise turn transparent
+      // until content scrolls under it, showing that scaffold's white
+      // rather than the page's own background.
+      automaticBackgroundVisibility: false,
       // The page's own colour, slightly translucent so iOS still blurs what
       // passes under it: the Cupertino default (white, or black in dark
       // mode) read as a band across the Material page below.
