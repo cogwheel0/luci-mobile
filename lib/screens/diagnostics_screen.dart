@@ -146,13 +146,25 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
             ),
 
           if (_error != null)
-            Card(
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(LuciSpacing.md),
-                child: Text(apiErrorText(context, _error!)),
-              ),
-            ),
+            // iOS says what went wrong in red on a flat tile of the grouped
+            // list; Android in its error container.
+            PlatformUiCapabilities.isIOS
+                ? _IosTile(
+                    child: Text(
+                      apiErrorText(context, _error!),
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: CupertinoColors.systemRed.resolveFrom(context),
+                      ),
+                    ),
+                  )
+                : Card(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.all(LuciSpacing.md),
+                      child: Text(apiErrorText(context, _error!)),
+                    ),
+                  ),
 
           if (_output != null) _OutputBlock(text: _output!),
         ],
@@ -169,39 +181,57 @@ class _OutputBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: AdaptiveButton.sfSymbol(
+            onPressed: () =>
+                copyToClipboard(context, text, label: context.l10n.diagnostics),
+            sfSymbol: const SFSymbol('doc.on.doc'),
+            materialIcon: Icons.copy,
+            semanticLabel: context.l10n.copy,
+            style: AdaptiveButtonStyle.plain,
+          ),
+        ),
+        SelectableText(
+          text.isEmpty ? '—' : text,
+          style: const TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 12,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+    // iOS sets the output on a flat tile of the grouped list, Android on a
+    // raised card.
+    if (PlatformUiCapabilities.isIOS) return _IosTile(child: content);
     return Card(
-      color: scheme.surfaceContainerHighest,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: Padding(
         padding: const EdgeInsets.all(LuciSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: AdaptiveButton.sfSymbol(
-                onPressed: () => copyToClipboard(
-                  context,
-                  text,
-                  label: context.l10n.diagnostics,
-                ),
-                sfSymbol: const SFSymbol('doc.on.doc'),
-                materialIcon: Icons.copy,
-                semanticLabel: context.l10n.copy,
-                style: AdaptiveButtonStyle.plain,
-              ),
-            ),
-            SelectableText(
-              text.isEmpty ? '—' : text,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 12,
-                height: 1.4,
-              ),
-            ),
-          ],
-        ),
+        child: content,
       ),
     );
   }
+}
+
+/// A flat tile in the grouped list's colour and corners, on iOS.
+class _IosTile extends StatelessWidget {
+  const _IosTile({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+        context,
+      ),
+      borderRadius: BorderRadius.circular(adaptiveFormCornerRadius),
+    ),
+    child: Padding(padding: const EdgeInsets.all(LuciSpacing.md), child: child),
+  );
 }

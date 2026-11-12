@@ -123,9 +123,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  /// Opens the app's repository in the browser, or says it could not.
+  static Future<void> _openRepository(BuildContext context) async {
+    final success = await launchUrlString(
+      AppConfig.githubRepositoryUrl,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!success && context.mounted) {
+      AdaptiveSnackBar.show(
+        context,
+        message: context.l10n.couldNotOpenRepository,
+        type: AdaptiveSnackBarType.error,
+      );
+    }
+  }
+
   Future<void> _showAboutDialog(BuildContext context) async {
     final info = await PackageInfo.fromPlatform();
     if (!context.mounted) return;
+    // iOS opens About as a page, as its row's chevron promises.
+    if (PlatformUiCapabilities.isIOS) {
+      unawaited(
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => _AboutPage(version: info.version),
+          ),
+        ),
+      );
+      return;
+    }
 
     unawaited(
       showDialog(
@@ -150,20 +176,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Text(context.l10n.openSourceDescription),
                 const SizedBox(height: 16),
                 InkWell(
-                  onTap: () async {
-                    final url = AppConfig.githubRepositoryUrl;
-                    final success = await launchUrlString(
-                      url,
-                      mode: LaunchMode.externalApplication,
-                    );
-                    if (!success && context.mounted) {
-                      AdaptiveSnackBar.show(
-                        context,
-                        message: context.l10n.couldNotOpenRepository,
-                        type: AdaptiveSnackBarType.error,
-                      );
-                    }
-                  },
+                  onTap: () => _openRepository(context),
                   child: Row(
                     children: [
                       Icon(
@@ -362,6 +375,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// About, on iOS: the app's version, what it is, and its repository, as a
+/// page of groups.
+class _AboutPage extends StatelessWidget {
+  const _AboutPage({required this.version});
+
+  final String version;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
+      context,
+    );
+    return Scaffold(
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: l10n.about,
+        showBack: true,
+        backgroundColor: grouped.withValues(alpha: 0.94),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(LuciSpacing.md),
+        children: [
+          AdaptiveFormSection(
+            header: l10n.appTitle,
+            footer: '${l10n.aboutDescription} ${l10n.openSourceDescription}',
+            children: [
+              AdaptiveFormValueRow(label: l10n.versionLabel, value: version),
+            ],
+          ),
+          AdaptiveFormSection(
+            children: [
+              AdaptiveFormButtonRow(
+                label: l10n.githubRepository,
+                onPressed: () => _SettingsScreenState._openRepository(context),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
