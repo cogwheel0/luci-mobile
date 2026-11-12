@@ -5,6 +5,8 @@ import 'package:cupertino_native_better/cupertino_native_better.dart'
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/gestures.dart' show kTouchSlop;
 
+import 'platform_ui_capabilities.dart';
+
 /// The iOS 26 system search bar, kept in step with a Flutter
 /// [TextEditingController] and [FocusNode].
 ///
@@ -291,6 +293,45 @@ class _AdaptiveNativeSearchBarState extends State<AdaptiveNativeSearchBar> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A search field, on iOS: the system search bar on iOS 26
+/// ([AdaptiveNativeSearchBar]) and [CupertinoSearchTextField] before, each
+/// with its own clear button. Android screens keep their own field.
+///
+/// What the person types reaches [controller], and [onChanged] if given;
+/// text the app sets in [controller] reaches the field.
+class AdaptiveSearchField extends StatelessWidget {
+  const AdaptiveSearchField({
+    super.key,
+    required this.controller,
+    required this.placeholder,
+    this.onChanged,
+    this.focusNode,
+  });
+
+  final TextEditingController controller;
+  final String placeholder;
+  final ValueChanged<String>? onChanged;
+  final FocusNode? focusNode;
+
+  @override
+  Widget build(BuildContext context) {
+    if (PlatformUiCapabilities.usesNativeIOS26) {
+      return AdaptiveNativeSearchBar(
+        controller: controller,
+        placeholder: placeholder,
+        focusNode: focusNode,
+        onChanged: onChanged ?? (_) {},
+      );
+    }
+    return CupertinoSearchTextField(
+      controller: controller,
+      focusNode: focusNode,
+      placeholder: placeholder,
+      onChanged: onChanged,
     );
   }
 }
