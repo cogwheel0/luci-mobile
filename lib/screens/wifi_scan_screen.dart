@@ -216,11 +216,18 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    // iOS lays the scanner out as iOS's Wi-Fi settings: grouped rows, on
+    // the grouped background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
+      backgroundColor: grouped,
       appBar: LuciAppBar(
         title: context.l10n.wifiScanner,
         showBack: true,
         elevation: 0,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
       ),
       body: Column(
         children: [
@@ -240,14 +247,16 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
     );
   }
 
-  /// The radio as an iOS picker row, filled as the buttons under it are:
+  /// The radio as an iOS picker row, a group of its own above the buttons:
   /// the system pull-down menu from iOS 26, an action sheet before, each
   /// radio with the network it serves.
   Widget _iosRadioPicker(BuildContext context) {
     final l10n = context.l10n;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
+        color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+          context,
+        ),
         borderRadius: BorderRadius.circular(adaptiveFormCornerRadius),
       ),
       child: AdaptiveFormPicker<String>(
@@ -284,16 +293,19 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
         LuciSpacing.md,
         LuciSpacing.md,
       ),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      // On iOS the controls sit on the grouped background with the results.
+      decoration: PlatformUiCapabilities.isIOS
+          ? null
+          : BoxDecoration(
+              color: colorScheme.surface,
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.shadow.withValues(alpha: 0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -565,6 +577,34 @@ class _WifiScanScreenState extends ConsumerState<WifiScanScreen>
         .toList();
     final hiddenNetworks = _scanResults.where((r) => r.ssid.isEmpty).toList();
 
+    if (PlatformUiCapabilities.isIOS) {
+      final found = context.l10n.networksFound(_scanResults.length);
+      Widget row(WifiScanResult network) => _WifiNetworkTile(
+        network: network,
+        onTap: () => _showConnectDialog(network),
+      );
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        children: [
+          // Only groups with networks in them, the count under the last.
+          if (visibleNetworks.isNotEmpty)
+            AdaptiveFormSection(
+              // The hairlines start at the names, past the signal icons.
+              separatorIndent: 64,
+              header: context.l10n.availableNetworks,
+              footer: hiddenNetworks.isEmpty ? found : null,
+              children: [for (final network in visibleNetworks) row(network)],
+            ),
+          if (hiddenNetworks.isNotEmpty)
+            AdaptiveFormSection(
+              separatorIndent: 64,
+              header: context.l10n.hiddenNetworks,
+              footer: found,
+              children: [for (final network in hiddenNetworks) row(network)],
+            ),
+        ],
+      );
+    }
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: LuciSpacing.sm),
       children: [
@@ -640,7 +680,39 @@ class _WifiNetworkTile extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final signalColor = _getSignalColor(colorScheme);
+    final title = network.ssid.isNotEmpty
+        ? network.ssid
+        : context.l10n.hiddenNetwork;
+    final summary = context.l10n.networkSummary(
+      network.band,
+      network.channel,
+      network.signal,
+    );
 
+    if (PlatformUiCapabilities.isIOS) {
+      // As a row of iOS's Wi-Fi list: its security on the right, in red
+      // for an open network, and a chevron to connect.
+      return AdaptiveListRow(
+        leading: _SignalIcon(
+          bars: network.signalBars,
+          color: signalColor,
+          hasLock: network.encryption.enabled,
+        ),
+        title: title,
+        subtitle: summary,
+        trailing: Text(
+          _encryptionLabel(context, network.encryption),
+          style: TextStyle(
+            fontSize: 15,
+            color: network.encryption.isOpen
+                ? CupertinoColors.systemRed.resolveFrom(context)
+                : CupertinoColors.secondaryLabel.resolveFrom(context),
+          ),
+        ),
+        showChevron: true,
+        onTap: onTap,
+      );
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: LuciSpacing.md,
@@ -681,9 +753,7 @@ class _WifiNetworkTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        network.ssid.isNotEmpty
-                            ? network.ssid
-                            : context.l10n.hiddenNetwork,
+                        title,
                         style: LuciTextStyles.cardTitle(context).copyWith(
                           fontStyle: network.ssid.isEmpty
                               ? FontStyle.italic
@@ -693,11 +763,7 @@ class _WifiNetworkTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        context.l10n.networkSummary(
-                          network.band,
-                          network.channel,
-                          network.signal,
-                        ),
+                        summary,
                         style: LuciTextStyles.cardSubtitle(context),
                       ),
                     ],

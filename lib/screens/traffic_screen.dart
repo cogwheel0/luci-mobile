@@ -53,8 +53,17 @@ class _TrafficScreenState extends ConsumerState<TrafficScreen> {
     final gate = ref.watch(featureProvider(RouterFeature.trafficAccounting));
     final periods = ref.watch(trafficPeriodsProvider);
 
+    // iOS lists the devices as one inset group, on the grouped background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
-      appBar: LuciAppBar(title: l10n.trafficHistory, showBack: true),
+      backgroundColor: grouped,
+      appBar: LuciAppBar(
+        title: l10n.trafficHistory,
+        showBack: true,
+        backgroundColor: grouped?.withValues(alpha: 0.94),
+      ),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(trafficPeriodsProvider);
@@ -101,12 +110,13 @@ class _Records extends ConsumerWidget {
   final String period;
   final ValueChanged<String> onPeriod;
 
-  /// The period as an iOS picker row, filled so it stands apart from the
-  /// list under it: the system pull-down menu from iOS 26, an action sheet
-  /// before.
+  /// The period as an iOS picker row, a group of its own above the list:
+  /// the system pull-down menu from iOS 26, an action sheet before.
   Widget _iosPeriodPicker(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
-      color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
+      color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+        context,
+      ),
       borderRadius: BorderRadius.circular(adaptiveFormCornerRadius),
     ),
     child: AdaptiveFormPicker<String>(
@@ -179,7 +189,41 @@ class _RowList extends StatelessWidget {
     // Relative bars make "who used the most" readable at a glance in a way
     // a column of byte counts does not.
     final biggest = rows.first.totalBytes;
+    String usage(TrafficRow row) =>
+        '${l10n.download} ${formatBytes(row.rxBytes)} · '
+        '${l10n.upload} ${formatBytes(row.txBytes)}';
+    double share(TrafficRow row) => biggest == 0 ? 0 : row.totalBytes / biggest;
 
+    if (PlatformUiCapabilities.isIOS) {
+      return AdaptiveGroupedListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: rows.length,
+        itemBuilder: (context, i) {
+          final row = rows[i];
+          return AdaptiveListRow(
+            title: row.ip.isEmpty ? row.mac : row.ip,
+            subtitle: usage(row),
+            below: ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: AdaptiveProgressIndicator.linear(
+                value: share(row),
+                minHeight: 4,
+                backgroundColor: CupertinoColors.systemFill.resolveFrom(
+                  context,
+                ),
+              ),
+            ),
+            trailing: Text(
+              formatBytes(row.totalBytes),
+              style: TextStyle(
+                fontSize: 17,
+                color: CupertinoColors.secondaryLabel.resolveFrom(context),
+              ),
+            ),
+          );
+        },
+      );
+    }
     return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
       itemCount: rows.length,
@@ -192,16 +236,12 @@ class _RowList extends StatelessWidget {
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${l10n.download} ${formatBytes(row.rxBytes)} · '
-                '${l10n.upload} ${formatBytes(row.txBytes)}',
-                style: LuciTextStyles.cardSubtitle(context),
-              ),
+              Text(usage(row), style: LuciTextStyles.cardSubtitle(context)),
               const SizedBox(height: LuciSpacing.xs),
               ClipRRect(
                 borderRadius: BorderRadius.circular(2),
                 child: LinearProgressIndicator(
-                  value: biggest == 0 ? 0 : row.totalBytes / biggest,
+                  value: share(row),
                   minHeight: 4,
                   backgroundColor: scheme.surfaceContainerHighest,
                 ),

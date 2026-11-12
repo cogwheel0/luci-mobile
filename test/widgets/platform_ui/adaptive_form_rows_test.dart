@@ -510,6 +510,171 @@ void main() {
       semantics.dispose();
     });
 
+    testWidgets('a grouped list builds its rows as they scroll into view, '
+        'with hairlines between them', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AdaptiveGroupedListView(
+              itemCount: 200,
+              separatorIndent: 52,
+              itemBuilder: (context, i) => AdaptiveListRow(title: 'Row $i'),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Row 0'), findsOneWidget);
+      expect(find.text('Row 199'), findsNothing);
+      // One hairline above each row but the first, indented past icons.
+      final hairlines = find.byWidgetPredicate(
+        (w) => w is Container && w.constraints?.maxHeight == 0.5,
+      );
+      expect(hairlines, findsWidgets);
+      expect(
+        tester.getTopLeft(hairlines.first).dx -
+            tester.getTopLeft(find.byType(AdaptiveGroupedListView)).dx,
+        16 + 52,
+      );
+      await tester.dragUntilVisible(
+        find.text('Row 199'),
+        find.byType(AdaptiveGroupedListView),
+        const Offset(0, -2000),
+      );
+      expect(find.text('Row 199'), findsOneWidget);
+    });
+
+    testWidgets('a list row that opens something reads as a button, '
+        'highlights while pressed and shows a chevron', (tester) async {
+      final semantics = tester.ensureSemantics();
+      var taps = 0;
+      await _pump(
+        tester,
+        Column(
+          children: [
+            AdaptiveListRow(
+              title: 'eth0',
+              subtitle: 'Up',
+              showChevron: true,
+              onTap: () => taps++,
+            ),
+            const AdaptiveListRow(title: 'Kernel', trailing: Text('6.6')),
+          ],
+        ),
+      );
+
+      expect(
+        tester.getSemantics(find.text('eth0')),
+        isSemantics(label: 'eth0\nUp', isButton: true),
+      );
+      expect(
+        tester.getSemantics(find.text('Kernel')),
+        isSemantics(label: 'Kernel\n6.6', isButton: false),
+      );
+      expect(find.byIcon(CupertinoIcons.chevron_right), findsOneWidget);
+
+      ColoredBox highlight() => tester.widget<ColoredBox>(
+        find
+            .descendant(
+              of: find.widgetWithText(AdaptiveListRow, 'eth0'),
+              matching: find.byType(ColoredBox),
+            )
+            .first,
+      );
+      expect(highlight().color.a, 0);
+      final press = await tester.startGesture(
+        tester.getCenter(find.text('eth0')),
+      );
+      // In a scroll view, a touch is a press once it has not moved for a
+      // moment, as on iOS.
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(
+        highlight().color,
+        CupertinoColors.systemGrey4.resolveFrom(
+          tester.element(find.text('eth0')),
+        ),
+      );
+      await press.up();
+      await tester.pump();
+      expect(highlight().color.a, 0);
+      expect(taps, 1);
+      semantics.dispose();
+    });
+
+    testWidgets('a tap on a row\'s action never opens the row, even when '
+        'the action claims no tap itself, as a native view does not', (
+      tester,
+    ) async {
+      var opened = 0;
+      await _pump(
+        tester,
+        AdaptiveListRow(
+          title: 'lab-ap',
+          onTap: () => opened++,
+          actions: const [
+            SizedBox.square(key: ValueKey('remove'), dimension: 44),
+          ],
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('remove')));
+      await tester.pumpAndSettle();
+      expect(opened, 0);
+      await tester.tap(find.text('lab-ap'));
+      await tester.pumpAndSettle();
+      expect(opened, 1);
+    });
+
+    testWidgets('a row that opens something is reached and opened from a '
+        'keyboard', (tester) async {
+      var opened = 0;
+      await _pump(
+        tester,
+        AdaptiveListRow(title: 'eth0', onTap: () => opened++),
+      );
+
+      ColoredBox highlight() => tester.widget<ColoredBox>(
+        find
+            .descendant(
+              of: find.byType(AdaptiveListRow),
+              matching: find.byType(ColoredBox),
+            )
+            .first,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(
+        highlight().color,
+        CupertinoColors.systemFill.resolveFrom(
+          tester.element(find.text('eth0')),
+        ),
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(opened, 1);
+    });
+
+    testWidgets('a group clips its rows to its rounded ends, so a pressed '
+        'row\'s highlight keeps the corners', (tester) async {
+      await _pump(
+        tester,
+        AdaptiveFormSection(
+          children: [AdaptiveListRow(title: 'Neighbor', onTap: () {})],
+        ),
+      );
+
+      final clip = tester.widget<ClipRRect>(
+        find.ancestor(
+          of: find.byType(AdaptiveListRow),
+          matching: find.byType(ClipRRect),
+        ),
+      );
+      expect(
+        clip.borderRadius,
+        BorderRadius.circular(adaptiveFormCornerRadius),
+      );
+    });
+
     testWidgets('a disabled picker opens nothing; a value it does not list '
         'shows the hint', (tester) async {
       await _pump(

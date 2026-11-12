@@ -69,9 +69,14 @@ class AdaptiveFormSection extends StatelessWidget {
     this.footer,
     this.error,
     this.materialGap = 16,
+    this.separatorIndent = 16,
   });
 
   final List<Widget> children;
+
+  /// Where the hairline between two rows starts on iOS: past rows' leading
+  /// icons, at their text, as iOS draws it.
+  final double separatorIndent;
 
   /// A title above the group, on iOS.
   final String? header;
@@ -137,18 +142,24 @@ class AdaptiveFormSection extends StatelessWidget {
                   .resolveFrom(context),
               borderRadius: BorderRadius.circular(adaptiveFormCornerRadius),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final (i, row) in rows.indexed) ...[
-                  if (i > 0)
-                    Padding(
-                      padding: const EdgeInsetsDirectional.only(start: 16),
-                      child: Container(height: 0.5, color: separator),
-                    ),
-                  row,
+            // A pressed row's highlight keeps to the group's rounded ends.
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(adaptiveFormCornerRadius),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final (i, row) in rows.indexed) ...[
+                    if (i > 0)
+                      Padding(
+                        padding: EdgeInsetsDirectional.only(
+                          start: separatorIndent,
+                        ),
+                        child: Container(height: 0.5, color: separator),
+                      ),
+                    row,
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           // Each row reads its own note to VoiceOver, so these are for
@@ -1266,6 +1277,274 @@ class AdaptiveFormNavigationRow extends StatelessWidget {
   }
 }
 
+/// A list as one scrolling inset group on the grouped background, as iOS
+/// Settings lists things: [itemCount] rows from [itemBuilder], built as they
+/// scroll into view, with hairlines between them and the group's ends
+/// rounded. [header] scrolls above the group. iOS only; Android lists keep
+/// their own tiles.
+class AdaptiveGroupedListView extends StatelessWidget {
+  const AdaptiveGroupedListView({
+    super.key,
+    required this.itemCount,
+    required this.itemBuilder,
+    this.header,
+    this.separatorIndent = 16,
+    this.padding = const EdgeInsets.fromLTRB(16, 16, 16, 28),
+    this.physics,
+    this.keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.manual,
+  });
+
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+
+  /// Above the group, such as a note on what the list shows.
+  final Widget? header;
+
+  /// Where the hairline between two rows starts: past a row's leading icon,
+  /// at its text, as iOS draws it.
+  final double separatorIndent;
+
+  /// Around the group, inside the scroll view.
+  final EdgeInsets padding;
+
+  final ScrollPhysics? physics;
+  final ScrollViewKeyboardDismissBehavior keyboardDismissBehavior;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = CupertinoColors.secondarySystemGroupedBackground
+        .resolveFrom(context);
+    final separator = CupertinoColors.separator.resolveFrom(context);
+    final radius = Radius.circular(adaptiveFormCornerRadius);
+    final first = header == null ? 0 : 1;
+    final last = first + itemCount - 1;
+    return ListView.builder(
+      padding: padding,
+      physics: physics,
+      keyboardDismissBehavior: keyboardDismissBehavior,
+      itemCount: first + itemCount,
+      itemBuilder: (context, i) {
+        if (i < first) return header!;
+        return ClipRRect(
+          borderRadius: BorderRadius.vertical(
+            top: i == first ? radius : Radius.zero,
+            bottom: i == last ? radius : Radius.zero,
+          ),
+          child: ColoredBox(
+            color: surface,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (i > first)
+                  Padding(
+                    padding: EdgeInsetsDirectional.only(start: separatorIndent),
+                    child: Container(height: 0.5, color: separator),
+                  ),
+                itemBuilder(context, i - first),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A row of an iOS list, for [AdaptiveGroupedListView] or an
+/// [AdaptiveFormSection]: [leading] (an icon), [title] with [subtitle]
+/// under it, [trailing] (a value or a control) at the end with a chevron
+/// when [showChevron], and [below] across the row under them all. A row with [onTap] highlights while
+/// pressed and reads as a button. iOS only; Android lists keep their tiles.
+class AdaptiveListRow extends StatefulWidget {
+  const AdaptiveListRow({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.below,
+    this.leading,
+    this.trailing,
+    this.onTap,
+    this.showChevron = false,
+    this.selected = false,
+    this.actions = const [],
+  });
+
+  /// Buttons at the row's end, such as removing what the row shows. They
+  /// sit outside the row's own tap target, so a tap on one never also opens
+  /// the row, and VoiceOver and the keyboard reach each on its own.
+  final List<Widget> actions;
+
+  final String title;
+  final String? subtitle;
+
+  /// Whether this is the one in use among its rows, such as the router the
+  /// app is connected to: a check mark in the tint, read as selected.
+  final bool selected;
+
+  /// Under the subtitle, such as a bar comparing the row with the others.
+  final Widget? below;
+
+  final Widget? leading;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  /// Whether a chevron says the row opens something.
+  final bool showChevron;
+
+  @override
+  State<AdaptiveListRow> createState() => _AdaptiveListRowState();
+}
+
+class _AdaptiveListRowState extends State<AdaptiveListRow> {
+  bool _pressed = false;
+  bool _focused = false;
+
+  void _press(bool pressed) {
+    if (_pressed != pressed) setState(() => _pressed = pressed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AdaptiveListRow(
+      :title,
+      :subtitle,
+      :below,
+      :leading,
+      :trailing,
+      :onTap,
+      :showChevron,
+      :selected,
+      :actions,
+    ) = widget;
+    final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
+    final row = ConstrainedBox(
+      constraints: BoxConstraints(minHeight: _rowHeight),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 10, actions.isEmpty ? 16 : 4, 10),
+        child: Row(
+          children: [
+            if (leading != null) ...[leading, const SizedBox(width: 12)],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              title,
+                              style: _bodyStyle(context).copyWith(
+                                color: CupertinoColors.label.resolveFrom(
+                                  context,
+                                ),
+                              ),
+                            ),
+                            if (subtitle != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                subtitle,
+                                style: _footnoteStyle(context)
+                                    .copyWith(fontSize: 15, color: secondary),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (trailing != null) ...[
+                        const SizedBox(width: 12),
+                        trailing,
+                      ],
+                      if (selected) ...[
+                        const SizedBox(width: 12),
+                        Icon(
+                          CupertinoIcons.checkmark_alt,
+                          size: 20,
+                          color: CupertinoTheme.of(context).primaryColor,
+                        ),
+                      ],
+                      if (showChevron) ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          CupertinoIcons.chevron_right,
+                          size: 15,
+                          color: CupertinoColors.tertiaryLabel.resolveFrom(
+                            context,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  // As wide as the row from the title on, whatever the
+                  // trailing value's width, so rows' bars compare.
+                  if (below != null) ...[const SizedBox(height: 6), below],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    final Widget content;
+    if (onTap == null) {
+      content = Semantics(
+        container: true,
+        selected: selected ? true : null,
+        child: row,
+      );
+    } else {
+      content = Semantics(
+        container: true,
+        button: true,
+        selected: selected ? true : null,
+        // Reachable and activated from a keyboard, as on iPad or a Mac.
+        child: FocusableActionDetector(
+          actions: {
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                onTap();
+                return null;
+              },
+            ),
+          },
+          onShowFocusHighlight: (focused) {
+            if (_focused != focused) setState(() => _focused = focused);
+          },
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            onTapDown: (_) => _press(true),
+            onTapUp: (_) => _press(false),
+            onTapCancel: () => _press(false),
+            child: row,
+          ),
+        ),
+      );
+    }
+    final highlight = _pressed
+        ? CupertinoColors.systemGrey4.resolveFrom(context)
+        : _focused
+        ? CupertinoColors.systemFill.resolveFrom(context)
+        : const Color(0x00000000);
+    return ColoredBox(
+      color: highlight,
+      child: actions.isEmpty
+          ? content
+          : Row(
+              children: [
+                Expanded(child: content),
+                ...actions,
+                const SizedBox(width: 8),
+              ],
+            ),
+    );
+  }
+}
+
 /// A long list of choices as one scrolling inset group, as iOS Settings
 /// lists time zones or languages on a page of their own: each choice a row,
 /// [value] with a check mark in the tint, built as it scrolls into view.
@@ -1288,74 +1567,44 @@ class AdaptiveFormChoiceList<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final surface = CupertinoColors.secondarySystemGroupedBackground
-        .resolveFrom(context);
-    final separator = CupertinoColors.separator.resolveFrom(context);
     final tint = CupertinoTheme.of(context).primaryColor;
-    final radius = Radius.circular(adaptiveFormCornerRadius);
-    final last = choices.length - 1;
-    return ListView.builder(
+    return AdaptiveGroupedListView(
       padding: padding,
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       itemCount: choices.length,
       itemBuilder: (context, i) {
         final choice = choices[i];
         final checked = choice.value == value;
-        return ClipRRect(
-          borderRadius: BorderRadius.vertical(
-            top: i == 0 ? radius : Radius.zero,
-            bottom: i == last ? radius : Radius.zero,
-          ),
-          child: ColoredBox(
-            color: surface,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (i > 0)
-                  Padding(
-                    padding: const EdgeInsetsDirectional.only(start: 16),
-                    child: Container(height: 0.5, color: separator),
-                  ),
-                Semantics(
-                  container: true,
-                  button: true,
-                  selected: checked,
-                  child: _TappableRow(
-                    onTap: () => onSelected(choice.value),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: _rowHeight),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 11,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                choice.label,
-                                style: _bodyStyle(context).copyWith(
-                                  color: CupertinoColors.label.resolveFrom(
-                                    context,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            if (checked) ...[
-                              const SizedBox(width: 16),
-                              Icon(
-                                CupertinoIcons.checkmark_alt,
-                                size: 20,
-                                color: tint,
-                              ),
-                            ],
-                          ],
+        return Semantics(
+          container: true,
+          button: true,
+          selected: checked,
+          child: _TappableRow(
+            onTap: () => onSelected(choice.value),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: _rowHeight),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 11,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        choice.label,
+                        style: _bodyStyle(context).copyWith(
+                          color: CupertinoColors.label.resolveFrom(context),
                         ),
                       ),
                     ),
-                  ),
+                    if (checked) ...[
+                      const SizedBox(width: 16),
+                      Icon(CupertinoIcons.checkmark_alt, size: 20, color: tint),
+                    ],
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         );

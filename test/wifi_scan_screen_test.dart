@@ -3,6 +3,7 @@ import 'package:cupertino_ui/cupertino_ui.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:luci_mobile/main.dart';
+import 'package:luci_mobile/models/wifi_scan_result.dart';
 import 'package:luci_mobile/screens/wifi_scan_screen.dart';
 import 'package:luci_mobile/services/mock_api_service.dart';
 import 'package:luci_mobile/services/mock_auth_service.dart';
@@ -13,7 +14,7 @@ import 'package:material_ui/material_ui.dart';
 /// An app state whose router has a 2.4 GHz radio serving "Home" and a
 /// 5 GHz one serving nothing yet.
 class _TwoRadios extends AppState {
-  _TwoRadios()
+  _TwoRadios({this.onlyHidden = false})
     : super.forTesting(
         apiService: MockApiService(),
         authService: MockAuthService(),
@@ -29,9 +30,46 @@ class _TwoRadios extends AppState {
     },
     {'radioName': 'radio1', 'band': '5 GHz', 'ssid': '', 'ifname': 'phy1-ap0'},
   ];
+
+  /// Whether a scan finds only the hidden network.
+  final bool onlyHidden;
+
+  /// A secured network, an open one and a hidden one.
+  @override
+  Future<List<WifiScanResult>> scanWirelessNetworks({
+    required String device,
+    BuildContext? context,
+  }) async => [
+    for (final (ssid, signal, encrypted) in [
+      if (!onlyHidden) ('Neighbor', -45, true),
+      if (!onlyHidden) ('Cafe', -62, false),
+      ('', -80, true),
+    ])
+      WifiScanResult.fromJson({
+        'ssid': ssid,
+        'bssid': 'AA:BB:CC:11:22:${signal.abs()}',
+        'mode': 'Master',
+        'channel': 6,
+        'signal': signal,
+        'quality': 50,
+        'quality_max': 70,
+        'encryption': {
+          'enabled': encrypted,
+          'description': encrypted ? 'WPA2 PSK (CCMP)' : 'None',
+          'wep': false,
+          'wpa': encrypted ? 2 : 0,
+          'auth_suites': encrypted ? ['PSK'] : <String>[],
+          'pair_ciphers': encrypted ? ['CCMP'] : <String>[],
+          'group_ciphers': encrypted ? ['CCMP'] : <String>[],
+        },
+      }),
+  ];
 }
 
-Future<void> _pumpScanner(WidgetTester tester) async {
+Future<void> _pumpScanner(
+  WidgetTester tester, {
+  bool onlyHidden = false,
+}) async {
   // Wide enough for the test font.
   tester.view
     ..physicalSize = const Size(1800, 2400)
@@ -39,7 +77,11 @@ Future<void> _pumpScanner(WidgetTester tester) async {
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [appStateProvider.overrideWith((ref) => _TwoRadios())],
+      overrides: [
+        appStateProvider.overrideWith(
+          (ref) => _TwoRadios(onlyHidden: onlyHidden),
+        ),
+      ],
       child: const MaterialApp(home: WifiScanScreen()),
     ),
   );
@@ -89,5 +131,55 @@ void main() {
       find.descendant(of: picker, matching: find.text('radio1 (5 GHz)')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('before iOS 26: the networks found as grouped rows, as iOS '
+      'lists Wi-Fi networks, each opening the connect form', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    await _pumpScanner(tester);
+
+    await tester.tap(find.text('Scan Networks'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Card), findsNothing);
+    expect(find.text('AVAILABLE NETWORKS'), findsOneWidget);
+    expect(find.text('3 found'), findsOneWidget);
+    expect(find.text('HIDDEN NETWORKS'), findsOneWidget);
+    final cafe = find.widgetWithText(AdaptiveListRow, 'Cafe');
+    expect(
+      find.descendant(of: cafe, matching: find.text('Open')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.widgetWithText(AdaptiveListRow, 'Neighbor'),
+        matching: find.text('WPA2'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(cafe);
+    await tester.pumpAndSettle();
+    // The connect form for the network tapped.
+    expect(
+      tester.widget<AdaptiveFormSheet>(find.byType(AdaptiveFormSheet)).title,
+      'Cafe',
+    );
+  });
+
+  testWidgets('before iOS 26: when every network found is hidden, no empty '
+      'Available Networks group', (tester) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    await _pumpScanner(tester, onlyHidden: true);
+
+    await tester.tap(find.text('Scan Networks'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('AVAILABLE NETWORKS'), findsNothing);
+    expect(find.text('HIDDEN NETWORKS'), findsOneWidget);
+    expect(find.byType(AdaptiveFormSection), findsOneWidget);
+    expect(find.text('1 found'), findsOneWidget);
   });
 }
