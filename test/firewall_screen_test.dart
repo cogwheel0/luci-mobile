@@ -51,6 +51,8 @@ Future<List<List<UciOperation>>> _pumpFirewall(
     FirewallZone(section: 'lan', name: 'lan'),
     FirewallZone(section: 'wan', name: 'wan', masq: true),
   ],
+  List<TrafficRule> rules = const [],
+  List<StaticRoute> routes = const [],
 }) async {
   final applied = <List<UciOperation>>[];
   // Tall enough for the whole form, and wide enough for the test font's
@@ -66,6 +68,8 @@ Future<List<List<UciOperation>>> _pumpFirewall(
           (ref) async => FirewallState(
             zones: zones,
             forwards: const [_forward],
+            rules: rules,
+            routes: routes,
             sectionNames: const {'web'},
           ),
         ),
@@ -92,6 +96,11 @@ Future<List<List<UciOperation>>> _openForward(WidgetTester tester) async {
   await tester.pumpAndSettle();
   return applied;
 }
+
+/// What is labelled [label] for VoiceOver, such as an icon button.
+Finder _labelled(String label) => find.byWidgetPredicate(
+  (w) => w is Semantics && w.properties.label == label,
+);
 
 /// Lets the apply report that follows a removal run out.
 Future<void> _finish(WidgetTester tester) async {
@@ -290,9 +299,10 @@ void main() {
       await tester.pumpAndSettle();
       final bar = find.byType(CupertinoNavigationBar).last;
       expect(find.descendant(of: bar, matching: find.text('Zones')), findsOne);
-      // The zone cards, as the tab showed them.
+      // A group per zone: its name (and NAT) over its three policies.
       expect(find.text('LAN'), findsOneWidget);
-      expect(find.text('WAN'), findsOneWidget);
+      expect(find.text('WAN · NAT'), findsOneWidget);
+      expect(find.byType(AdaptiveFormValueRow), findsNWidgets(6));
 
       await tester.tap(
         find.descendant(
@@ -302,6 +312,86 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(LuciHubTile), findsNWidgets(4));
+    });
+
+    testWidgets('port forwards as grouped rows, each opening to edit, its '
+        'switch toggling it without opening it', (tester) async {
+      final applied = await _pumpFirewall(tester);
+      await tester.tap(find.text('Port forwards'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ListTile), findsNothing);
+      final web = find.widgetWithText(AdaptiveListRow, 'Web server');
+      expect(
+        find.descendant(
+          of: web,
+          matching: find.textContaining('192.168.1.10:80'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.descendant(of: web, matching: find.byType(AdaptiveSwitch)),
+      );
+      await tester.pumpAndSettle();
+      expect(applied, hasLength(1));
+      expect(find.byType(AdaptiveFormSheet), findsNothing);
+      await _finish(tester);
+    });
+
+    testWidgets('traffic rules and static routes as grouped rows, with '
+        'their switch and buttons', (tester) async {
+      await _pumpFirewall(
+        tester,
+        rules: const [
+          TrafficRule(
+            section: 'luci_mobile_block_tv',
+            name: 'Block TV',
+            sourceMac: 'aa:bb:cc:00:00:09',
+          ),
+        ],
+        routes: const [
+          StaticRoute(
+            section: 'vpn',
+            interface: 'wg0',
+            target: '10.8.0.0',
+            netmask: '255.255.255.0',
+            gateway: '10.8.0.1',
+          ),
+        ],
+      );
+
+      await tester.tap(find.text('Traffic rules'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ListTile), findsNothing);
+      final rule = find.widgetWithText(AdaptiveListRow, 'Block TV');
+      expect(
+        find.descendant(of: rule, matching: find.byType(AdaptiveSwitch)),
+        findsOneWidget,
+      );
+      // A rule the app wrote is removed, so its button says Remove.
+      expect(
+        find.descendant(of: rule, matching: _labelled('Remove')),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byType(CupertinoNavigationBar).last,
+          matching: find.byType(CupertinoNavigationBarBackButton),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Static routes'));
+      await tester.pumpAndSettle();
+      final route = find.ancestor(
+        of: find.textContaining('via 10.8.0.1'),
+        matching: find.byType(AdaptiveListRow),
+      );
+      expect(route, findsOneWidget);
+      expect(
+        find.descendant(of: route, matching: _labelled('Remove')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('port forwards adds from the navigation bar\'s +, not a '
