@@ -1489,7 +1489,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         title: null, // Always use titleWidget now
         titleWidget: routers.length > 1 && PlatformUiCapabilities.isIOS
             ? AdaptiveTitleMenu<String>(
-                title: headerText,
+                // Named as its checked choice in the menu: until the board
+                // info arrives, the saved hostname rather than the address.
+                title: selected == null
+                    ? headerText
+                    : _routerTitle(
+                        selected,
+                        isSelected: true,
+                        boardInfo: boardInfo,
+                      ).routerTitle,
                 menuTitle: context.l10n.selectRouter,
                 value: selected?.id,
                 choices: [

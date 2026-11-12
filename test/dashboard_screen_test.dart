@@ -95,6 +95,13 @@ void main() {
     expect(find.byIcon(Icons.arrow_drop_down), findsNothing);
     final title = find.byType(AdaptiveTitleMenu<String>);
     expect(title, findsOneWidget);
+    // Before the board info arrives, the title is the saved hostname, as
+    // the menu names the router, rather than its address.
+    expect(
+      find.descendant(of: title, matching: find.text('OpenWrt')),
+      findsOne,
+    );
+    expect(find.text('192.168.1.1'), findsNothing);
 
     await tester.tap(title);
     await tester.pumpAndSettle();
