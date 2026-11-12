@@ -356,6 +356,34 @@ void main() {
       expect(results, [null]);
     });
 
+    testWidgets('a trackpad drag flings an idle sheet away, and not a busy '
+        'one', (tester) async {
+      final idle = await _open(tester, cupertino: false, material: bottomSheet);
+      await tester.trackpadFling(
+        find.text('Rename'),
+        const Offset(0, 600),
+        2000,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(idle, [null]);
+
+      final busy = await _open(
+        tester,
+        cupertino: false,
+        busy: true,
+        material: bottomSheet,
+      );
+      await tester.trackpadFling(
+        find.text('Rename'),
+        const Offset(0, 600),
+        2000,
+      );
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(BottomSheet), findsOneWidget);
+      expect(busy, isEmpty);
+    });
+
     testWidgets('a busy sheet\'s handle refuses to dismiss it for '
         'accessibility services', (tester) async {
       final results = await _open(

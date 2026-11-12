@@ -464,6 +464,12 @@ class _BusyDragRecognizer extends VerticalDragGestureRecognizer {
   @override
   bool isPointerAllowed(PointerEvent event) =>
       blocking() && super.isPointerAllowed(event);
+
+  // A trackpad drag starts with a pan/zoom event, which bypasses
+  // isPointerAllowed.
+  @override
+  bool isPointerPanZoomAllowed(PointerPanZoomStartEvent event) =>
+      blocking() && super.isPointerPanZoomAllowed(event);
 }
 
 /// Material 3's bottom sheet drag handle, as BottomSheet draws it, except
