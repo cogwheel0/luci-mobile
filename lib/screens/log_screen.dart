@@ -130,22 +130,28 @@ class _LogScreenState extends ConsumerState<LogScreen> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: LuciSpacing.md),
-            child: TextField(
-              controller: _filter,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
-                hintText: l10n.filterLog,
-                isDense: true,
-                border: const OutlineInputBorder(),
-                suffixIcon: _filter.text.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () => setState(_filter.clear),
-                      ),
-              ),
-            ),
+            child: PlatformUiCapabilities.isIOS
+                ? AdaptiveSearchField(
+                    controller: _filter,
+                    placeholder: l10n.filterLog,
+                    onChanged: (_) => setState(() {}),
+                  )
+                : TextField(
+                    controller: _filter,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.search),
+                      hintText: l10n.filterLog,
+                      isDense: true,
+                      border: const OutlineInputBorder(),
+                      suffixIcon: _filter.text.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () => setState(_filter.clear),
+                            ),
+                    ),
+                  ),
           ),
           const SizedBox(height: LuciSpacing.sm),
           Expanded(child: _body(context, visible)),

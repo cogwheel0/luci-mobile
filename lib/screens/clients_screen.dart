@@ -240,40 +240,47 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                             horizontal: 16.0,
                             vertical: 8.0,
                           ),
-                          child: TextField(
-                            autofocus: false,
-                            onChanged: (value) {
-                              // No need to setState here, listener handles it
-                            },
-                            controller: _searchController,
-                            decoration: InputDecoration(
-                              hintText: context.l10n.clientSearchHint,
-                              prefixIcon: const Icon(Icons.search),
-                              suffixIcon: _searchQuery.isNotEmpty
-                                  ? IconButton(
-                                      icon: const Icon(Icons.clear),
-                                      onPressed: () {
-                                        setState(() {
-                                          _searchController.clear();
-                                        });
-                                      },
-                                      tooltip: context.l10n.clearSearch,
-                                    )
-                                  : null,
-                              filled: true,
-                              fillColor: colorScheme.surfaceContainerHighest
-                                  .withValues(alpha: 0.8),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(24.0),
-                                borderSide: BorderSide.none,
-                              ),
-                              hintStyle: TextStyle(
-                                color: colorScheme.onSurfaceVariant.withValues(
-                                  alpha: 0.7,
+                          // The system search field on iOS; the controller's
+                          // listener filters either way.
+                          child: PlatformUiCapabilities.isIOS
+                              ? AdaptiveSearchField(
+                                  controller: _searchController,
+                                  placeholder: context.l10n.clientSearchHint,
+                                )
+                              : TextField(
+                                  autofocus: false,
+                                  onChanged: (value) {
+                                    // No need to setState here, listener handles it
+                                  },
+                                  controller: _searchController,
+                                  decoration: InputDecoration(
+                                    hintText: context.l10n.clientSearchHint,
+                                    prefixIcon: const Icon(Icons.search),
+                                    suffixIcon: _searchQuery.isNotEmpty
+                                        ? IconButton(
+                                            icon: const Icon(Icons.clear),
+                                            onPressed: () {
+                                              setState(() {
+                                                _searchController.clear();
+                                              });
+                                            },
+                                            tooltip: context.l10n.clearSearch,
+                                          )
+                                        : null,
+                                    filled: true,
+                                    fillColor: colorScheme
+                                        .surfaceContainerHighest
+                                        .withValues(alpha: 0.8),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(24.0),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    hintStyle: TextStyle(
+                                      color: colorScheme.onSurfaceVariant
+                                          .withValues(alpha: 0.7),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                          ),
                         ),
                         if (_canAggregate)
                           Padding(
