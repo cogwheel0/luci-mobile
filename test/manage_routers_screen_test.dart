@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cupertino_ui/cupertino_ui.dart'
     show CupertinoNavigationBar, CupertinoTextField;
 import 'package:material_ui/material_ui.dart';
@@ -131,10 +133,48 @@ void main() {
       );
       expect(state.logins, isEmpty);
 
+      // Changing the address clears the fallback's "must differ" too.
+      await tester.enterText(_field('Router Address'), '10.0.0.2');
+      await tester.pump();
+      expect(
+        find.text('Fallback Address: Must differ from primary address'),
+        findsNothing,
+      );
+
+      // A username of spaces is no username.
+      await tester.enterText(_field('Username'), '   ');
+      await add();
+      expect(find.text('Required'), findsOneWidget);
+      expect(state.logins, isEmpty);
+
+      await tester.enterText(_field('Username'), 'root');
       await tester.enterText(_field('Fallback Address'), 'router.example.com');
       await tester.enterText(_field('Password'), 'secret');
       await add();
+      expect(state.logins, ['10.0.0.2 root secret']);
+    });
+
+    testWidgets('before iOS 26: Return while signing in starts no second '
+        'sign-in', (tester) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+      final state = await _openAddRouter(tester);
+      final pending = state.pendingLogin = Completer<bool>();
+
+      await tester.enterText(_field('Router Address'), '10.0.0.1');
+      await tester.enterText(_field('Password'), 'secret');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      // Done closes the keyboard; back in the field, Return again.
+      await tester.tap(_field('Password'));
+      await tester.pump();
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
       expect(state.logins, ['10.0.0.1 root secret']);
+
+      pending.complete(true);
+      await tester.pumpAndSettle();
+      expect(find.text('Router Address'), findsNothing);
     });
   });
 }
@@ -188,6 +228,9 @@ class _TestAppState extends AppState {
 
   final logins = <String>[];
 
+  /// When set, a sign-in waits for it, as one over the network does.
+  Completer<bool>? pendingLogin;
+
   @override
   Future<bool> login(
     String ip,
@@ -201,6 +244,6 @@ class _TestAppState extends AppState {
     BuildContext? context,
   }) async {
     logins.add('$ip $user $pass');
-    return true;
+    return pendingLogin?.future ?? true;
   }
 }

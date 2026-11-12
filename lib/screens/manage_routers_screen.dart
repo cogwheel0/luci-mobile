@@ -295,8 +295,9 @@ class _AddRouterFormState extends State<_AddRouterForm> {
     return null;
   }
 
+  // Trimmed, as the username sent to the router is.
   String? _validateUser(String? value) =>
-      value == null || value.isEmpty ? context.l10n.required : null;
+      value == null || value.trim().isEmpty ? context.l10n.required : null;
 
   /// Checks the fields: the Form's validators on Android, the rows' errors
   /// on iOS.
@@ -326,6 +327,9 @@ class _AddRouterFormState extends State<_AddRouterForm> {
   }
 
   Future<void> _connect() async {
+    // Return in the password field can arrive while a sign-in is under
+    // way; a second one would make the first report a failure.
+    if (_connecting) return;
     if (!_validate()) return;
 
     final input = _address.text.trim();
@@ -428,7 +432,11 @@ class _AddRouterFormState extends State<_AddRouterForm> {
               autocorrect: false,
               autofillHints: const [AutofillHints.url],
               textInputAction: TextInputAction.next,
-              onChanged: (_) => clear(() => _addressError = null),
+              // The fallback's "must differ" depends on this field too.
+              onChanged: (_) => clear(() {
+                _addressError = null;
+                _alternateError = null;
+              }),
             ),
             if (_showAlternate)
               AdaptiveFormTextField(
