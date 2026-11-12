@@ -121,7 +121,7 @@ class _ServicesScreenState extends ConsumerState<ServicesScreen> {
         showBack: true,
         backgroundColor: grouped?.withValues(alpha: 0.94),
       ),
-      body: RefreshIndicator(
+      body: AdaptiveRefreshIndicator(
         onRefresh: () async => ref.invalidate(servicesProvider),
         child: async.when(
           loading: () => const Padding(

@@ -64,7 +64,7 @@ class _TrafficScreenState extends ConsumerState<TrafficScreen> {
         showBack: true,
         backgroundColor: grouped?.withValues(alpha: 0.94),
       ),
-      body: RefreshIndicator(
+      body: AdaptiveRefreshIndicator(
         onRefresh: () async {
           ref.invalidate(trafficPeriodsProvider);
           final p = _period;

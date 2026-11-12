@@ -35,7 +35,7 @@ class _WirelessScreenState extends ConsumerState<WirelessScreen> {
 
     return Scaffold(
       appBar: LuciAppBar(title: l10n.wirelessNetworks, showBack: true),
-      body: RefreshIndicator(
+      body: AdaptiveRefreshIndicator(
         onRefresh: () async => ref.invalidate(wirelessConfigProvider),
         child: async.when(
           loading: () => ListView(

@@ -54,7 +54,7 @@ class _ManageRoutersScreenState extends ConsumerState<ManageRoutersScreen> {
         children: [
           const SizedBox(height: 16),
           Expanded(
-            child: RefreshIndicator(
+            child: AdaptiveRefreshIndicator(
               onRefresh: () async => appState.loadRouters(),
               child: routers.isEmpty
                   ? ListView(
