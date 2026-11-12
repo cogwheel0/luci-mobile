@@ -13,8 +13,8 @@ import 'package:luci_mobile/state/app_state.dart';
 import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// A router with a LAN, a WireGuard tunnel with one peer, and a Wi-Fi
-/// network "Home" on its first radio.
+/// A router with a LAN, a WAN that is down, a WireGuard tunnel with one
+/// peer, and a Wi-Fi network ([ssid]) on its first radio.
 class _Router extends AppState {
   _Router()
     : super.forTesting(
@@ -24,6 +24,9 @@ class _Router extends AppState {
 
   /// As when a refresh brings the data in again.
   void refreshed() => notifyListeners();
+
+  /// The Wi-Fi network's name, as the router reports it.
+  String ssid = 'Home';
 
   /// Wi-Fi switch changes asked for, saved when [saving] completes.
   final switched = <(String, bool)>[];
@@ -58,6 +61,7 @@ class _Router extends AppState {
           'dns-server': ['1.1.1.1'],
           'stats': {'rx_bytes': 1000000, 'tx_bytes': 2000000},
         },
+        {'interface': 'wan', 'up': false, 'proto': 'pppoe', 'device': 'eth0'},
         {
           'interface': 'wg0',
           'up': true,
@@ -90,11 +94,11 @@ class _Router extends AppState {
             'config': {
               'device': 'radio0',
               'mode': 'ap',
-              'ssid': 'Home',
+              'ssid': ssid,
               'network': ['lan'],
               'encryption': 'psk2',
             },
-            'iwinfo': {'ssid': 'Home', 'channel': 36, 'signal': -40},
+            'iwinfo': {'ssid': ssid, 'channel': 36, 'signal': -40},
           },
         ],
       },
@@ -197,9 +201,17 @@ void main() {
       await _pump(tester);
 
       expect(find.text('Radio'), findsNothing);
-      for (final title in ['LAN', 'WG0', 'Home', 'WiFi Scanner']) {
+      for (final title in ['LAN', 'WAN', 'WG0', 'Home', 'WiFi Scanner']) {
         expect(_openingRow(title), findsOneWidget, reason: title);
       }
+      // A down interface says so in words, not only in its icon's colour.
+      Finder off(String row) => find.descendant(
+        of: find.widgetWithText(AdaptiveListRow, row),
+        matching: find.text('Off'),
+      );
+      expect(off('WAN'), findsOneWidget);
+      expect(off('LAN'), findsNothing);
+      expect(off('Home'), findsNothing);
       expect(
         find.descendant(
           of: find.widgetWithText(AdaptiveListRow, 'LAN'),
@@ -305,6 +317,23 @@ void main() {
       expect(toggle().onChanged, isNotNull);
     });
 
+    testWidgets('a renamed network\'s page follows its new name', (
+      tester,
+    ) async {
+      final state = await _pump(tester);
+      await tester.tap(find.text('Home'));
+      await tester.pumpAndSettle();
+      expect(find.text('Home'), findsOneWidget);
+
+      state
+        ..ssid = 'Cabin'
+        ..refreshed();
+      await tester.pumpAndSettle();
+      expect(find.text('Cabin'), findsOneWidget);
+      expect(find.text('Home'), findsNothing);
+      expect(_value('Channel'), findsOneWidget);
+    });
+
     testWidgets('a link to an interface opens its page, once', (tester) async {
       var shown = 0;
       final state = await _pump(
@@ -346,7 +375,7 @@ void main() {
       tester,
     ) async {
       var shown = 0;
-      await _pump(tester, target: 'wan', onTargetShown: () => shown++);
+      await _pump(tester, target: 'wwan', onTargetShown: () => shown++);
 
       expect(_openingRow('LAN'), findsOneWidget);
       expect(find.byType(AdaptiveFormValueRow), findsNothing);

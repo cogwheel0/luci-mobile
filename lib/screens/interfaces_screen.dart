@@ -945,6 +945,25 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
         : CupertinoColors.tertiaryLabel.resolveFrom(context),
   );
 
+  /// "Off" before the chevron of an interface that is down, as iOS
+  /// Settings says so, and as Android's chip does: the state in words,
+  /// read with the row, not only in the icon's colour.
+  Widget? _offLabel(bool isUp) => isUp
+      ? null
+      : Text(
+          context.l10n.off,
+          style: TextStyle(
+            fontSize: 17,
+            color: CupertinoColors.secondaryLabel.resolveFrom(context),
+          ),
+        );
+
+  /// A wireless interface's name: its SSID, or its radio without one.
+  static String _wirelessTitleOf(Map<String, dynamic> iface) =>
+      (iface['ssid'] ?? '').toString().isNotEmpty
+      ? iface['ssid'].toString()
+      : (iface['deviceName'] ?? '').toString();
+
   /// The wired interfaces as an iOS group, as iOS Settings lists things
   /// that open a page: a row each, its state, name and address.
   Widget _iosWiredGroup(List<NetworkInterface> interfaces) {
@@ -970,6 +989,7 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
               ),
               title: iface.name.toUpperCase(),
               subtitle: _buildMinimalInterfaceSubtitle(iface),
+              trailing: _offLabel(iface.isUp),
               showChevron: true,
               onTap: () => _openWiredPage(iface.name),
             ),
@@ -984,14 +1004,12 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     List<Map<String, dynamic>> interfaces,
     String? targetKey,
   ) {
-    String titleOf(Map<String, dynamic> iface) =>
-        (iface['ssid'] ?? '').toString().isNotEmpty
-        ? iface['ssid'].toString()
-        : (iface['deviceName'] ?? '').toString();
     if (targetKey != null) {
       for (final iface in interfaces) {
         if (_wirelessKeyOf(iface) == targetKey) {
-          _openTargetOnce(() => _openWirelessPage(targetKey, titleOf(iface)));
+          _openTargetOnce(
+            () => _openWirelessPage(targetKey, _wirelessTitleOf(iface)),
+          );
           break;
         }
       }
@@ -1007,11 +1025,14 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
                 Icons.wifi,
                 iface['isEnabled'] as bool? ?? false,
               ),
-              title: titleOf(iface),
+              title: _wirelessTitleOf(iface),
               subtitle: iface['subtitle'] as String?,
+              trailing: _offLabel(iface['isEnabled'] as bool? ?? false),
               showChevron: true,
-              onTap: () =>
-                  _openWirelessPage(_wirelessKeyOf(iface), titleOf(iface)),
+              onTap: () => _openWirelessPage(
+                _wirelessKeyOf(iface),
+                _wirelessTitleOf(iface),
+              ),
             ),
           AdaptiveListRow(
             leading: Icon(
@@ -1033,31 +1054,39 @@ class _InterfacesScreenState extends ConsumerState<InterfacesScreen> {
     MaterialPageRoute(
       builder: (_) => _InterfacePage(
         title: name.toUpperCase(),
-        sections: (context, appState) {
+        content: (context, appState) {
           final iface = _wiredInterfacesOf(appState)
               .where((i) => i.name == name)
               .firstOrNull;
           return iface == null
               ? null
-              : _iosWiredSections(context, appState, iface);
+              : (
+                  title: name.toUpperCase(),
+                  sections: _iosWiredSections(context, appState, iface),
+                );
         },
       ),
     ),
   );
 
-  void _openWirelessPage(String key, String title) => Navigator.of(context)
-      .push(
+  void _openWirelessPage(String key, String title) =>
+      Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => _InterfacePage(
             title: title,
-            sections: (context, appState) {
+            content: (context, appState) {
               final iface = _wirelessInterfacesOf(
                 context,
                 appState,
               ).where((i) => _wirelessKeyOf(i) == key).firstOrNull;
+              // Named afresh each time, so a renamed network's page
+              // follows its new name.
               return iface == null
                   ? null
-                  : _iosWirelessSections(context, iface);
+                  : (
+                      title: _wirelessTitleOf(iface),
+                      sections: _iosWirelessSections(context, iface),
+                    );
             },
           ),
         ),
@@ -2093,21 +2122,22 @@ class _UnifiedNetworkCardState extends State<_UnifiedNetworkCard>
   }
 }
 
-// ──────────────────────────────────────────────────────────────────
-// WiFi Enable/Disable Toggle Row
-// ──────────────────────────────────────────────────────────────────
-
-/// An interface's own page on iOS: [sections] built from the latest
-/// dashboard data, so the page follows a refresh, or a message once the
-/// interface is gone from it.
+/// An interface's own page on iOS, built from the latest dashboard data
+/// by [content], so it follows a refresh, or a message once the interface
+/// is gone from it.
 class _InterfacePage extends ConsumerWidget {
-  const _InterfacePage({required this.title, required this.sections});
+  const _InterfacePage({required this.title, required this.content});
 
+  /// The title the page opens with, and keeps once the interface is gone.
   final String title;
 
-  /// The page's groups, or null when the interface is no longer there.
-  final List<Widget>? Function(BuildContext context, AppState appState)
-  sections;
+  /// The page's current title and groups, or null when the interface is
+  /// no longer there.
+  final ({String title, List<Widget> sections})? Function(
+    BuildContext context,
+    AppState appState,
+  )
+  content;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2115,17 +2145,17 @@ class _InterfacePage extends ConsumerWidget {
     final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
       context,
     );
-    final children = sections(context, appState);
+    final current = content(context, appState);
     return Scaffold(
       backgroundColor: grouped,
       appBar: LuciAppBar(
-        title: title,
+        title: current?.title ?? title,
         showBack: true,
         backgroundColor: grouped.withValues(alpha: 0.94),
       ),
       body: AdaptiveRefreshIndicator(
         onRefresh: () => ref.read(appStateProvider).fetchDashboardData(),
-        child: children == null
+        child: current == null
             ? LuciMessageState(
                 icon: Icons.device_hub_outlined,
                 message: context.l10n.noInterfaceData,
@@ -2133,12 +2163,16 @@ class _InterfacePage extends ConsumerWidget {
             : ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(LuciSpacing.md),
-                children: children,
+                children: current.sections,
               ),
       ),
     );
   }
 }
+
+// ──────────────────────────────────────────────────────────────────
+// WiFi Enable/Disable Toggle Row
+// ──────────────────────────────────────────────────────────────────
 
 class _WifiToggleRow extends ConsumerStatefulWidget {
   final String uciSection;
