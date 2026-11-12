@@ -498,28 +498,56 @@ void main() {
       expect(card.margin, EdgeInsets.zero);
     });
 
-    testWidgets('iOS: a flat tile in the grouped rows\' surface', (
-      tester,
-    ) async {
+    testWidgets('iOS: a flat tile in the grouped rows\' surface, which a '
+        'press darkens without a ripple', (tester) async {
       PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
       PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
-      await pumpCard(tester);
-
-      expect(find.byType(Card), findsNothing);
-      final tile = tester.widget<Container>(
-        find
-            .ancestor(of: find.text('CPU'), matching: find.byType(Container))
-            .first,
-      );
-      final decoration = tile.decoration! as BoxDecoration;
-      expect(
-        decoration.color,
-        CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
-          tester.element(find.text('CPU')),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AdaptiveCard(
+              elevation: 2,
+              borderRadius: BorderRadius.circular(18),
+              margin: EdgeInsets.zero,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onLongPress: () {},
+                child: const SizedBox(
+                  width: 100,
+                  height: 60,
+                  child: Text('CPU'),
+                ),
+              ),
+            ),
+          ),
         ),
       );
-      expect(decoration.borderRadius, BorderRadius.circular(18));
-      expect(decoration.boxShadow, isNull);
+
+      expect(find.byType(Card), findsNothing);
+      final cpu = tester.element(find.text('CPU'));
+      final tile = tester.widget<Material>(
+        find
+            .ancestor(of: find.text('CPU'), matching: find.byType(Material))
+            .first,
+      );
+      expect(
+        tile.color,
+        CupertinoColors.secondarySystemGroupedBackground.resolveFrom(cpu),
+      );
+      expect(tile.borderRadius, BorderRadius.circular(18));
+      expect(tile.elevation, 0);
+      // No ripple in the tile, only the highlight.
+      expect(Theme.of(cpu).splashFactory, NoSplash.splashFactory);
+
+      final press = await tester.startGesture(
+        tester.getCenter(find.text('CPU')),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      // The highlight paints on the tile itself, where it can be seen, not
+      // on the page's Material under the tile.
+      expect(Material.of(cpu), paints..rrect());
+      await press.up();
+      await tester.pumpAndSettle();
     });
   });
 }
