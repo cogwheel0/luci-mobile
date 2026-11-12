@@ -89,7 +89,7 @@ class LuciApplyProgressDialog extends StatelessWidget {
                     const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                      child: AdaptiveProgressIndicator(strokeWidth: 2.5),
                     ),
                     const SizedBox(width: LuciSpacing.md),
                     Expanded(

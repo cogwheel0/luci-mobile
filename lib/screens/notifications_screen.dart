@@ -23,7 +23,7 @@ class NotificationsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: LuciAppBar(title: l10n.notifications, showBack: true),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: AdaptiveProgressIndicator()),
         error: (e, _) => Center(child: Text(e.toString())),
         data: (settings) => ListView(
           padding: const EdgeInsets.all(LuciSpacing.md),

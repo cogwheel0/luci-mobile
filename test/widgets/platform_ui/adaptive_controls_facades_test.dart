@@ -357,4 +357,48 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsNothing);
     });
   }
+
+  group('a spinner in place of the Material one', () {
+    const color = Color(0xFF3366CC);
+    Future<void> pumpIn24(WidgetTester tester) => tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox.square(
+              dimension: 24,
+              child: AdaptiveProgressIndicator(strokeWidth: 2.5, color: color),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('Android: the Material spinner, as configured', (tester) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android;
+      await pumpIn24(tester);
+
+      final indicator = tester.widget<CircularProgressIndicator>(
+        find.byType(CircularProgressIndicator),
+      );
+      expect(indicator.strokeWidth, 2.5);
+      expect(indicator.color, color);
+      expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    });
+
+    testWidgets('iOS: the system activity indicator, fitted to its box', (
+      tester,
+    ) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+      await pumpIn24(tester);
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      final spinner = find.byType(CupertinoActivityIndicator);
+      expect(tester.widget<CupertinoActivityIndicator>(spinner).color, color);
+      expect(
+        tester.getSize(find.byType(AdaptiveProgressIndicator)),
+        const Size.square(24),
+      );
+    });
+  });
 }

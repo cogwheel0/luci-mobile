@@ -1806,7 +1806,7 @@ class _WifiToggleRowState extends ConsumerState<_WifiToggleRow> {
             const SizedBox(
               width: 20,
               height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: AdaptiveProgressIndicator(strokeWidth: 2),
             )
           else
             AdaptiveSwitch(value: widget.isEnabled, onChanged: _toggle),
@@ -2482,7 +2482,7 @@ class _WifiDeleteDialogState extends ConsumerState<_WifiDeleteDialog> {
               ? const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(
+                  child: AdaptiveProgressIndicator(
                     strokeWidth: 2,
                     color: Colors.white,
                   ),

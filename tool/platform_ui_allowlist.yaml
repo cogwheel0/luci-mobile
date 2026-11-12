@@ -1,4 +1,4 @@
-# luci-mobile's platform UI baseline: 127 entries, 160 occurrences.
+# luci-mobile's platform UI baseline: 114 entries, 146 occurrences.
 # Each entry is a direct Material or Cupertino import or control outside
 # lib/widgets/platform_ui. Counts may only go down: migrate a screen to the
 # platform UI layer and remove or lower its entries.
@@ -143,12 +143,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/diagnostics_screen.dart
-    symbol: "CircularProgressIndicator"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/diagnostics_screen.dart
     symbol: "IconButton"
     count: 1
     owner: screens
@@ -162,12 +156,6 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/screens/event_feed_screen.dart
     package: "package:material_ui/material_ui.dart"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/event_feed_screen.dart
-    symbol: "CircularProgressIndicator"
     count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
@@ -221,12 +209,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/interfaces_screen.dart
-    symbol: "CircularProgressIndicator"
-    count: 2
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/interfaces_screen.dart
     symbol: "DropdownButton"
     count: 1
     owner: screens
@@ -269,12 +251,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/log_screen.dart
-    symbol: "CircularProgressIndicator"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/log_screen.dart
     symbol: "IconButton"
     count: 1
     owner: screens
@@ -300,12 +276,6 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/screens/login_screen.dart
     symbol: "Card"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/login_screen.dart
-    symbol: "CircularProgressIndicator"
     count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
@@ -383,12 +353,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/manage_routers_screen.dart
-    symbol: "CircularProgressIndicator"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/manage_routers_screen.dart
     symbol: "ElevatedButton"
     count: 3
     owner: screens
@@ -418,12 +382,6 @@ exceptions:
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
-  - path: lib/screens/notifications_screen.dart
-    symbol: "CircularProgressIndicator"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
   - path: lib/screens/router_dashboard_settings_screen.dart
     package: "package:material_ui/material_ui.dart"
     count: 1
@@ -437,12 +395,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/screens/router_dashboard_settings_screen.dart
-    symbol: "CircularProgressIndicator"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/router_dashboard_settings_screen.dart
     symbol: "ExpansionTile"
     count: 1
     owner: screens
@@ -450,12 +402,6 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/screens/services_screen.dart
     package: "package:material_ui/material_ui.dart"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/services_screen.dart
-    symbol: "CircularProgressIndicator"
     count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
@@ -498,12 +444,6 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/screens/splash_screen.dart
     package: "package:material_ui/material_ui.dart"
-    count: 1
-    owner: screens
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/screens/splash_screen.dart
-    symbol: "CircularProgressIndicator"
     count: 1
     owner: screens
     reason: "Existing use awaiting migration to the platform UI seam"
@@ -683,12 +623,6 @@ exceptions:
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
   - path: lib/widgets/luci_app_bar.dart
-    symbol: "CircularProgressIndicator"
-    count: 1
-    owner: widgets
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/widgets/luci_app_bar.dart
     symbol: "IconButton"
     count: 1
     owner: widgets
@@ -706,12 +640,6 @@ exceptions:
     owner: widgets
     reason: "Existing use awaiting migration to the platform UI seam"
     removal: platform-ui-migration
-  - path: lib/widgets/luci_apply_progress.dart
-    symbol: "CircularProgressIndicator"
-    count: 1
-    owner: widgets
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
   - path: lib/widgets/luci_hub_tile.dart
     package: "package:material_ui/material_ui.dart"
     count: 1
@@ -738,12 +666,6 @@ exceptions:
     removal: platform-ui-migration
   - path: lib/widgets/luci_navigation_enhancements.dart
     package: "package:material_ui/material_ui.dart"
-    count: 1
-    owner: widgets
-    reason: "Existing use awaiting migration to the platform UI seam"
-    removal: platform-ui-migration
-  - path: lib/widgets/luci_navigation_enhancements.dart
-    symbol: "CircularProgressIndicator"
     count: 1
     owner: widgets
     reason: "Existing use awaiting migration to the platform UI seam"

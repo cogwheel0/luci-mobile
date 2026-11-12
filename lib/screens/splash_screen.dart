@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:luci_mobile/services/secure_storage_service.dart';
 import 'package:luci_mobile/config/app_config.dart';
 import 'package:luci_mobile/l10n/luci_localizations.dart';
+import 'package:luci_mobile/widgets/platform_ui/platform_ui.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -104,7 +105,7 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
               ),
               const SizedBox(height: 24),
-              const CircularProgressIndicator(),
+              const AdaptiveProgressIndicator(),
             ],
           ),
         ),

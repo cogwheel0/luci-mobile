@@ -142,7 +142,7 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
           if (_running)
             const Padding(
               padding: EdgeInsets.all(LuciSpacing.xl),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: AdaptiveProgressIndicator()),
             ),
 
           if (_error != null)
