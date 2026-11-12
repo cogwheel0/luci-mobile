@@ -765,18 +765,21 @@ class _ReservationDialogState extends State<_ReservationDialog> {
       onConfirm: _check.isBlocking
           ? null
           : () => Navigator.of(context).pop(_controller.text.trim()),
-      child: TextField(
-        controller: _controller,
-        autofocus: true,
-        keyboardType: numericAddressKeyboard,
-        decoration: InputDecoration(
-          labelText: context.l10n.ipAddress,
-          errorText: _check.isBlocking ? message : null,
-          // An address inside the pool still works, so it is a warning rather
-          // than something to refuse.
-          helperText: _check.isBlocking ? null : message,
-        ),
-        onChanged: _validate,
+      grouped: true,
+      child: AdaptiveFormSection(
+        children: [
+          AdaptiveFormTextField(
+            label: context.l10n.ipAddress,
+            controller: _controller,
+            autofocus: true,
+            keyboardType: numericAddressKeyboard,
+            error: _check.isBlocking ? message : null,
+            // An address inside the pool still works, so it is a warning
+            // rather than something to refuse.
+            helper: _check.isBlocking ? null : message,
+            onChanged: _validate,
+          ),
+        ],
       ),
     );
   }
@@ -843,29 +846,27 @@ class _RenameDialogState extends State<_RenameDialog> {
               ),
             )
           : null,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+      grouped: true,
+      child: AdaptiveFormSection(
+        materialGap: 0,
         children: [
-          TextField(
+          AdaptiveFormTextField(
+            label: l10n.displayName,
             controller: _name,
             autofocus: true,
-            decoration: InputDecoration(
-              labelText: l10n.displayName,
-              hintText: widget.hint,
-              helperText: _alsoHostname
-                  ? l10n.dhcpHostnameHint
-                  : l10n.displayNameHint,
-              errorText: _valid ? null : l10n.invalidHostname,
-            ),
+            placeholder: widget.hint,
+            helper: _alsoHostname
+                ? l10n.dhcpHostnameHint
+                : l10n.displayNameHint,
+            error: _valid ? null : l10n.invalidHostname,
             onChanged: (_) => setState(() {}),
           ),
           if (widget.canSetHostname)
-            AdaptiveCheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(l10n.setDhcpHostname),
+            AdaptiveFormSwitch(
+              label: l10n.setDhcpHostname,
               value: _alsoHostname,
               onChanged: (v) => setState(() => _alsoHostname = v),
+              materialCheckbox: true,
             ),
         ],
       ),

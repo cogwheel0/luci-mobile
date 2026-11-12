@@ -414,44 +414,52 @@ class _PasswordDialogState extends State<_PasswordDialog> {
       cancelLabel: l10n.cancel,
       confirmLabel: l10n.saveAction,
       onConfirm: valid ? () => Navigator.of(context).pop(value) : null,
+      grouped: true,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            l10n.routerPasswordWarning,
-            style: LuciTextStyles.cardSubtitle(context),
-          ),
-          const SizedBox(height: LuciSpacing.md),
-          TextField(
-            controller: _password,
-            obscureText: _obscure,
-            autofocus: true,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              labelText: l10n.newPassword,
-              errorText: tooShort ? l10n.passwordTooShort : null,
-              border: const OutlineInputBorder(),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscure
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
+          // Above the fields on Android; iOS explains a group under it.
+          if (!PlatformUiCapabilities.isIOS) ...[
+            Text(
+              l10n.routerPasswordWarning,
+              style: LuciTextStyles.cardSubtitle(context),
+            ),
+            const SizedBox(height: LuciSpacing.md),
+          ],
+          AdaptiveFormSection(
+            footer: l10n.routerPasswordWarning,
+            children: [
+              AdaptiveFormTextField(
+                label: l10n.newPassword,
+                controller: _password,
+                obscureText: _obscure,
+                autofocus: true,
+                error: tooShort ? l10n.passwordTooShort : null,
+                materialDecoration: const InputDecoration(
+                  border: OutlineInputBorder(),
                 ),
-                onPressed: () => setState(() => _obscure = !_obscure),
+                suffix: AdaptiveObscureToggle(
+                  obscured: _obscure,
+                  materialOutlined: true,
+                  semanticLabel: _obscure
+                      ? l10n.showPassword
+                      : l10n.hidePassword,
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                ),
+                onChanged: (_) => setState(() {}),
               ),
-            ),
-          ),
-          const SizedBox(height: LuciSpacing.md),
-          TextField(
-            controller: _confirm,
-            obscureText: _obscure,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              labelText: l10n.confirmPassword,
-              errorText: mismatch ? l10n.passwordsDoNotMatch : null,
-              border: const OutlineInputBorder(),
-            ),
+              AdaptiveFormTextField(
+                label: l10n.confirmPassword,
+                controller: _confirm,
+                obscureText: _obscure,
+                error: mismatch ? l10n.passwordsDoNotMatch : null,
+                materialDecoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
           ),
         ],
       ),

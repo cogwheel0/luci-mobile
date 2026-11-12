@@ -412,6 +412,7 @@ class _NetworkSheetState extends State<_NetworkSheet> {
       onConfirm: _isEnterprise || !_canSave ? null : _save,
       destructiveLabel: existing == null ? null : l10n.remove,
       onDestructive: existing == null ? null : () => _remove(existing),
+      grouped: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -419,68 +420,76 @@ class _NetworkSheetState extends State<_NetworkSheet> {
             _Banner(text: l10n.enterpriseNotEditable),
             const SizedBox(height: LuciSpacing.md),
           ],
-
-          TextField(
-            controller: _ssid,
-            enabled: !_isEnterprise,
-            autofocus: widget.existing == null,
-            decoration: InputDecoration(
-              labelText: l10n.networkNameSsid,
-              errorText: _ssidError,
-            ),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: LuciSpacing.md),
-
-          DropdownButtonFormField<WirelessSecurity>(
-            initialValue: _security,
-            decoration: InputDecoration(labelText: l10n.encryption),
-            items: [
-              for (final s in WirelessSecurity.values)
-                DropdownMenuItem(value: s, child: Text(_securityLabel(s))),
-            ],
-            onChanged: _isEnterprise
-                ? null
-                : (v) => setState(() => _security = v ?? _security),
-          ),
-
-          if (_security.needsPassphrase) ...[
-            const SizedBox(height: LuciSpacing.md),
-            TextField(
-              controller: _key,
-              enabled: !_isEnterprise,
-              obscureText: !_showKey,
-              decoration: InputDecoration(
-                labelText: l10n.password,
-                errorText: _keyError,
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _showKey ? Icons.visibility_off : Icons.visibility,
+          AdaptiveForm(
+            // On Android the switches follow the fields directly, as they
+            // did.
+            materialGap: 0,
+            sections: [
+              AdaptiveFormSection(
+                children: [
+                  AdaptiveFormTextField(
+                    label: l10n.networkNameSsid,
+                    controller: _ssid,
+                    enabled: !_isEnterprise,
+                    autofocus: widget.existing == null,
+                    error: _ssidError,
+                    onChanged: (_) => setState(() {}),
                   ),
-                  onPressed: () => setState(() => _showKey = !_showKey),
-                ),
+                  AdaptiveFormPicker<WirelessSecurity>(
+                    label: l10n.encryption,
+                    value: _security,
+                    choices: [
+                      for (final s in WirelessSecurity.values)
+                        AdaptiveFormChoice(s, _securityLabel(s)),
+                    ],
+                    onChanged: _isEnterprise
+                        ? null
+                        : (v) => setState(() => _security = v ?? _security),
+                  ),
+                  if (_security.needsPassphrase)
+                    AdaptiveFormTextField(
+                      label: l10n.password,
+                      controller: _key,
+                      enabled: !_isEnterprise,
+                      obscureText: !_showKey,
+                      error: _keyError,
+                      suffix: AdaptiveObscureToggle(
+                        obscured: !_showKey,
+                        semanticLabel: _showKey
+                            ? l10n.hidePassword
+                            : l10n.showPassword,
+                        onPressed: () => setState(() => _showKey = !_showKey),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                ],
               ),
-              onChanged: (_) => setState(() {}),
-            ),
-          ],
-
-          AdaptiveSwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.hiddenSsid),
-            subtitle: Text(l10n.hiddenSsidDescription),
-            value: _hidden,
-            onChanged: _isEnterprise
-                ? null
-                : (v) => setState(() => _hidden = v),
-          ),
-          AdaptiveSwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.clientIsolation),
-            subtitle: Text(l10n.clientIsolationDescription),
-            value: _isolate,
-            onChanged: _isEnterprise
-                ? null
-                : (v) => setState(() => _isolate = v),
+              // A section each, so each switch's explanation sits under it.
+              AdaptiveFormSection(
+                children: [
+                  AdaptiveFormSwitch(
+                    label: l10n.hiddenSsid,
+                    description: l10n.hiddenSsidDescription,
+                    value: _hidden,
+                    onChanged: _isEnterprise
+                        ? null
+                        : (v) => setState(() => _hidden = v),
+                  ),
+                ],
+              ),
+              AdaptiveFormSection(
+                children: [
+                  AdaptiveFormSwitch(
+                    label: l10n.clientIsolation,
+                    description: l10n.clientIsolationDescription,
+                    value: _isolate,
+                    onChanged: _isEnterprise
+                        ? null
+                        : (v) => setState(() => _isolate = v),
+                  ),
+                ],
+              ),
+            ],
           ),
         ],
       ),

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'adaptive_anchored_menu.dart';
+import 'adaptive_selection_controls.dart';
 import 'platform_ui_capabilities.dart';
 
 /// A row of an [AdaptiveFormSection] that has something to say under the
@@ -204,7 +205,9 @@ class _RowLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-    text,
+    // A Material field label can end in a colon ("Network Name (SSID):");
+    // an iOS row's label never does.
+    text.replaceFirst(RegExp(r'\s*[:：]\s*$'), ''),
     style: _bodyStyle(context).copyWith(
       color:
           (error
@@ -261,11 +264,16 @@ class AdaptiveFormTextField extends StatefulWidget
     this.autofillHints,
     this.onChanged,
     this.onSubmitted,
+    this.materialDecoration = const InputDecoration(),
   });
 
   final String label;
   final TextEditingController? controller;
   final FocusNode? focusNode;
+
+  /// The Material field's look on Android, such as an outlined border. Its
+  /// label, hint, helper, error and suffix come from the fields here.
+  final InputDecoration materialDecoration;
 
   /// Shown while the field is empty.
   final String? placeholder;
@@ -337,7 +345,7 @@ class _AdaptiveFormTextFieldState extends State<AdaptiveFormTextField> {
         autofillHints: widget.autofillHints,
         onChanged: widget.onChanged,
         onSubmitted: widget.onSubmitted,
-        decoration: InputDecoration(
+        decoration: widget.materialDecoration.copyWith(
           labelText: widget.label,
           hintText: widget.placeholder,
           helperText: widget.helper,
@@ -730,6 +738,154 @@ class _TappableRowState extends State<_TappableRow> {
           ),
           child: widget.child,
         ),
+      ),
+    );
+  }
+}
+
+/// An on/off setting as a form row.
+///
+/// On Android, the switch tile luci-mobile's forms used, [description]
+/// under its title. On iOS, a row of an [AdaptiveFormSection]: [label] on
+/// the left and the switch on the right, the native one on iOS 26, with
+/// [description] under the group, as iOS Settings explains a switch. Give a
+/// switch with a description a section of its own, so its explanation sits
+/// under it.
+class AdaptiveFormSwitch extends StatelessWidget implements AdaptiveFormNotes {
+  const AdaptiveFormSwitch({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.description,
+    this.materialContentPadding = EdgeInsets.zero,
+    this.materialCheckbox = false,
+  });
+
+  final String label;
+  final bool value;
+
+  /// Called with the new value; null disables the switch.
+  final ValueChanged<bool>? onChanged;
+
+  /// What the setting does.
+  final String? description;
+
+  /// The tile's padding on Android.
+  final EdgeInsetsGeometry materialContentPadding;
+
+  /// Whether Android shows a checkbox tile rather than a switch tile, for
+  /// an option that goes with the rest of the form rather than a setting
+  /// of its own. iOS forms use a switch for either.
+  final bool materialCheckbox;
+
+  @override
+  String? get formNote => description;
+
+  @override
+  bool get formNoteIsError => false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PlatformUiCapabilities.isIOS && materialCheckbox) {
+      return AdaptiveCheckboxListTile(
+        contentPadding: materialContentPadding,
+        title: Text(label),
+        subtitle: description == null ? null : Text(description!),
+        value: value,
+        onChanged: onChanged,
+      );
+    }
+    if (!PlatformUiCapabilities.isIOS) {
+      return AdaptiveSwitchListTile(
+        contentPadding: materialContentPadding,
+        title: Text(label),
+        subtitle: description == null ? null : Text(description!),
+        value: value,
+        onChanged: onChanged,
+      );
+    }
+    final change = onChanged;
+    // One switch to assistive technology, as a Settings row is; only the
+    // switch itself responds to touch.
+    return MergeSemantics(
+      child: Semantics(
+        toggled: value,
+        enabled: change != null,
+        onTap: change == null ? null : () => change(!value),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: _rowHeight),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _RowLabel(
+                    label,
+                    error: false,
+                    enabled: change != null,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ExcludeSemantics(
+                  child: AdaptiveSwitch(value: value, onChanged: change),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The button at the end of a password field that shows or hides what is
+/// typed: an eye on iOS, at a 44 point target, and the Material visibility
+/// icon on Android. It shows what tapping it will do, as both platforms do.
+class AdaptiveObscureToggle extends StatelessWidget {
+  const AdaptiveObscureToggle({
+    super.key,
+    required this.obscured,
+    required this.onPressed,
+    this.semanticLabel,
+    this.materialOutlined = false,
+  });
+
+  /// Whether the field hides its text now.
+  final bool obscured;
+
+  /// Whether Android shows the outlined visibility icons.
+  final bool materialOutlined;
+
+  final VoidCallback? onPressed;
+
+  /// What the button does, such as "Show password", for assistive
+  /// technology (and a tooltip on Android).
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PlatformUiCapabilities.isIOS) {
+      return IconButton(
+        icon: Icon(switch ((obscured, materialOutlined)) {
+          (true, false) => Icons.visibility,
+          (false, false) => Icons.visibility_off,
+          (true, true) => Icons.visibility_outlined,
+          (false, true) => Icons.visibility_off_outlined,
+        }),
+        tooltip: semanticLabel,
+        onPressed: onPressed,
+      );
+    }
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size.square(44),
+      onPressed: onPressed,
+      child: Icon(
+        obscured ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+        size: 20,
+        color: CupertinoColors.secondaryLabel.resolveFrom(context),
+        semanticLabel: semanticLabel,
       ),
     );
   }
