@@ -1,4 +1,5 @@
-import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoNavigationBar;
+import 'package:cupertino_ui/cupertino_ui.dart'
+    show CupertinoNavigationBar, CupertinoTextField;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -90,11 +91,62 @@ void main() {
       expect(state.logins, ['10.0.0.1 root secret']);
       expect(find.text('Router Address'), findsNothing);
     });
+
+    testWidgets('before iOS 26: the rows say what is wrong, and a failed '
+        'check signs nothing in', (tester) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+      final state = await _openAddRouter(tester);
+      final bar = find.byType(CupertinoNavigationBar).last;
+      Future<void> add() async {
+        await tester.tap(find.descendant(of: bar, matching: find.text('Add')));
+        await tester.pumpAndSettle();
+      }
+
+      expect(find.byType(TextFormField), findsNothing);
+      await add();
+      expect(find.text('Please enter the router address'), findsOneWidget);
+      expect(state.logins, isEmpty);
+
+      // Editing the field clears its error.
+      await tester.enterText(_field('Router Address'), '192.168.1.1');
+      await tester.pump();
+      expect(find.text('Please enter the router address'), findsNothing);
+
+      // A router already saved: the form's own error, under the sign-in.
+      await add();
+      expect(find.text('Router already exists.'), findsOneWidget);
+      expect(state.logins, isEmpty);
+
+      // The fallback address, once added, must differ from the address.
+      await tester.tap(find.text('Add fallback address'));
+      await tester.pump();
+      await tester.enterText(_field('Router Address'), '10.0.0.1');
+      await tester.enterText(_field('Fallback Address'), '10.0.0.1');
+      await add();
+      // Two notes in that group now, so each names its row.
+      expect(
+        find.text('Fallback Address: Must differ from primary address'),
+        findsOneWidget,
+      );
+      expect(state.logins, isEmpty);
+
+      await tester.enterText(_field('Fallback Address'), 'router.example.com');
+      await tester.enterText(_field('Password'), 'secret');
+      await add();
+      expect(state.logins, ['10.0.0.1 root secret']);
+    });
   });
 }
 
-/// The add-router form: what the field labelled [label] holds.
-Finder _field(String label) => find.widgetWithText(TextFormField, label);
+/// The add-router form's field labelled [label]: a Material field on
+/// Android, the text field of a grouped row on iOS.
+Finder _field(String label) => PlatformUiCapabilities.isIOS
+    ? find.descendant(
+        of: find.widgetWithText(AdaptiveFormTextField, label),
+        matching: find.byType(CupertinoTextField),
+      )
+    : find.widgetWithText(TextFormField, label);
 
 final _existing = model.Router(
   id: '192.168.1.1-root',
