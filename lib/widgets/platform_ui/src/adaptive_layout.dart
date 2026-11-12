@@ -567,6 +567,10 @@ Widget adaptiveFlutterNavigationIcon(AdaptiveNavigationIcon value) =>
       ),
     };
 
+/// A card: Material's [Card] on Android; on iOS a flat tile in the surface
+/// of grouped rows, without a shadow, for a page on the grouped background,
+/// as Health or Fitness lay out their summaries. A press on an InkWell in
+/// the tile darkens it, without a ripple.
 class AdaptiveCard extends StatelessWidget {
   const AdaptiveCard({
     super.key,
@@ -614,20 +618,23 @@ class AdaptiveCard extends StatelessWidget {
         child: content,
       );
     }
-    return Semantics(
-      container: semanticContainer,
-      child: Container(
-        margin: margin,
-        clipBehavior: clipBehavior ?? Clip.none,
-        decoration: BoxDecoration(
-          color:
-              color ??
-              CupertinoColors.secondarySystemBackground.resolveFrom(context),
-          borderRadius: borderRadius ?? BorderRadius.circular(12),
-        ),
+    // The tile is a surface of its own, so a press on an InkWell in it
+    // shows on it: a darkening, as an iOS row's, and no Material ripple.
+    Widget tile = Material(
+      color:
+          color ??
+          CupertinoColors.secondarySystemGroupedBackground.resolveFrom(context),
+      borderRadius: borderRadius ?? BorderRadius.circular(12),
+      clipBehavior: clipBehavior ?? Clip.none,
+      child: Theme(
+        data: Theme.of(context).copyWith(splashFactory: NoSplash.splashFactory),
         child: content,
       ),
     );
+    if (margin case final margin?) {
+      tile = Padding(padding: margin, child: tile);
+    }
+    return Semantics(container: semanticContainer, child: tile);
   }
 }
 

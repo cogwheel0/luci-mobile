@@ -230,9 +230,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     final details = SystemDetail.of(boardInfo);
 
-    return Card(
+    return AdaptiveCard(
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      borderRadius: BorderRadius.circular(18),
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: SystemDetailsTap(
@@ -400,9 +400,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final isSwitchingRouter =
         appState.isLoading && appState.dashboardData == null;
 
-    final card = Card(
+    final card = AdaptiveCard(
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -820,9 +820,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
     }
 
-    return Card(
+    return AdaptiveCard(
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      borderRadius: BorderRadius.circular(18),
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
@@ -971,12 +971,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             final signal = iwinfo['signal'] as int?;
 
             networkCardWidgets.add(
-              Card(
+              AdaptiveCard(
                 margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
                 elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
+                borderRadius: BorderRadius.circular(18),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(18),
@@ -1039,12 +1037,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           );
 
           networkCardWidgets.add(
-            Card(
+            AdaptiveCard(
               margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
               elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
+              borderRadius: BorderRadius.circular(18),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 borderRadius: BorderRadius.circular(18),
@@ -1256,12 +1252,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       final proto = interface['proto'] as String? ?? '';
 
       interfaceCardWidgets.add(
-        Card(
+        AdaptiveCard(
           margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
           elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
+          borderRadius: BorderRadius.circular(18),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             borderRadius: BorderRadius.circular(18),
@@ -1483,8 +1477,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final headerText = (hostname != null && hostname.isNotEmpty)
         ? hostname
         : (selected?.ipAddress ?? context.l10n.loading);
+    // iOS lays the dashboard out as Health lays out its summaries: flat
+    // tiles on the grouped background.
+    final grouped = PlatformUiCapabilities.isIOS
+        ? CupertinoColors.systemGroupedBackground.resolveFrom(context)
+        : null;
     return Scaffold(
+      backgroundColor: grouped,
       appBar: LuciAppBar(
+        backgroundColor: grouped?.withValues(alpha: 0.94),
         centerTitle: true,
         title: null, // Always use titleWidget now
         titleWidget: routers.length > 1 && PlatformUiCapabilities.isIOS

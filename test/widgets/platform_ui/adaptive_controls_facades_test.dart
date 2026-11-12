@@ -468,4 +468,86 @@ void main() {
       expect(spinner.color, isNull);
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
   });
+
+  group('a card', () {
+    Future<void> pumpCard(WidgetTester tester) => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AdaptiveCard(
+            elevation: 2,
+            borderRadius: BorderRadius.circular(18),
+            margin: EdgeInsets.zero,
+            child: const SizedBox(width: 100, height: 60, child: Text('CPU')),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('Android: the Material card, raised and rounded', (
+      tester,
+    ) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android;
+      await pumpCard(tester);
+
+      final card = tester.widget<Card>(find.byType(Card));
+      expect(card.elevation, 2);
+      expect(
+        card.shape,
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      );
+      expect(card.margin, EdgeInsets.zero);
+    });
+
+    testWidgets('iOS: a flat tile in the grouped rows\' surface, which a '
+        'press darkens without a ripple', (tester) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AdaptiveCard(
+              elevation: 2,
+              borderRadius: BorderRadius.circular(18),
+              margin: EdgeInsets.zero,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onLongPress: () {},
+                child: const SizedBox(
+                  width: 100,
+                  height: 60,
+                  child: Text('CPU'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(Card), findsNothing);
+      final cpu = tester.element(find.text('CPU'));
+      final tile = tester.widget<Material>(
+        find
+            .ancestor(of: find.text('CPU'), matching: find.byType(Material))
+            .first,
+      );
+      expect(
+        tile.color,
+        CupertinoColors.secondarySystemGroupedBackground.resolveFrom(cpu),
+      );
+      expect(tile.borderRadius, BorderRadius.circular(18));
+      expect(tile.elevation, 0);
+      // No ripple in the tile, only the highlight.
+      expect(Theme.of(cpu).splashFactory, NoSplash.splashFactory);
+
+      final press = await tester.startGesture(
+        tester.getCenter(find.text('CPU')),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+      // The highlight paints on the tile itself, where it can be seen, not
+      // on the page's Material under the tile.
+      expect(Material.of(cpu), paints..rrect());
+      await press.up();
+      await tester.pumpAndSettle();
+    });
+  });
 }

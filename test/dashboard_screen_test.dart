@@ -95,6 +95,13 @@ void main() {
     expect(find.byIcon(Icons.arrow_drop_down), findsNothing);
     final title = find.byType(AdaptiveTitleMenu<String>);
     expect(title, findsOneWidget);
+    // Its tiles sit on the grouped background.
+    expect(
+      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+      CupertinoColors.systemGroupedBackground.resolveFrom(
+        tester.element(find.byType(Scaffold).first),
+      ),
+    );
     // Before the board info arrives, the title is the saved hostname, as
     // the menu names the router, rather than its address.
     expect(
