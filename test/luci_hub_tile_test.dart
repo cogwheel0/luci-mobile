@@ -38,6 +38,14 @@ Future<List<String>> _pumpHub(WidgetTester tester) async {
                   enabled: false,
                   onTap: () => opened.add('SQM'),
                 ),
+                LuciHubTile(
+                  icon: Icons.rule,
+                  title: 'Rules',
+                  // A preview of names, cut to two lines.
+                  subtitle: List.filled(40, 'Allow-ISAKMP').join(', '),
+                  subtitleMaxLines: 2,
+                  onTap: () => opened.add('Rules'),
+                ),
               ],
             ),
           ],
@@ -58,7 +66,7 @@ void main() {
     final opened = await _pumpHub(tester);
 
     expect(find.byType(Card), findsOneWidget);
-    expect(find.byType(ListTile), findsNWidgets(3));
+    expect(find.byType(ListTile), findsNWidgets(4));
     expect(find.byType(AdaptiveFormSection), findsNothing);
     expect(find.text('DEVICE MANAGEMENT'), findsOneWidget);
 
@@ -120,8 +128,13 @@ void main() {
       ),
     );
 
-    // An entry the router cannot support stays, dimmed, and opens nothing.
+    // An entry the router cannot support stays, dimmed and read as such,
+    // and opens nothing.
     final sqm = find.widgetWithText(AdaptiveListRow, 'SQM');
+    expect(
+      tester.getSemantics(find.descendant(of: sqm, matching: find.text('SQM'))),
+      isSemantics(hasEnabledState: true, isEnabled: false, isButton: false),
+    );
     expect(
       find.descendant(
         of: sqm,
@@ -131,6 +144,16 @@ void main() {
     );
     await tester.tap(find.text('SQM'));
     expect(opened, ['Services']);
+
+    // A preview keeps to its two lines.
+    final preview = tester.widget<Text>(
+      find.descendant(
+        of: find.widgetWithText(AdaptiveListRow, 'Rules'),
+        matching: find.textContaining('Allow-ISAKMP'),
+      ),
+    );
+    expect(preview.maxLines, 2);
+    expect(preview.overflow, TextOverflow.ellipsis);
     semantics.dispose();
   });
 }
