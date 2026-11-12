@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:cupertino_ui/cupertino_ui.dart'
     show
         CupertinoActionSheetAction,
@@ -276,4 +278,68 @@ void main() {
       );
     }
   });
+
+  testWidgets('Android: a card per radio, its networks as list tiles', (
+    tester,
+  ) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.android;
+    await _pumpWireless(tester);
+
+    expect(find.byType(ListTile), findsOneWidget);
+    expect(find.byType(AdaptiveFormSection), findsNothing);
+  });
+
+  testWidgets('before iOS 26: a group per radio, the network opening to edit '
+      'and its switch toggling it without opening it, and adding as a row', (
+    tester,
+  ) async {
+    PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+    PlatformUiCapabilities.debugIOSMajorVersionOverride = 25;
+    final applied = await _pumpWireless(tester);
+
+    expect(find.byType(ListTile), findsNothing);
+    expect(find.byType(AdaptiveFormSection), findsOneWidget);
+    final home = find.widgetWithText(AdaptiveListRow, 'Home');
+    await tester.tap(
+      find.descendant(of: home, matching: find.byType(AdaptiveSwitch)),
+    );
+    await tester.pumpAndSettle();
+    expect(applied, hasLength(1));
+    expect(find.byType(AdaptiveFormSheet), findsNothing);
+    await tester.pump(const Duration(seconds: 10));
+
+    await tester.tap(find.widgetWithText(AdaptiveFormButtonRow, 'Add network'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AdaptiveFormSheet), findsOneWidget);
+    await _finish(tester);
+  });
+
+  testWidgets(
+    'iOS 26: a tap on a network\'s native switch does not open the network',
+    (tester) async {
+      PlatformUiCapabilities.debugPlatformOverride = TargetPlatform.iOS;
+      PlatformUiCapabilities.debugIOSMajorVersionOverride = 26;
+      PlatformUiCapabilities.debugNativeIOS26Override = true;
+      final applied = await _pumpWireless(tester);
+
+      final native = find.descendant(
+        of: find.widgetWithText(AdaptiveListRow, 'Home'),
+        matching: find.byType(CNSwitch),
+      );
+      expect(native, findsOneWidget);
+      // A native view claims no tap in Flutter: inside the row's tap target,
+      // this tap would open the network.
+      await tester.tap(native);
+      await tester.pumpAndSettle();
+      expect(find.byType(AdaptiveFormSheet), findsNothing);
+
+      tester.widget<CNSwitch>(native).onChanged(false);
+      await tester.pumpAndSettle();
+      expect(applied, hasLength(1));
+      expect(find.byType(AdaptiveFormSheet), findsNothing);
+      await _finish(tester);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    skip: !Platform.isMacOS,
+  );
 }
