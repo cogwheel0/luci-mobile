@@ -72,7 +72,8 @@ void main() {
             ),
           )
           .label,
-      startsWith('phone joined the network\n'),
+      // Once, what happened and then when; the icon stays silent.
+      'phone joined the network\nNov 12, 2026 10:15',
     );
     semantics.dispose();
   });
