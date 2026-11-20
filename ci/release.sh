@@ -29,7 +29,8 @@ bash tools/update_site.sh "$apk" "$url" >/dev/null
 prev="$(python3 -I -c 'import json;p=json.load(open("site/release.json")).get("previous");print(p["version"] if p else "")')"
 prev_url="$(python3 -I -c 'import json;p=json.load(open("site/release.json")).get("previous");print(p["url"] if p else "")')"
 
-"${GIT[@]}" add -A -- . ':!claude.md'
+# claude.md уже в .gitignore; явное исключение заставляет git add вернуть ошибку
+"${GIT[@]}" add -A -- .
 "${GIT[@]}" commit -q -m "release $version${prev:+ (previous $prev kept for rollback)}" \
   -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" || true
 "${GIT[@]}" push -q "${GIT_PUSH_URL:-git@github.com:relkin016/luci-mobile.git}" HEAD:main

@@ -52,6 +52,27 @@ void main() {
   });
 
   group('package gating', () {
+    // OpenWrt 25.x renamed luci-app-wol's config to `luci-wol`; looking only
+    // for `etherwake` told users to install a package they already had.
+    test('wake-on-LAN is found under either luci-app-wol layout', () {
+      final legacy = _stock(configs: const {'network', 'etherwake'});
+      expect(legacy.of(RouterFeature.wakeOnLan).available, isTrue);
+
+      final modern = _stock(
+        configs: const {'network', 'luci-wol'},
+        acl: const {
+          'luci.wol': {'stat', 'exec'},
+        },
+      );
+      expect(modern.of(RouterFeature.wakeOnLan).available, isTrue);
+
+      final none = _stock(configs: const {'network'});
+      expect(
+        none.of(RouterFeature.wakeOnLan).reason,
+        UnavailableReason.missingPackage,
+      );
+    });
+
     test('a stock router supports the Phase 1 write features', () {
       final caps = _stock();
       expect(caps.of(RouterFeature.uciApplyRollback).available, isTrue);

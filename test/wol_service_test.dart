@@ -8,9 +8,17 @@ import 'package:luci_mobile/state/router_session.dart';
 
 class _ConfigApi extends MockApiService {
   Map<String, dynamic>? etherwake;
+  Map<String, dynamic>? luciWol;
+  Map<String, dynamic>? network;
   Object? execReply;
   Object readError = Exception('timeout');
+
+  /// `luci.wol stat` reply; null means the object does not exist (legacy).
+  Map<String, dynamic>? stat;
   int reads = 0;
+  int statCalls = 0;
+  String? execObject;
+  String? execName;
   List<String>? sentParams;
 
   @override
@@ -21,11 +29,17 @@ class _ConfigApi extends MockApiService {
     required String config,
     BuildContext? context,
   }) async {
-    reads++;
-    if (etherwake == null) throw readError;
+    final values = switch (config) {
+      'etherwake' => etherwake,
+      'luci-wol' => luciWol,
+      'network' => network,
+      _ => null,
+    };
+    if (config == 'etherwake') reads++;
+    if (values == null) throw readError;
     return [
       0,
-      {'values': etherwake},
+      {'values': values},
     ];
   }
 
@@ -39,7 +53,20 @@ class _ConfigApi extends MockApiService {
     Map<String, dynamic>? params,
     BuildContext? context,
   }) async {
-    sentParams = (params?['params'] as List).cast<String>();
+    if (object == 'luci.wol' && method == 'stat') {
+      statCalls++;
+      if (stat == null) {
+        throw RpcException(object: object, method: method, status: 4);
+      }
+      return [0, stat];
+    }
+    execObject = object;
+    if (object == 'luci.wol') {
+      execName = params?['name'] as String?;
+      sentParams = (params?['args'] as List).cast<String>();
+    } else {
+      sentParams = (params?['params'] as List).cast<String>();
+    }
     return execReply ??
         [
           0,
@@ -121,6 +148,99 @@ void main() {
     api.etherwake = null;
     await wol.wake(session, 'aa:bb:cc:dd:ee:ff');
     expect(api.sentParams, ['-D', '-i', 'br-lan', 'aa:bb:cc:dd:ee:ff']);
+  });
+
+  // OpenWrt 25.x's luci-app-wol has no `file.exec` grant and no `etherwake`
+  // config: it goes through `luci.wol`, configured by `luci-wol`.
+  group('modern luci-app-wol', () {
+    test('wakes through luci.wol with the target\'s interface', () async {
+      final api = _ConfigApi()
+        ..stat = {'etherwake': true, 'wakeonlan': false}
+        ..luciWol = {
+          'defaults': {'.type': 'wol'},
+          'cfg1': {
+            '.type': 'target',
+            'mac': 'AA:BB:CC:DD:EE:FF',
+            'iface': 'br-lan',
+            'broadcast': '1',
+          },
+        };
+
+      expect(await WolService(api).wake(session, 'aa:bb:cc:dd:ee:ff'), isTrue);
+      expect(api.execObject, 'luci.wol');
+      expect(api.execName, WolService.etherwake);
+      expect(api.sentParams, ['-D', '-i', 'br-lan', '-b', 'aa:bb:cc:dd:ee:ff']);
+    });
+
+    test('an unknown device goes out on the LAN device', () async {
+      final api = _ConfigApi()
+        ..stat = {'etherwake': true, 'wakeonlan': false}
+        ..luciWol = {
+          'defaults': {'.type': 'wol'},
+        }
+        ..network = {
+          'lan': {'.type': 'interface', 'device': 'br-lan'},
+        };
+
+      expect(await WolService(api).wake(session, 'aa:bb:cc:dd:ee:ff'), isTrue);
+      expect(api.sentParams, ['-D', '-i', 'br-lan', 'aa:bb:cc:dd:ee:ff']);
+    });
+
+    test('wakeonlan alone is used with just the MAC', () async {
+      final api = _ConfigApi()
+        ..stat = {'etherwake': false, 'wakeonlan': true}
+        ..luciWol = {
+          'defaults': {'.type': 'wol', 'executable': WolService.etherwake},
+        };
+
+      expect(await WolService(api).wake(session, 'aa:bb:cc:dd:ee:ff'), isTrue);
+      expect(api.execName, WolService.wakeonlan);
+      expect(api.sentParams, ['aa:bb:cc:dd:ee:ff']);
+    });
+
+    test('a disallowed binary is not reported as sent', () async {
+      final api = _ConfigApi()
+        ..stat = {'etherwake': true, 'wakeonlan': false}
+        ..luciWol = {
+          'defaults': {'.type': 'wol'},
+        }
+        ..execReply = [
+          0,
+          {'code': 1, 'stdout': '', 'stderr': 'disallowed'},
+        ];
+
+      expect(await WolService(api).wake(session, 'aa:bb:cc:dd:ee:ff'), isFalse);
+    });
+
+    test('neither binary installed sends nothing', () async {
+      final api = _ConfigApi()..stat = {'etherwake': false, 'wakeonlan': false};
+
+      expect(await WolService(api).wake(session, 'aa:bb:cc:dd:ee:ff'), isFalse);
+      expect(api.sentParams, isNull);
+    });
+
+    test('which package is installed is asked once', () async {
+      final api = _ConfigApi()
+        ..stat = {'etherwake': true, 'wakeonlan': false}
+        ..luciWol = {
+          'defaults': {'.type': 'wol'},
+        };
+      final wol = WolService(api);
+
+      await wol.wake(session, 'aa:bb:cc:dd:ee:ff');
+      await wol.wake(session, 'aa:bb:cc:dd:ee:ff');
+      expect(api.statCalls, 1);
+    });
+  });
+
+  test('legacy wake goes through file.exec', () async {
+    final api = _ConfigApi()
+      ..etherwake = {
+        'setup': {'.type': 'etherwake', 'interface': 'br-lan'},
+      };
+
+    expect(await WolService(api).wake(session, 'aa:bb:cc:dd:ee:ff'), isTrue);
+    expect(api.execObject, 'file');
   });
 
   group('normalising a MAC for etherwake', () {

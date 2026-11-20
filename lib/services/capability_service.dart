@@ -47,6 +47,8 @@ class CapabilityService {
     // `uci.configs` is denied on a stock box and this list is the only
     // other way the probe learns what is installed.
     'etherwake',
+    // The same package from OpenWrt 25.x on, which renamed its config.
+    'luci-wol',
   ];
 
   /// The objects and functions worth checking one at a time when the router
@@ -58,6 +60,7 @@ class CapabilityService {
     'luci-rpc': ['getHostHints'],
     'luci': ['getRealtimeStats'],
     'rc': ['init'],
+    'luci.wol': ['exec'],
   };
 
   Future<RouterCapabilities> probe(

@@ -269,8 +269,13 @@ class RouterCapabilities {
         return _requireUbus('rc', const ['init']);
 
       case RouterFeature.wakeOnLan:
-        // `luci-app-wol` is what grants `file.exec` on the etherwake path;
-        // the `etherwake` binary alone is not reachable over rpcd.
+        // `luci-app-wol` is what makes a WoL binary reachable over rpcd; the
+        // binary alone is not. Current releases ship config `luci-wol` and a
+        // `luci.wol` ubus object; 24.10 and older ship config `etherwake`
+        // and grant `file.exec` on its path.
+        if (uciConfigs.contains('luci-wol')) {
+          return _requireUbus('luci.wol', const ['exec']);
+        }
         return _requireConfig('etherwake', 'luci-app-wol');
 
       case RouterFeature.systemSettings:
